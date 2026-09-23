@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>BSW Kota Bogor — Multi-Camera Traffic Intelligence & Car Tracker</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- HLS.js for Live Stream Video Playback -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .custom-camera-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0ea5e9;
+            color: white;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 10px rgba(14, 165, 233, 0.8);
+            font-size: 11px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .custom-camera-marker.active-marker {
+            background: #ef4444 !important;
+            box-shadow: 0 0 18px rgba(239, 68, 68, 1) !important;
+            transform: scale(1.25);
+            z-index: 1000 !important;
+        }
+        .custom-camera-marker.candidate-marker {
+            background: #eab308 !important;
+            box-shadow: 0 0 14px rgba(234, 179, 8, 1) !important;
+            animation: pulse-candidate 1.5s infinite;
+        }
+        @keyframes pulse-candidate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 0.75rem;
+            z-index: 10;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-zinc-900 border-b border-zinc-800 px-6 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i data-lucide="cctv" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight flex items-center gap-2">
+                    BSW Kota Bogor Traffic Intelligence
+                    <span class="text-xs bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono">
+                        94 Streams Active
+                    </span>
+                </h1>
+                <p class="text-xs text-zinc-400 flex items-center gap-2">
+                    <span>Multi-Camera Vehicle Tracking (MTMC)</span>
+                    <span class="text-zinc-600">•</span>
+                    <span class="text-emerald-400 font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Apple Neural Engine (ANE) Accelerated
+                    </span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Global Search & Handoff Controls -->
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <i data-lucide="search" class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                    id="vehicleSearchInput" 
+                    type="text" 
+                    placeholder="Search Vehicle ID (e.g. Car #14)..." 
+                    class="bg-zinc-800/80 border border-zinc-700/80 rounded-lg pl-9 pr-4 py-1.5 text-sm focus:outline-none focus:border-cyan-500 w-64 text-zinc-200 placeholder-zinc-500"
+                />
+            </div>
+            <button 
+                id="searchBtn"
+                class="bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition"
+            >
+                <i data-lucide="compass" class="w-4 h-4"></i>
+                Find Journey
+            </button>
+            <div class="h-6 w-px bg-zinc-800"></div>
+            <button 
+                id="followModeToggle"
+                class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+            >
+                <i data-lucide="route" class="w-4 h-4 text-amber-400"></i>
+                <span>Follow Mode: <b id="followModeText" class="text-zinc-400">OFF</b></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 p-5 grid grid-cols-12 gap-5 overflow-hidden">
+        
+        <!-- Left Panel: Interactive Map & Topology Corridors (7 cols) -->
+        <section class="col-span-12 lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Map Controls & Corridor Filters -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 overflow-x-auto py-1 text-xs">
+                    <span class="text-zinc-400 font-semibold px-2">Corridor:</span>
+                    <button class="corridor-btn bg-cyan-600 text-white px-3 py-1 rounded-md transition" data-corridor="ALL">All (94)</button>
+                    <button class="corridor-btn bg-zinc-800 text-zinc-400 hover:text-white px-3 py-1 rounded-md transition" data-corridor="SSA Ring Road">SSA Kebun Raya</button>
+                    <button class="corridor-btn bg-zinc-800 text-zinc-400 hover:text-white px-3 py-1 rounded-md transition" data-corridor="Jl. Raya Pajajaran">Pajajaran</button>
+                    <button class="corridor-btn bg-zinc-800 text-zinc-400 hover:text-white px-3 py-1 rounded-md transition" data-corridor="Jl. Sholeh Iskandar / Jl. Baru">Jl. Baru</button>
+                    <button class="corridor-btn bg-zinc-800 text-zinc-400 hover:text-white px-3 py-1 rounded-md transition" data-corridor="Jl. Raya Tajur">Tajur</button>
+                </div>
+                <div class="text-xs text-zinc-400 shrink-0">
+                    <span id="activeCamIndicator" class="font-mono text-cyan-400 font-medium">Cam #167: Simpang Pahlawan</span>
+                </div>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div class="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden relative shadow-inner min-h-[480px]">
+                <div id="map"></div>
+                
+                <!-- Overlay Follow Banner (Hidden by default) -->
+                <div id="followBanner" class="hidden absolute top-4 left-4 right-4 bg-zinc-900/90 backdrop-blur border border-amber-500/50 rounded-lg p-3 z-20 shadow-xl flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center animate-spin">
+                            <i data-lucide="loader" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-white flex items-center gap-2">
+                                <span>Following: <b id="followTargetId" class="text-amber-400">Car #14</b></span>
+                                <span class="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">Predicting Next Camera</span>
+                            </div>
+                            <p id="followRouteText" class="text-xs text-zinc-400">Exited Simpang Pahlawan heading South $\rightarrow$ Batutulis corridor</p>
+                        </div>
+                    </div>
+                    <button id="cancelFollowBtn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-2.5 py-1 rounded border border-zinc-700">
+                        Cancel Follow
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live City Traffic Gauges -->
+            <div class="grid grid-cols-5 gap-3">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div class="text-zinc-400 text-xs font-medium">Total Unique Cars</div>
+                    <div id="statUniqueCars" class="text-xl font-bold text-emerald-400 font-mono mt-1">218</div>
+                    <div class="text-[10px] text-zinc-500 mt-0.5">Persistent across city</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div class="text-zinc-400 text-xs font-medium">Motorcycles</div>
+                    <div id="statMotos" class="text-xl font-bold text-sky-400 font-mono mt-1">482</div>
+                    <div class="text-[10px] text-zinc-500 mt-0.5">Identified in network</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div class="text-zinc-400 text-xs font-medium">Trucks</div>
+                    <div id="statTrucks" class="text-xl font-bold text-amber-400 font-mono mt-1">45</div>
+                    <div class="text-[10px] text-zinc-500 mt-0.5">Heavy transport</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div class="text-zinc-400 text-xs font-medium">Buses / Angkot</div>
+                    <div id="statBuses" class="text-xl font-bold text-fuchsia-400 font-mono mt-1">68</div>
+                    <div class="text-[10px] text-zinc-500 mt-0.5">Public transit</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div class="text-zinc-400 text-xs font-medium">ANE Inference</div>
+                    <div class="text-xl font-bold text-cyan-400 font-mono mt-1">11.8 ms</div>
+                    <div class="text-[10px] text-emerald-400 mt-0.5">~84 FPS Local</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: Live CCTV Video Feed & Predictive Handoff Panel (5 cols) -->
+        <section class="col-span-12 lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- Live Video Stream Player Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col shadow-lg">
+                <div class="bg-zinc-900/90 px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                        <h2 id="videoPlayerTitle" class="text-sm font-semibold truncate max-w-[200px]">
+                            CCTV SIMPANG PAHLAWAN 2 -F
+                        </h2>
+                    </div>
+                    
+                    <!-- Stream Mode Toggle -->
+                    <div class="flex items-center bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-700/60 text-[11px]">
+                        <button id="btnAiMode" class="bg-cyan-600 text-white font-medium px-2 py-0.5 rounded transition">
+                            AI Tracking (IDs)
+                        </button>
+                        <button id="btnRawMode" class="text-zinc-400 hover:text-white px-2 py-0.5 rounded transition">
+                            Raw CCTV
+                        </button>
+                    </div>
+
+                    <span id="cameraBadgeId" class="text-xs bg-zinc-800 px-2 py-0.5 rounded font-mono text-zinc-400">
+                        ID: 167
+                    </span>
+                </div>
+
+                <!-- Video Element / Embedded Restreamer / AI Stream -->
+                <div class="relative bg-black aspect-video flex items-center justify-center overflow-hidden">
+                    <img id="aiStreamImg" class="w-full h-full object-contain" src="/api/stream/167" alt="Live ANE Tracking Stream" />
+                    <video id="cctvVideo" class="hidden w-full h-full object-contain" controls autoplay muted playsinline></video>
+                    <iframe id="cctvEmbedIframe" class="hidden w-full h-full border-none"></iframe>
+                    
+                    <!-- Fallback / Loading Overlay -->
+                    <div id="videoLoadingSpinner" class="hidden absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2 z-10">
+                        <i data-lucide="loader-2" class="w-8 h-8 text-cyan-400 animate-spin"></i>
+                        <span class="text-xs text-zinc-400">Connecting HLS Stream...</span>
+                    </div>
+
+                    <!-- Live HUD Watermark -->
+                    <div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur px-2.5 py-1 rounded text-[11px] font-mono text-zinc-300 pointer-events-none">
+                        ANE CoreML • YOLOv8 • ByteTrack
+                    </div>
+                </div>
+
+                <!-- Camera Quick Switch Dropdown -->
+                <div class="p-3 bg-zinc-900/60 border-t border-zinc-800 flex items-center gap-2">
+                    <label class="text-xs text-zinc-400 shrink-0 font-medium">Switch Camera:</label>
+                    <select id="cameraSelect" class="bg-zinc-800 border border-zinc-700 text-xs rounded-lg px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-cyan-500 w-full truncate">
+                        <option value="">Loading cameras...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Predictive Camera Handoff & Downstream Candidates Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex-1 flex flex-col shadow-lg">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold flex items-center gap-2">
+                        <i data-lucide="git-fork" class="w-4 h-4 text-cyan-400"></i>
+                        Predictive Handoff & Candidate Junctions
+                    </h3>
+                    <span class="text-[11px] text-zinc-500 font-mono">Spatiotemporal Road Model</span>
+                </div>
+
+                <!-- Candidate Cameras Container -->
+                <div id="candidateList" class="flex-1 overflow-y-auto space-y-2.5 pr-1 max-h-[220px]">
+                    <div class="text-xs text-zinc-500 text-center py-6">
+                        Select a vehicle or exit heading to compute downstream handoff candidates.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Verified Vehicle Sightings -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-lg">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h3 class="text-sm font-semibold flex items-center gap-2">
+                        <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i>
+                        Recent Sightings in Kota Bogor
+                    </h3>
+                    <span class="text-xs text-emerald-400 font-mono">Live Feed</span>
+                </div>
+                <div id="recentSightingsList" class="space-y-2 overflow-y-auto max-h-[140px] pr-1 text-xs">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Vehicle Journey Modal (Timeline View) -->
+    <div id="journeyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+            <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+                <div>
+                    <h3 id="modalVehicleTitle" class="text-lg font-bold flex items-center gap-2">
+                        Vehicle Journey Replay
+                    </h3>
+                    <p id="modalVehicleSubtitle" class="text-xs text-zinc-400">Chronological sightings across Kota Bogor CCTV network</p>
+                </div>
+                <button id="closeModalBtn" class="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div id="modalTimelineContent" class="p-6 overflow-y-auto space-y-4">
+                <!-- Timeline items injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Frontend Application Logic -->
+    <script src="/static/app.js?v=20260923_1835"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

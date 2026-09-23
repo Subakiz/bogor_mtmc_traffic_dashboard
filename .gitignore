@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and logs
+.pytest_cache/
+.agents/
+*.log
+server.log
+.DS_Store
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Large AI Model weights & packages (Export via `yolo export model=yolov8m.pt format=coreml`)
+*.pt
+*.mlpackage/
+*.onnx
+
+# Temporary investigation scripts
+scratch_*.py
+/tmp/
+
+# SQLite WAL and shared memory
+*.sqlite-wal
+*.sqlite-shm

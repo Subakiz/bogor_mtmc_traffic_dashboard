@@ -1,0 +1,754 @@
+[
+  {
+    "id": 75,
+    "name": "CCTV-GANG AUT",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/75/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/64b180ce-d237-44d9-b857-c610e1d0c75c.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/64b180ce-d237-44d9-b857-c610e1d0c75c.html",
+    "status": "online"
+  },
+  {
+    "id": 79,
+    "name": "CCTV - TUGU KUJANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/79/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/5a5cf878-9d9b-4400-a73a-27a5b24a6ec4.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/5a5cf878-9d9b-4400-a73a-27a5b24a6ec4.html",
+    "status": "online"
+  },
+  {
+    "id": 80,
+    "name": "CCTV -CIHELEUT",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/80/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/f5ca1d37-c267-4806-850b-d1ca537fb29a.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/f5ca1d37-c267-4806-850b-d1ca537fb29a.html",
+    "status": "online"
+  },
+  {
+    "id": 81,
+    "name": "CCTV - DJUANDA ARAH BALAIKOTA SIMPANG BTM",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/81/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/f707b72a-5c95-421a-9f3a-2e478794bd76.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/f707b72a-5c95-421a-9f3a-2e478794bd76.html",
+    "status": "online"
+  },
+  {
+    "id": 82,
+    "name": "CCTV DEPAN ALUN ALUN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/82/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/c07c1926-288c-46e4-a19c-9f51022edc5d.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/c07c1926-288c-46e4-a19c-9f51022edc5d.html",
+    "status": "online"
+  },
+  {
+    "id": 83,
+    "name": "CCTV PASAR BOGOR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/83/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b43066d4-b1e4-4e90-8e17-86c15a9a944e.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/b43066d4-b1e4-4e90-8e17-86c15a9a944e.html",
+    "status": "online"
+  },
+  {
+    "id": 85,
+    "name": "CCTV JUANDA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/85/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/62cded1f-90d0-4af6-b330-dc40af5fdd67.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/62cded1f-90d0-4af6-b330-dc40af5fdd67.html",
+    "status": "online"
+  },
+  {
+    "id": 86,
+    "name": "CCTV- SEKETENG SURKEN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/86/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/3d51d3a1-0d90-4230-956c-60dea3c11ac3.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/3d51d3a1-0d90-4230-956c-60dea3c11ac3.html",
+    "status": "online"
+  },
+  {
+    "id": 87,
+    "name": "CCTV OTISTA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/87/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b75e84e5-d033-48fb-aa67-fc48c5e11091.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/b75e84e5-d033-48fb-aa67-fc48c5e11091.html",
+    "status": "online"
+  },
+  {
+    "id": 89,
+    "name": "CCTV SEKETENG GUDANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/89/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/1083f9b4-b193-490d-aa45-31cbc69913fb.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/1083f9b4-b193-490d-aa45-31cbc69913fb.html",
+    "status": "online"
+  },
+  {
+    "id": 91,
+    "name": "CCTV PEDATI ARAH GUDANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/91/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b22b4de5-8c27-4a6b-81eb-70d68455c627.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/b22b4de5-8c27-4a6b-81eb-70d68455c627.html",
+    "status": "online"
+  },
+  {
+    "id": 92,
+    "name": "CCTV- SIMPANG DEPOM",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/92/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/2942b8fd-1f48-4c2c-b368-d0df0526367c.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/2942b8fd-1f48-4c2c-b368-d0df0526367c.html",
+    "status": "online"
+  },
+  {
+    "id": 96,
+    "name": "CCTV PEDATI SURKEN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/96/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/2ac495a8-1cf3-4451-ae8d-529b805acb71.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/2ac495a8-1cf3-4451-ae8d-529b805acb71.html",
+    "status": "online"
+  },
+  {
+    "id": 100,
+    "name": "CCTV LAWANG SEKETENG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/100/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/0557f29a-ab7a-4c03-85fa-bcb696d7ab0c.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/0557f29a-ab7a-4c03-85fa-bcb696d7ab0c.html",
+    "status": "online"
+  },
+  {
+    "id": 101,
+    "name": "CCTV-PEDATI LAWANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/101/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/7e657898-5798-48c3-8f62-63f360243ad9.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/7e657898-5798-48c3-8f62-63f360243ad9.html",
+    "status": "online"
+  },
+  {
+    "id": 103,
+    "name": "CCTV DEPAN MASJID RAYA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/103/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/aff6fd2d-2f56-4072-b5c3-774f07722a04.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/aff6fd2d-2f56-4072-b5c3-774f07722a04.html",
+    "status": "online"
+  },
+  {
+    "id": 106,
+    "name": "CCTV  DJUANDA ARAH SURKEN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/106/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/f6b50f38-9184-418e-b3f9-05faaa9b387d.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/f6b50f38-9184-418e-b3f9-05faaa9b387d.html",
+    "status": "online"
+  },
+  {
+    "id": 107,
+    "name": "DJUANDA ARAH EMPANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/107/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/31b05614-19d8-492e-b244-903e8aa28292.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/31b05614-19d8-492e-b244-903e8aa28292.html",
+    "status": "online"
+  },
+  {
+    "id": 108,
+    "name": "KOMINFO ARAH TAJUR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/108/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/a688d9a6-2db5-405c-9810-7e8205e214c9.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/a688d9a6-2db5-405c-9810-7e8205e214c9.html",
+    "status": "online"
+  },
+  {
+    "id": 111,
+    "name": "SIMPANG DENPOM ARAH PINTU UTAMA ISTANA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/111/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/67ebf216-fa63-4a6a-9ea8-1e5604257f74.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/67ebf216-fa63-4a6a-9ea8-1e5604257f74.html",
+    "status": "online"
+  },
+  {
+    "id": 114,
+    "name": "MA SALMUN ARAH MAWAR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/114/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/aaa81ab7-5f96-4073-8090-e33d882a5dff.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/aaa81ab7-5f96-4073-8090-e33d882a5dff.html",
+    "status": "online"
+  },
+  {
+    "id": 115,
+    "name": "MA SALMUN ARAH DEWI SARTIKA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/115/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/ee837053-a8e7-4fde-84ed-fc88ad26d3a5.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/ee837053-a8e7-4fde-84ed-fc88ad26d3a5.html",
+    "status": "online"
+  },
+  {
+    "id": 116,
+    "name": "MA SALMUN ARAH JEMBATAN MERAH",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/116/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/e7609045-eeaf-4579-8eca-fc3e61502eac.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/e7609045-eeaf-4579-8eca-fc3e61502eac.html",
+    "status": "online"
+  },
+  {
+    "id": 118,
+    "name": "TAMAN CORAT CORET",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/118/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/d6ef0d86-68f1-42c9-acd7-667d05bfa463.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/d6ef0d86-68f1-42c9-acd7-667d05bfa463.html",
+    "status": "online"
+  },
+  {
+    "id": 119,
+    "name": "TAMAN CORAT CORET ARAH DISDUKCAPIL",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/119/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/cdfdab2e-7f7d-4bd1-8a7a-698559837d91.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/cdfdab2e-7f7d-4bd1-8a7a-698559837d91.html",
+    "status": "online"
+  },
+  {
+    "id": 120,
+    "name": "TAMAN EKSPRESI 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/120/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/87ec2d37-4a67-4edf-a748-01e511f77585.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/87ec2d37-4a67-4edf-a748-01e511f77585.html",
+    "status": "online"
+  },
+  {
+    "id": 121,
+    "name": "CCTV TAMAN HEULANG 4",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/121/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/a5658165-b05c-4a10-a8ca-951551985530.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/a5658165-b05c-4a10-a8ca-951551985530.html",
+    "status": "online"
+  },
+  {
+    "id": 122,
+    "name": "TAMAN SEMPUR 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/122/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/81d53543-1607-45df-9d17-db70c9960345.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/81d53543-1607-45df-9d17-db70c9960345.html",
+    "status": "online"
+  },
+  {
+    "id": 123,
+    "name": "POMAD ARAH BOGOR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/123/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/bb88ed9f-e6c6-433b-8f12-26c249e8e8f9.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/bb88ed9f-e6c6-433b-8f12-26c249e8e8f9.html",
+    "status": "online"
+  },
+  {
+    "id": 124,
+    "name": "CCTV TAMAN HEULANG I",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/124/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/a01c12ab-7fad-428c-9289-cef83ea2a64d.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/a01c12ab-7fad-428c-9289-cef83ea2a64d.html",
+    "status": "online"
+  },
+  {
+    "id": 126,
+    "name": "CCTV TAMAN HEULANG 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/126/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/f9d2816e-3e6c-46aa-9d63-4bc1379eec51.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/f9d2816e-3e6c-46aa-9d63-4bc1379eec51.html",
+    "status": "online"
+  },
+  {
+    "id": 127,
+    "name": "CCTV TAMAN HEULANG 3",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/127/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/aab243a3-6711-4e12-8956-b030bad6375b.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/aab243a3-6711-4e12-8956-b030bad6375b.html",
+    "status": "online"
+  },
+  {
+    "id": 128,
+    "name": "CCTV TAMAN KENCANA 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/128/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/bbee8545-0296-478a-b1dc-5312d0acab1d.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/bbee8545-0296-478a-b1dc-5312d0acab1d.html",
+    "status": "online"
+  },
+  {
+    "id": 129,
+    "name": "CCTV TAMAN KENCANA 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/129/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/b397dea2-8884-4c22-b6a9-f0acd0a204ea.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/b397dea2-8884-4c22-b6a9-f0acd0a204ea.html",
+    "status": "online"
+  },
+  {
+    "id": 130,
+    "name": "CCTV LAPANGAN SEMPUR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/130/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/3a33b052-0526-429f-b8ac-c10865626acd.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/3a33b052-0526-429f-b8ac-c10865626acd.html",
+    "status": "online"
+  },
+  {
+    "id": 131,
+    "name": "TAMAN EKSPRESI 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/131/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/1bcb7d49-9573-4d87-9e74-b6b1a4cfdcfc.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/1bcb7d49-9573-4d87-9e74-b6b1a4cfdcfc.html",
+    "status": "online"
+  },
+  {
+    "id": 132,
+    "name": "CCTV-TAMAN-PANGRANGO",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/132/detail",
+    "stream_url": "https://restreamer.kotabogor.go.id/memfs/ce8e9840-f59d-4ae3-a82d-39e978dd0a56.m3u8",
+    "embed_url": "https://restreamer.kotabogor.go.id/ce8e9840-f59d-4ae3-a82d-39e978dd0a56.html",
+    "status": "online"
+  },
+  {
+    "id": 133,
+    "name": "CCTV - JL. JUANDA ARAH BALAIKOTA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/133/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/519d2368-103e-4e7c-860c-35d66a7f6352.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/519d2368-103e-4e7c-860c-35d66a7f6352.html",
+    "status": "online"
+  },
+  {
+    "id": 134,
+    "name": "CCTV -  JL. JUANDA DEPAN BALAIKOTA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/134/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/e7d14e54-b9bd-474a-8976-dd08baec4498.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/e7d14e54-b9bd-474a-8976-dd08baec4498.html",
+    "status": "online"
+  },
+  {
+    "id": 136,
+    "name": "CCTV- PERTIGA JL. MAWAR ARAH MERDEKA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/136/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/8b39d204-4039-4352-b236-01635b3f5e7a.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/8b39d204-4039-4352-b236-01635b3f5e7a.html",
+    "status": "online"
+  },
+  {
+    "id": 137,
+    "name": "CCTV - JL. MAWAR ARAH SEMERU",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/137/detail",
+    "stream_url": "https://restreamer3.kotabogor.go.id/memfs/3b191b4b-6473-401d-9508-fe4a61be876b.m3u8",
+    "embed_url": "https://restreamer3.kotabogor.go.id/3b191b4b-6473-401d-9508-fe4a61be876b.html",
+    "status": "online"
+  },
+  {
+    "id": 138,
+    "name": "CCTV-  PASIR KUDA ARAH PANCASAN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/138/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/a95b5688-fb04-42bc-88cb-fc9119323d72.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/a95b5688-fb04-42bc-88cb-fc9119323d72.html",
+    "status": "online"
+  },
+  {
+    "id": 139,
+    "name": "CCTV- PASIR KUDA ARAH GUNUNG BATU",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/139/detail",
+    "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b36180e0-e368-42ba-a50d-48f95db42787.m3u8",
+    "embed_url": "https://restreamer2.kotabogor.go.id/b36180e0-e368-42ba-a50d-48f95db42787.html",
+    "status": "online"
+  },
+  {
+    "id": 142,
+    "name": "CCTV PUTERAN ARAH BONDES 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/142/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/22d63eda-40bb-4fed-95c3-7c4eeef51cbf.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/22d63eda-40bb-4fed-95c3-7c4eeef51cbf.html",
+    "status": "online"
+  },
+  {
+    "id": 143,
+    "name": "CCTV SIMPANG SINDANG BARANG 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/143/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/534eb46c-159d-43c9-ae35-2f273245f257.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/534eb46c-159d-43c9-ae35-2f273245f257.html",
+    "status": "online"
+  },
+  {
+    "id": 145,
+    "name": "CCTV SIMPANG SINDANG BARANG 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/145/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/83eb5f01-df58-4cc1-8cd0-2f507be57649.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/83eb5f01-df58-4cc1-8cd0-2f507be57649.html",
+    "status": "online"
+  },
+  {
+    "id": 146,
+    "name": "CCTV SIMPANG SINDANG BARANG 3",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/146/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/b85b93a4-22dd-418a-ae88-8322f0bc479f.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/b85b93a4-22dd-418a-ae88-8322f0bc479f.html",
+    "status": "online"
+  },
+  {
+    "id": 147,
+    "name": "CCTV PASAR GUNUNG BATU 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/147/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/c749c699-6399-446f-9207-478be7de226d.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/c749c699-6399-446f-9207-478be7de226d.html",
+    "status": "online"
+  },
+  {
+    "id": 149,
+    "name": "CCTV PASAR GUNUNG BATU 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/149/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/a4e728ef-9bbc-4c89-a303-9d4a160cb940.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/a4e728ef-9bbc-4c89-a303-9d4a160cb940.html",
+    "status": "online"
+  },
+  {
+    "id": 150,
+    "name": "CCTV BELAKANG PASAR MAWAR -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/150/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/09ca573e-e121-4689-aac7-c4ee4b1278fa.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/09ca573e-e121-4689-aac7-c4ee4b1278fa.html",
+    "status": "online"
+  },
+  {
+    "id": 151,
+    "name": "CCTV SIMPANG ARAH DRAMAGA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/151/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/51e9eed5-4b9a-4d45-bd04-8e3fc7485a67.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/51e9eed5-4b9a-4d45-bd04-8e3fc7485a67.html",
+    "status": "online"
+  },
+  {
+    "id": 152,
+    "name": "CCTV BELAKANG PASAR MAWAR 1 -P",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/152/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/baccd872-4c65-4832-9f33-c5b4d467e777.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/baccd872-4c65-4832-9f33-c5b4d467e777.html",
+    "status": "online"
+  },
+  {
+    "id": 154,
+    "name": "CCTV JL. FALAK 2 -P",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/154/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/d2ef4780-f867-46f4-86a7-9923306a4701.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/d2ef4780-f867-46f4-86a7-9923306a4701.html",
+    "status": "online"
+  },
+  {
+    "id": 157,
+    "name": "CCTV JL.SEMERU 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/157/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/fd60e020-303a-42fa-9673-ed01778a4380.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/fd60e020-303a-42fa-9673-ed01778a4380.html",
+    "status": "online"
+  },
+  {
+    "id": 158,
+    "name": "CCTV JL. SEMERU 1 -P",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/158/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/f5bed50e-775c-4260-8817-679a36c950d2.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/f5bed50e-775c-4260-8817-679a36c950d2.html",
+    "status": "online"
+  },
+  {
+    "id": 159,
+    "name": "CCTV TAMAN SEMPUR BELAKANG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/159/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/b5af80c7-6bd1-4b1e-9fb3-f847e012cb80.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/b5af80c7-6bd1-4b1e-9fb3-f847e012cb80.html",
+    "status": "online"
+  },
+  {
+    "id": 160,
+    "name": "CCTV TAMAN HEULANG DEPAN SMKN 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/160/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/e64599b3-b253-4dcd-acca-87e158932ae4.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/e64599b3-b253-4dcd-acca-87e158932ae4.html",
+    "status": "online"
+  },
+  {
+    "id": 161,
+    "name": "CCTV SIMPANG A. YANI - DADALI 2 -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/161/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/e41c3780-b023-4083-af93-3ece32c6c098.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/e41c3780-b023-4083-af93-3ece32c6c098.html",
+    "status": "online"
+  },
+  {
+    "id": 163,
+    "name": "CCTV JL. BARU ARAH JEMBATAN",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/163/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/0316066f-7936-44ce-9acd-d2f9032d44b4.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/0316066f-7936-44ce-9acd-d2f9032d44b4.html",
+    "status": "online"
+  },
+  {
+    "id": 166,
+    "name": "CCTV SIMPANG JL. DREDED -P",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/166/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/1616c078-596f-434f-96bc-d6ba04c3b85c.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/1616c078-596f-434f-96bc-d6ba04c3b85c.html",
+    "status": "online"
+  },
+  {
+    "id": 167,
+    "name": "CCTV SIMPANG PAHLAWAN 2 -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/167/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/fd56d0ac-e4c7-4915-87d3-0d8e59edef1b.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/fd56d0ac-e4c7-4915-87d3-0d8e59edef1b.html",
+    "status": "online"
+  },
+  {
+    "id": 168,
+    "name": "CCTV SIMPANG PAHLAWAN 1 -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/168/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/427eb879-7e41-469f-b1f0-dd2954d154d9.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/427eb879-7e41-469f-b1f0-dd2954d154d9.html",
+    "status": "online"
+  },
+  {
+    "id": 169,
+    "name": "CCTV JL.BARU-CIBADAK -P",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/169/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/a0db3c9b-7dcc-4296-b5a2-e4a740fd3b5f.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/a0db3c9b-7dcc-4296-b5a2-e4a740fd3b5f.html",
+    "status": "online"
+  },
+  {
+    "id": 170,
+    "name": "CCTV  JL.BARU - CIBADAK 2 -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/170/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/676bd3d3-fbd3-48b4-b40c-15bb4105876f.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/676bd3d3-fbd3-48b4-b40c-15bb4105876f.html",
+    "status": "online"
+  },
+  {
+    "id": 171,
+    "name": "CCTV JL.BARU - CIBADAK 3 -F",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/171/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/0ce422a1-9367-40f7-8af4-71b19f32ea5a.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/0ce422a1-9367-40f7-8af4-71b19f32ea5a.html",
+    "status": "online"
+  },
+  {
+    "id": 172,
+    "name": "CCTV JL. BARU DEPAN YOGYA 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/172/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/c9fdf5ba-ae6c-477c-bec2-f1599f534950.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/c9fdf5ba-ae6c-477c-bec2-f1599f534950.html",
+    "status": "online"
+  },
+  {
+    "id": 173,
+    "name": "CCTV JL. RAYA TAJUR 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/173/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/53f19db7-f6e7-4c32-aea5-9f73507e2106.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/53f19db7-f6e7-4c32-aea5-9f73507e2106.html",
+    "status": "online"
+  },
+  {
+    "id": 174,
+    "name": "CCTV JL. RAYA TAJUR 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/174/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/5ed5116a-52c7-45b9-bf9b-e2ff355c225e.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/5ed5116a-52c7-45b9-bf9b-e2ff355c225e.html",
+    "status": "online"
+  },
+  {
+    "id": 175,
+    "name": "CCTV DEPAN PINTU TOL KAYUMANIS 2 - 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/175/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/cdac6674-51b9-4987-95b0-be37ecff1c15.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/cdac6674-51b9-4987-95b0-be37ecff1c15.html",
+    "status": "online"
+  },
+  {
+    "id": 176,
+    "name": "CCTV JL. BARU DEPAN YOGYA 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/176/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f35a34ac-7528-4582-96bb-1f5f0a226f07.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/f35a34ac-7528-4582-96bb-1f5f0a226f07.html",
+    "status": "online"
+  },
+  {
+    "id": 177,
+    "name": "CCTV DEPAN PINTU TOL KAYUMANIS 2 - 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/177/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/6195a071-3f0c-48ad-b9b0-c69f9b17d38c.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/6195a071-3f0c-48ad-b9b0-c69f9b17d38c.html",
+    "status": "online"
+  },
+  {
+    "id": 179,
+    "name": "CCTV PARUNG BANTENG",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/179/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/069413b0-dc6c-4c76-b3c1-2a41b427c61c.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/069413b0-dc6c-4c76-b3c1-2a41b427c61c.html",
+    "status": "online"
+  },
+  {
+    "id": 180,
+    "name": "CCTV PARUNG BANTENG 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/180/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/438bb41f-5bc2-40f6-8bb1-fa99cb3fa721.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/438bb41f-5bc2-40f6-8bb1-fa99cb3fa721.html",
+    "status": "online"
+  },
+  {
+    "id": 181,
+    "name": "CCTV SIMPANG KATULAMPA 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/181/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/7c1016d7-cba8-4ed0-995d-6bbd44920698.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/7c1016d7-cba8-4ed0-995d-6bbd44920698.html",
+    "status": "online"
+  },
+  {
+    "id": 182,
+    "name": "CCTV SIMPANG KATULAMPA 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/182/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f22e94b8-f52c-4d15-9b09-1b2ab05e980a.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/f22e94b8-f52c-4d15-9b09-1b2ab05e980a.html",
+    "status": "online"
+  },
+  {
+    "id": 183,
+    "name": "CCTV KOL AHMAD SYAM 3-1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/183/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/0fc635f9-5c54-427a-86f3-0843626ee719.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/0fc635f9-5c54-427a-86f3-0843626ee719.html",
+    "status": "online"
+  },
+  {
+    "id": 184,
+    "name": "CCTV KOL AHMAD SYAM 3-2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/184/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/58f8870f-b68b-4f4b-9a8b-d9b7169c9317.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/58f8870f-b68b-4f4b-9a8b-d9b7169c9317.html",
+    "status": "online"
+  },
+  {
+    "id": 185,
+    "name": "CCTV KOL AHMAD SYAM 1-2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/185/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/83608f94-69a9-4341-a821-beb90fdee6e3.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/83608f94-69a9-4341-a821-beb90fdee6e3.html",
+    "status": "online"
+  },
+  {
+    "id": 186,
+    "name": "CCTV KOL AHMAD SYAM 1-1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/186/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f03456d3-1d6c-4156-b301-e66e85e1b52e.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/f03456d3-1d6c-4156-b301-e66e85e1b52e.html",
+    "status": "online"
+  },
+  {
+    "id": 187,
+    "name": "CCTV KOL AHMAD SYAM 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/187/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/244ee10c-bbb3-4f48-852a-b7bd6fbf5aa1.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/244ee10c-bbb3-4f48-852a-b7bd6fbf5aa1.html",
+    "status": "online"
+  },
+  {
+    "id": 188,
+    "name": "CCTV DEPAN BALE BINARUM 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/188/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/21022dbb-0461-42b4-8677-c1f941d40827.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/21022dbb-0461-42b4-8677-c1f941d40827.html",
+    "status": "online"
+  },
+  {
+    "id": 189,
+    "name": "CCTV DEPAN BALEBINARUM 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/189/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/3f83b5c2-ad43-4ecd-a935-feab4ebe5654.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/3f83b5c2-ad43-4ecd-a935-feab4ebe5654.html",
+    "status": "online"
+  },
+  {
+    "id": 190,
+    "name": "CCTV JL. BARU SEBELUM UNDERPASS 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/190/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/d220d1d8-ff5f-40ee-a3f8-019deb6bd019.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/d220d1d8-ff5f-40ee-a3f8-019deb6bd019.html",
+    "status": "online"
+  },
+  {
+    "id": 191,
+    "name": "CCTV JL. BARU SEBELUM UNDERPASS 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/191/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/9c47a00d-90ce-44de-835e-1a4d704f7901.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/9c47a00d-90ce-44de-835e-1a4d704f7901.html",
+    "status": "online"
+  },
+  {
+    "id": 192,
+    "name": "CCTV SIMPANG MANUNGGAL",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/192/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/fafe128b-2570-4c74-9ca1-da1286fdf59d.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/fafe128b-2570-4c74-9ca1-da1286fdf59d.html",
+    "status": "online"
+  },
+  {
+    "id": 193,
+    "name": "CCTV SIMPANG YASMIN 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/193/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/c18014c9-7e81-4fc4-a799-b71fe2718e08.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/c18014c9-7e81-4fc4-a799-b71fe2718e08.html",
+    "status": "online"
+  },
+  {
+    "id": 194,
+    "name": "CCTV SIMPANG YASMIN 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/194/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/fa74138a-dd7e-4f10-8174-69475584073d.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/fa74138a-dd7e-4f10-8174-69475584073d.html",
+    "status": "online"
+  },
+  {
+    "id": 195,
+    "name": "CCTV JL. BARU DEPAN UNDERPASS 2",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/195/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/ad7725b1-5f9a-4ccb-97e2-9f5a68990865.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/ad7725b1-5f9a-4ccb-97e2-9f5a68990865.html",
+    "status": "online"
+  },
+  {
+    "id": 196,
+    "name": "CCTV JL.BARU DEPAN UNDERPASS 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/196/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/807907af-8920-439d-9ae6-b67daa216818.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/807907af-8920-439d-9ae6-b67daa216818.html",
+    "status": "online"
+  },
+  {
+    "id": 197,
+    "name": "CCTV PUTERAN ARAH BONDES 1",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/197/detail",
+    "stream_url": "https://restreamer5.kotabogor.go.id/memfs/97adb406-257a-472d-af1f-cd2978c89bdb.m3u8",
+    "embed_url": "https://restreamer5.kotabogor.go.id/97adb406-257a-472d-af1f-cd2978c89bdb.html",
+    "status": "online"
+  },
+  {
+    "id": 198,
+    "name": "CCTV SIMPANG RSUD KOTA BOGOR",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/198/detail",
+    "stream_url": "https://restreamer4.kotabogor.go.id/memfs/5ef1d418-65ba-41da-83db-edee5beec4ff.m3u8",
+    "embed_url": "https://restreamer4.kotabogor.go.id/5ef1d418-65ba-41da-83db-edee5beec4ff.html",
+    "status": "online"
+  },
+  {
+    "id": 199,
+    "name": "CCTV TUGU ARAH OTISTA",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/199/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/c1f83df4-edda-4a5b-aff6-a3543236c1a6.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/c1f83df4-edda-4a5b-aff6-a3543236c1a6.html",
+    "status": "online"
+  },
+  {
+    "id": 201,
+    "name": "CCTV Simpang A.Yani Dadali 1 -p",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/201/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/c7615c34-0764-4770-995a-7ef81ebb1e21.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/c7615c34-0764-4770-995a-7ef81ebb1e21.html",
+    "status": "online"
+  },
+  {
+    "id": 202,
+    "name": "UNDERPASS ARAH PINTU 4",
+    "detail_url": "https://bsw.kotabogor.go.id/cctv/202/detail",
+    "stream_url": "https://restreamer6.kotabogor.go.id/memfs/cdc14643-b8fb-4509-bb43-98240d8f275a.m3u8",
+    "embed_url": "https://restreamer6.kotabogor.go.id/cdc14643-b8fb-4509-bb43-98240d8f275a.html",
+    "status": "online"
+  }
+]

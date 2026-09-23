@@ -1,0 +1,5692 @@
+{
+  "metadata": {
+    "project": "BSW Kota Bogor Multi-Camera Tracking Dashboard",
+    "version": "1.0.0",
+    "total_cameras": 94,
+    "total_directed_edges": 220,
+    "ssa_ring_direction": "STRICTLY_COUNTER_CLOCKWISE",
+    "coordinate_crs": "EPSG:4326 (WGS84)",
+    "bounds": {
+      "min_latitude": -6.636,
+      "max_latitude": -6.5376,
+      "min_longitude": 106.7456,
+      "max_longitude": 106.8326
+    }
+  },
+  "nodes": [
+    {
+      "id": 75,
+      "name": "CCTV-GANG AUT",
+      "junction_name": "Jl. Suryakencana Simpang Gang Aut",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.61026,
+      "longitude": 106.804134,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 165.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/64b180ce-d237-44d9-b857-c610e1d0c75c.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/64b180ce-d237-44d9-b857-c610e1d0c75c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/75/detail",
+      "status": "online",
+      "lat": -6.61026,
+      "lng": 106.804134,
+      "default_azimuth": 165.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 79,
+      "name": "CCTV - TUGU KUJANG",
+      "junction_name": "Simpang Tugu Kujang (Pajajaran - Otista)",
+      "corridor": "SSA_RING",
+      "latitude": -6.601403,
+      "longitude": 106.805133,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 240.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/5a5cf878-9d9b-4400-a73a-27a5b24a6ec4.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/5a5cf878-9d9b-4400-a73a-27a5b24a6ec4.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/79/detail",
+      "status": "online",
+      "lat": -6.601403,
+      "lng": 106.805133,
+      "default_azimuth": 240.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 80,
+      "name": "CCTV -CIHELEUT",
+      "junction_name": "Simpang Jl. Pajajaran - Ciheleut (Univ Pakuan)",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5982,
+      "longitude": 106.8078,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 205.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/f5ca1d37-c267-4806-850b-d1ca537fb29a.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/f5ca1d37-c267-4806-850b-d1ca537fb29a.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/80/detail",
+      "status": "online",
+      "lat": -6.5982,
+      "lng": 106.8078,
+      "default_azimuth": 205.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 81,
+      "name": "CCTV - DJUANDA ARAH BALAIKOTA SIMPANG BTM",
+      "junction_name": "Simpang BTM (Juanda Arah Balaikota)",
+      "corridor": "SSA_RING",
+      "latitude": -6.6036,
+      "longitude": 106.7958,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 355.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/f707b72a-5c95-421a-9f3a-2e478794bd76.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/f707b72a-5c95-421a-9f3a-2e478794bd76.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/81/detail",
+      "status": "online",
+      "lat": -6.6036,
+      "lng": 106.7958,
+      "default_azimuth": 355.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 82,
+      "name": "CCTV DEPAN ALUN ALUN",
+      "junction_name": "Depan Alun-Alun & Stasiun Kota Bogor (Kapten Muslihat)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.595101,
+      "longitude": 106.79141,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 270.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/c07c1926-288c-46e4-a19c-9f51022edc5d.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/c07c1926-288c-46e4-a19c-9f51022edc5d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/82/detail",
+      "status": "online",
+      "lat": -6.595101,
+      "lng": 106.79141,
+      "default_azimuth": 270.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 83,
+      "name": "CCTV PASAR BOGOR",
+      "junction_name": "Jl. Otista - Pasar Bogor & Lawang Suryakencana",
+      "corridor": "SSA_RING",
+      "latitude": -6.60358,
+      "longitude": 106.800629,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 255.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b43066d4-b1e4-4e90-8e17-86c15a9a944e.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/b43066d4-b1e4-4e90-8e17-86c15a9a944e.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/83/detail",
+      "status": "online",
+      "lat": -6.60358,
+      "lng": 106.800629,
+      "default_azimuth": 255.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 85,
+      "name": "CCTV JUANDA",
+      "junction_name": "Jl. Ir. H. Djuanda (Museum Zoologi)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5991,
+      "longitude": 106.7949,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 350.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/62cded1f-90d0-4af6-b330-dc40af5fdd67.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/62cded1f-90d0-4af6-b330-dc40af5fdd67.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/85/detail",
+      "status": "online",
+      "lat": -6.5991,
+      "lng": 106.7949,
+      "default_azimuth": 350.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 86,
+      "name": "CCTV- SEKETENG SURKEN",
+      "junction_name": "Simpang Lawang Seketeng - Suryakencana",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.6055,
+      "longitude": 106.8014,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 160.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/3d51d3a1-0d90-4230-956c-60dea3c11ac3.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/3d51d3a1-0d90-4230-956c-60dea3c11ac3.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/86/detail",
+      "status": "online",
+      "lat": -6.6055,
+      "lng": 106.8014,
+      "default_azimuth": 160.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 87,
+      "name": "CCTV OTISTA",
+      "junction_name": "Jl. Otto Iskandardinata (Otista Tengah)",
+      "corridor": "SSA_RING",
+      "latitude": -6.60285,
+      "longitude": 106.8021,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 245.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b75e84e5-d033-48fb-aa67-fc48c5e11091.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/b75e84e5-d033-48fb-aa67-fc48c5e11091.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/87/detail",
+      "status": "online",
+      "lat": -6.60285,
+      "lng": 106.8021,
+      "default_azimuth": 245.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 89,
+      "name": "CCTV SEKETENG GUDANG",
+      "junction_name": "Simpang Lawang Seketeng - Gudang",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.6058,
+      "longitude": 106.8028,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 90.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/1083f9b4-b193-490d-aa45-31cbc69913fb.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/1083f9b4-b193-490d-aa45-31cbc69913fb.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/89/detail",
+      "status": "online",
+      "lat": -6.6058,
+      "lng": 106.8028,
+      "default_azimuth": 90.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 91,
+      "name": "CCTV PEDATI ARAH GUDANG",
+      "junction_name": "Jl. Pedati Arah Gudang",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.6048,
+      "longitude": 106.8002,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 120.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b22b4de5-8c27-4a6b-81eb-70d68455c627.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/b22b4de5-8c27-4a6b-81eb-70d68455c627.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/91/detail",
+      "status": "online",
+      "lat": -6.6048,
+      "lng": 106.8002,
+      "default_azimuth": 120.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 92,
+      "name": "CCTV- SIMPANG DEPOM",
+      "junction_name": "Simpang Denpom (Juanda - Sudirman - Jalak Harupat)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5919,
+      "longitude": 106.7951,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 95.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/2942b8fd-1f48-4c2c-b368-d0df0526367c.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/2942b8fd-1f48-4c2c-b368-d0df0526367c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/92/detail",
+      "status": "online",
+      "lat": -6.5919,
+      "lng": 106.7951,
+      "default_azimuth": 95.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 96,
+      "name": "CCTV PEDATI SURKEN",
+      "junction_name": "Jl. Pedati Simpang Suryakencana",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.6046,
+      "longitude": 106.801,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 155.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/2ac495a8-1cf3-4451-ae8d-529b805acb71.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/2ac495a8-1cf3-4451-ae8d-529b805acb71.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/96/detail",
+      "status": "online",
+      "lat": -6.6046,
+      "lng": 106.801,
+      "default_azimuth": 155.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 100,
+      "name": "CCTV LAWANG SEKETENG",
+      "junction_name": "Jl. Lawang Seketeng Pasar Bogor",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.6042,
+      "longitude": 106.8004,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 170.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/0557f29a-ab7a-4c03-85fa-bcb696d7ab0c.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/0557f29a-ab7a-4c03-85fa-bcb696d7ab0c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/100/detail",
+      "status": "online",
+      "lat": -6.6042,
+      "lng": 106.8004,
+      "default_azimuth": 170.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 101,
+      "name": "CCTV-PEDATI LAWANG",
+      "junction_name": "Jl. Pedati Simpang Lawang Seketeng",
+      "corridor": "SURKEN_PASAR_BOGOR",
+      "latitude": -6.604,
+      "longitude": 106.7999,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 150.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/7e657898-5798-48c3-8f62-63f360243ad9.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/7e657898-5798-48c3-8f62-63f360243ad9.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/101/detail",
+      "status": "online",
+      "lat": -6.604,
+      "lng": 106.7999,
+      "default_azimuth": 150.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 103,
+      "name": "CCTV DEPAN MASJID RAYA",
+      "junction_name": "Jl. Raya Pajajaran Depan Masjid Raya Bogor",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.60748,
+      "longitude": 106.808709,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 175.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/aff6fd2d-2f56-4072-b5c3-774f07722a04.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/aff6fd2d-2f56-4072-b5c3-774f07722a04.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/103/detail",
+      "status": "online",
+      "lat": -6.60748,
+      "lng": 106.808709,
+      "default_azimuth": 175.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 106,
+      "name": "CCTV  DJUANDA ARAH SURKEN",
+      "junction_name": "Simpang BTM / Djuanda Arah Surken",
+      "corridor": "SSA_RING",
+      "latitude": -6.60395,
+      "longitude": 106.7972,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 110.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/f6b50f38-9184-418e-b3f9-05faaa9b387d.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/f6b50f38-9184-418e-b3f9-05faaa9b387d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/106/detail",
+      "status": "online",
+      "lat": -6.60395,
+      "lng": 106.7972,
+      "default_azimuth": 110.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 107,
+      "name": "DJUANDA ARAH EMPANG",
+      "junction_name": "Simpang BTM / Djuanda Arah Empang",
+      "corridor": "SSA_RING",
+      "latitude": -6.6044,
+      "longitude": 106.7961,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 185.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/31b05614-19d8-492e-b244-903e8aa28292.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/31b05614-19d8-492e-b244-903e8aa28292.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/107/detail",
+      "status": "online",
+      "lat": -6.6044,
+      "lng": 106.7961,
+      "default_azimuth": 185.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 108,
+      "name": "KOMINFO ARAH TAJUR",
+      "junction_name": "Jl. Raya Pajajaran / Kominfo Arah Tajur",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.6192,
+      "longitude": 106.8175,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 140.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/a688d9a6-2db5-405c-9810-7e8205e214c9.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/a688d9a6-2db5-405c-9810-7e8205e214c9.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/108/detail",
+      "status": "online",
+      "lat": -6.6192,
+      "lng": 106.8175,
+      "default_azimuth": 140.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 111,
+      "name": "SIMPANG DENPOM ARAH PINTU UTAMA ISTANA",
+      "junction_name": "Simpang Denpom Arah Pintu Utama Istana Bogor",
+      "corridor": "SSA_RING",
+      "latitude": -6.5923,
+      "longitude": 106.7954,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 135.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/67ebf216-fa63-4a6a-9ea8-1e5604257f74.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/67ebf216-fa63-4a6a-9ea8-1e5604257f74.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/111/detail",
+      "status": "online",
+      "lat": -6.5923,
+      "lng": 106.7954,
+      "default_azimuth": 135.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 114,
+      "name": "MA SALMUN ARAH MAWAR",
+      "junction_name": "Jl. MA Salmun Arah Mawar",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5905,
+      "longitude": 106.7885,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 315.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/aaa81ab7-5f96-4073-8090-e33d882a5dff.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/aaa81ab7-5f96-4073-8090-e33d882a5dff.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/114/detail",
+      "status": "online",
+      "lat": -6.5905,
+      "lng": 106.7885,
+      "default_azimuth": 315.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 115,
+      "name": "MA SALMUN ARAH DEWI SARTIKA",
+      "junction_name": "Jl. MA Salmun Arah Dewi Sartika",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5912,
+      "longitude": 106.7891,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 135.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/ee837053-a8e7-4fde-84ed-fc88ad26d3a5.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/ee837053-a8e7-4fde-84ed-fc88ad26d3a5.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/115/detail",
+      "status": "online",
+      "lat": -6.5912,
+      "lng": 106.7891,
+      "default_azimuth": 135.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 116,
+      "name": "MA SALMUN ARAH JEMBATAN MERAH",
+      "junction_name": "Jl. MA Salmun Arah Jembatan Merah",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5938,
+      "longitude": 106.7882,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 210.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/e7609045-eeaf-4579-8eca-fc3e61502eac.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/e7609045-eeaf-4579-8eca-fc3e61502eac.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/116/detail",
+      "status": "online",
+      "lat": -6.5938,
+      "lng": 106.7882,
+      "default_azimuth": 210.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 118,
+      "name": "TAMAN CORAT CORET",
+      "junction_name": "Simpang Taman Corat Coret (Pandu Raya)",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5742,
+      "longitude": 106.8105,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 170.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/d6ef0d86-68f1-42c9-acd7-667d05bfa463.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/d6ef0d86-68f1-42c9-acd7-667d05bfa463.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/118/detail",
+      "status": "online",
+      "lat": -6.5742,
+      "lng": 106.8105,
+      "default_azimuth": 170.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 119,
+      "name": "TAMAN CORAT CORET ARAH DISDUKCAPIL",
+      "junction_name": "Taman Corat Coret Arah Disdukcapil",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5745,
+      "longitude": 106.8112,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 85.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/cdfdab2e-7f7d-4bd1-8a7a-698559837d91.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/cdfdab2e-7f7d-4bd1-8a7a-698559837d91.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/119/detail",
+      "status": "online",
+      "lat": -6.5745,
+      "lng": 106.8112,
+      "default_azimuth": 85.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 120,
+      "name": "TAMAN EKSPRESI 1",
+      "junction_name": "Jl. Jalak Harupat (Taman Ekspresi 1)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5912,
+      "longitude": 106.7978,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 100.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/87ec2d37-4a67-4edf-a748-01e511f77585.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/87ec2d37-4a67-4edf-a748-01e511f77585.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/120/detail",
+      "status": "online",
+      "lat": -6.5912,
+      "lng": 106.7978,
+      "default_azimuth": 100.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 121,
+      "name": "CCTV TAMAN HEULANG 4",
+      "junction_name": "Taman Heulang 4 (Sisi Utara / Lapangan)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.56949,
+      "longitude": 106.801964,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 180.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/a5658165-b05c-4a10-a8ca-951551985530.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/a5658165-b05c-4a10-a8ca-951551985530.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/121/detail",
+      "status": "online",
+      "lat": -6.56949,
+      "lng": 106.801964,
+      "default_azimuth": 180.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 122,
+      "name": "TAMAN SEMPUR 2",
+      "junction_name": "Jl. Jalak Harupat (Taman Sempur 2)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5918,
+      "longitude": 106.7998,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 115.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/81d53543-1607-45df-9d17-db70c9960345.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/81d53543-1607-45df-9d17-db70c9960345.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/122/detail",
+      "status": "online",
+      "lat": -6.5918,
+      "lng": 106.7998,
+      "default_azimuth": 115.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 123,
+      "name": "POMAD ARAH BOGOR",
+      "junction_name": "Jl. Raya Jakarta-Bogor KM 50 (Simpang Pomad)",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5385,
+      "longitude": 106.8152,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 195.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/bb88ed9f-e6c6-433b-8f12-26c249e8e8f9.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/bb88ed9f-e6c6-433b-8f12-26c249e8e8f9.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/123/detail",
+      "status": "online",
+      "lat": -6.5385,
+      "lng": 106.8152,
+      "default_azimuth": 195.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 124,
+      "name": "CCTV TAMAN HEULANG I",
+      "junction_name": "Taman Heulang 1 (Sisi Timur)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5696,
+      "longitude": 106.8025,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 270.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/a01c12ab-7fad-428c-9289-cef83ea2a64d.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/a01c12ab-7fad-428c-9289-cef83ea2a64d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/124/detail",
+      "status": "online",
+      "lat": -6.5696,
+      "lng": 106.8025,
+      "default_azimuth": 270.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 126,
+      "name": "CCTV TAMAN HEULANG 2",
+      "junction_name": "Taman Heulang 2 (Sisi Selatan)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5698,
+      "longitude": 106.8021,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/f9d2816e-3e6c-46aa-9d63-4bc1379eec51.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/f9d2816e-3e6c-46aa-9d63-4bc1379eec51.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/126/detail",
+      "status": "online",
+      "lat": -6.5698,
+      "lng": 106.8021,
+      "default_azimuth": 0.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 127,
+      "name": "CCTV TAMAN HEULANG 3",
+      "junction_name": "Taman Heulang 3 (Sisi Barat)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5695,
+      "longitude": 106.8015,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 90.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/aab243a3-6711-4e12-8956-b030bad6375b.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/aab243a3-6711-4e12-8956-b030bad6375b.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/127/detail",
+      "status": "online",
+      "lat": -6.5695,
+      "lng": 106.8015,
+      "default_azimuth": 90.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 128,
+      "name": "CCTV TAMAN KENCANA 1",
+      "junction_name": "Taman Kencana 1 (Pusat Kuliner & Taman)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.588816,
+      "longitude": 106.801861,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 120.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/bbee8545-0296-478a-b1dc-5312d0acab1d.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/bbee8545-0296-478a-b1dc-5312d0acab1d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/128/detail",
+      "status": "online",
+      "lat": -6.588816,
+      "lng": 106.801861,
+      "default_azimuth": 120.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 129,
+      "name": "CCTV TAMAN KENCANA 2",
+      "junction_name": "Taman Kencana 2",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5889,
+      "longitude": 106.80195,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 300.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/b397dea2-8884-4c22-b6a9-f0acd0a204ea.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/b397dea2-8884-4c22-b6a9-f0acd0a204ea.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/129/detail",
+      "status": "online",
+      "lat": -6.5889,
+      "lng": 106.80195,
+      "default_azimuth": 300.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 130,
+      "name": "CCTV LAPANGAN SEMPUR",
+      "junction_name": "Lapangan Sempur (Sentra Olahraga)",
+      "corridor": "SSA_RING",
+      "latitude": -6.591635,
+      "longitude": 106.800786,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 90.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/3a33b052-0526-429f-b8ac-c10865626acd.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/3a33b052-0526-429f-b8ac-c10865626acd.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/130/detail",
+      "status": "online",
+      "lat": -6.591635,
+      "lng": 106.800786,
+      "default_azimuth": 90.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 131,
+      "name": "TAMAN EKSPRESI 2",
+      "junction_name": "Jl. Jalak Harupat (Taman Ekspresi 2)",
+      "corridor": "SSA_RING",
+      "latitude": -6.591,
+      "longitude": 106.7981,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 105.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/1bcb7d49-9573-4d87-9e74-b6b1a4cfdcfc.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/1bcb7d49-9573-4d87-9e74-b6b1a4cfdcfc.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/131/detail",
+      "status": "online",
+      "lat": -6.591,
+      "lng": 106.7981,
+      "default_azimuth": 105.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 132,
+      "name": "CCTV-TAMAN-PANGRANGO",
+      "junction_name": "Taman Pangrango (Pajajaran - Jalak Harupat)",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5895,
+      "longitude": 106.8042,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 135.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer.kotabogor.go.id/memfs/ce8e9840-f59d-4ae3-a82d-39e978dd0a56.m3u8",
+      "embed_url": "https://restreamer.kotabogor.go.id/ce8e9840-f59d-4ae3-a82d-39e978dd0a56.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/132/detail",
+      "status": "online",
+      "lat": -6.5895,
+      "lng": 106.8042,
+      "default_azimuth": 135.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 133,
+      "name": "CCTV - JL. JUANDA ARAH BALAIKOTA",
+      "junction_name": "Jl. Ir. H. Djuanda (Korem / Gereja Zebaoth)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5968,
+      "longitude": 106.7942,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 355.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/519d2368-103e-4e7c-860c-35d66a7f6352.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/519d2368-103e-4e7c-860c-35d66a7f6352.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/133/detail",
+      "status": "online",
+      "lat": -6.5968,
+      "lng": 106.7942,
+      "default_azimuth": 355.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 134,
+      "name": "CCTV -  JL. JUANDA DEPAN BALAIKOTA",
+      "junction_name": "Jl. Ir. H. Djuanda Depan Balaikota Bogor",
+      "corridor": "SSA_RING",
+      "latitude": -6.595146,
+      "longitude": 106.793792,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 10.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/e7d14e54-b9bd-474a-8976-dd08baec4498.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/e7d14e54-b9bd-474a-8976-dd08baec4498.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/134/detail",
+      "status": "online",
+      "lat": -6.595146,
+      "lng": 106.793792,
+      "default_azimuth": 10.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 136,
+      "name": "CCTV- PERTIGA JL. MAWAR ARAH MERDEKA",
+      "junction_name": "Pertigaan Jl. Mawar Arah Merdeka",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.586134,
+      "longitude": 106.787721,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 345.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/8b39d204-4039-4352-b236-01635b3f5e7a.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/8b39d204-4039-4352-b236-01635b3f5e7a.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/136/detail",
+      "status": "online",
+      "lat": -6.586134,
+      "lng": 106.787721,
+      "default_azimuth": 345.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 137,
+      "name": "CCTV - JL. MAWAR ARAH SEMERU",
+      "junction_name": "Jl. Mawar Arah Dr. Sumeru",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5878,
+      "longitude": 106.7852,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 260.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer3.kotabogor.go.id/memfs/3b191b4b-6473-401d-9508-fe4a61be876b.m3u8",
+      "embed_url": "https://restreamer3.kotabogor.go.id/3b191b4b-6473-401d-9508-fe4a61be876b.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/137/detail",
+      "status": "online",
+      "lat": -6.5878,
+      "lng": 106.7852,
+      "default_azimuth": 260.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 138,
+      "name": "CCTV-  PASIR KUDA ARAH PANCASAN",
+      "junction_name": "Simpang Pasir Kuda Arah Pancasan",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.606998,
+      "longitude": 106.783655,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 130.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/a95b5688-fb04-42bc-88cb-fc9119323d72.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/a95b5688-fb04-42bc-88cb-fc9119323d72.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/138/detail",
+      "status": "online",
+      "lat": -6.606998,
+      "lng": 106.783655,
+      "default_azimuth": 130.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 139,
+      "name": "CCTV- PASIR KUDA ARAH GUNUNG BATU",
+      "junction_name": "Simpang Pasir Kuda Arah Gunung Batu",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.6068,
+      "longitude": 106.7835,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 350.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer2.kotabogor.go.id/memfs/b36180e0-e368-42ba-a50d-48f95db42787.m3u8",
+      "embed_url": "https://restreamer2.kotabogor.go.id/b36180e0-e368-42ba-a50d-48f95db42787.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/139/detail",
+      "status": "online",
+      "lat": -6.6068,
+      "lng": 106.7835,
+      "default_azimuth": 350.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 142,
+      "name": "CCTV PUTERAN ARAH BONDES 2",
+      "junction_name": "Putaran Arah Bondongan (Bondes) 2",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.6095,
+      "longitude": 106.7958,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 185.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/22d63eda-40bb-4fed-95c3-7c4eeef51cbf.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/22d63eda-40bb-4fed-95c3-7c4eeef51cbf.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/142/detail",
+      "status": "online",
+      "lat": -6.6095,
+      "lng": 106.7958,
+      "default_azimuth": 185.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 143,
+      "name": "CCTV SIMPANG SINDANG BARANG 2",
+      "junction_name": "Simpang Sindang Barang 2",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.57865,
+      "longitude": 106.75545,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 270.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/534eb46c-159d-43c9-ae35-2f273245f257.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/534eb46c-159d-43c9-ae35-2f273245f257.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/143/detail",
+      "status": "online",
+      "lat": -6.57865,
+      "lng": 106.75545,
+      "default_azimuth": 270.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 145,
+      "name": "CCTV SIMPANG SINDANG BARANG 1",
+      "junction_name": "Simpang Sindang Barang 1",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.5786,
+      "longitude": 106.7554,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 90.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/83eb5f01-df58-4cc1-8cd0-2f507be57649.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/83eb5f01-df58-4cc1-8cd0-2f507be57649.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/145/detail",
+      "status": "online",
+      "lat": -6.5786,
+      "lng": 106.7554,
+      "default_azimuth": 90.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 146,
+      "name": "CCTV SIMPANG SINDANG BARANG 3",
+      "junction_name": "Simpang Sindang Barang 3",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.5787,
+      "longitude": 106.7555,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 180.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/b85b93a4-22dd-418a-ae88-8322f0bc479f.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/b85b93a4-22dd-418a-ae88-8322f0bc479f.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/146/detail",
+      "status": "online",
+      "lat": -6.5787,
+      "lng": 106.7555,
+      "default_azimuth": 180.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 147,
+      "name": "CCTV PASAR GUNUNG BATU 2",
+      "junction_name": "Pasar Gunung Batu 2 (Jl. Veteran)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.594166,
+      "longitude": 106.778068,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 255.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/c749c699-6399-446f-9207-478be7de226d.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/c749c699-6399-446f-9207-478be7de226d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/147/detail",
+      "status": "online",
+      "lat": -6.594166,
+      "lng": 106.778068,
+      "default_azimuth": 255.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 149,
+      "name": "CCTV PASAR GUNUNG BATU 1",
+      "junction_name": "Pasar Gunung Batu 1 (Jl. Veteran)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5942,
+      "longitude": 106.7781,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 75.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/a4e728ef-9bbc-4c89-a303-9d4a160cb940.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/a4e728ef-9bbc-4c89-a303-9d4a160cb940.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/149/detail",
+      "status": "online",
+      "lat": -6.5942,
+      "lng": 106.7781,
+      "default_azimuth": 75.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 150,
+      "name": "CCTV BELAKANG PASAR MAWAR -F",
+      "junction_name": "Belakang Pasar Mawar (Fixed)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.589806,
+      "longitude": 106.786908,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 280.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/09ca573e-e121-4689-aac7-c4ee4b1278fa.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/09ca573e-e121-4689-aac7-c4ee4b1278fa.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/150/detail",
+      "status": "online",
+      "lat": -6.589806,
+      "lng": 106.786908,
+      "default_azimuth": 280.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 151,
+      "name": "CCTV SIMPANG ARAH DRAMAGA",
+      "junction_name": "Simpang Bubulak / Laladon Arah Dramaga",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.5721,
+      "longitude": 106.7456,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 260.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/51e9eed5-4b9a-4d45-bd04-8e3fc7485a67.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/51e9eed5-4b9a-4d45-bd04-8e3fc7485a67.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/151/detail",
+      "status": "online",
+      "lat": -6.5721,
+      "lng": 106.7456,
+      "default_azimuth": 260.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 152,
+      "name": "CCTV BELAKANG PASAR MAWAR 1 -P",
+      "junction_name": "Belakang Pasar Mawar 1 (PTZ)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.58985,
+      "longitude": 106.78695,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/baccd872-4c65-4832-9f33-c5b4d467e777.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/baccd872-4c65-4832-9f33-c5b4d467e777.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/152/detail",
+      "status": "online",
+      "lat": -6.58985,
+      "lng": 106.78695,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 154,
+      "name": "CCTV JL. FALAK 2 -P",
+      "junction_name": "Jl. KH Tubagus Muhammad Falak (Loji)",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.584292,
+      "longitude": 106.772771,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/d2ef4780-f867-46f4-86a7-9923306a4701.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/d2ef4780-f867-46f4-86a7-9923306a4701.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/154/detail",
+      "status": "online",
+      "lat": -6.584292,
+      "lng": 106.772771,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 157,
+      "name": "CCTV JL.SEMERU 2",
+      "junction_name": "Jl. Dr. Sumeru 2",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5845,
+      "longitude": 106.7812,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 295.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/fd60e020-303a-42fa-9673-ed01778a4380.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/fd60e020-303a-42fa-9673-ed01778a4380.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/157/detail",
+      "status": "online",
+      "lat": -6.5845,
+      "lng": 106.7812,
+      "default_azimuth": 295.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 158,
+      "name": "CCTV JL. SEMERU 1 -P",
+      "junction_name": "Jl. Dr. Sumeru 1 (PTZ)",
+      "corridor": "STASIUN_MERDEKA_MAWAR_SEMERU",
+      "latitude": -6.5844,
+      "longitude": 106.7811,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/f5bed50e-775c-4260-8817-679a36c950d2.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/f5bed50e-775c-4260-8817-679a36c950d2.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/158/detail",
+      "status": "online",
+      "lat": -6.5844,
+      "lng": 106.7811,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 159,
+      "name": "CCTV TAMAN SEMPUR BELAKANG",
+      "junction_name": "Taman Sempur Belakang (Akses Ciliwung)",
+      "corridor": "SSA_RING",
+      "latitude": -6.5898,
+      "longitude": 106.8012,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 170.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/b5af80c7-6bd1-4b1e-9fb3-f847e012cb80.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/b5af80c7-6bd1-4b1e-9fb3-f847e012cb80.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/159/detail",
+      "status": "online",
+      "lat": -6.5898,
+      "lng": 106.8012,
+      "default_azimuth": 170.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 160,
+      "name": "CCTV TAMAN HEULANG DEPAN SMKN 1",
+      "junction_name": "Taman Heulang Depan SMKN 1 Bogor",
+      "corridor": "TAMAN_KOTA_PARKS",
+      "latitude": -6.5689,
+      "longitude": 106.8028,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 220.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/e64599b3-b253-4dcd-acca-87e158932ae4.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/e64599b3-b253-4dcd-acca-87e158932ae4.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/160/detail",
+      "status": "online",
+      "lat": -6.5689,
+      "lng": 106.8028,
+      "default_azimuth": 220.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 161,
+      "name": "CCTV SIMPANG A. YANI - DADALI 2 -F",
+      "junction_name": "Simpang A. Yani - Dadali (Warung Jambu) 2",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5658,
+      "longitude": 106.8032,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 180.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/e41c3780-b023-4083-af93-3ece32c6c098.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/e41c3780-b023-4083-af93-3ece32c6c098.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/161/detail",
+      "status": "online",
+      "lat": -6.5658,
+      "lng": 106.8032,
+      "default_azimuth": 180.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 163,
+      "name": "CCTV JL. BARU ARAH JEMBATAN",
+      "junction_name": "Jl. Sholeh Iskandar Arah Jembatan Ciliwung",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5632,
+      "longitude": 106.8062,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 265.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/0316066f-7936-44ce-9acd-d2f9032d44b4.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/0316066f-7936-44ce-9acd-d2f9032d44b4.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/163/detail",
+      "status": "online",
+      "lat": -6.5632,
+      "lng": 106.8062,
+      "default_azimuth": 265.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 166,
+      "name": "CCTV SIMPANG JL. DREDED -P",
+      "junction_name": "Simpang Jl. Dreded (Akses BNR)",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.616048,
+      "longitude": 106.801347,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/1616c078-596f-434f-96bc-d6ba04c3b85c.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/1616c078-596f-434f-96bc-d6ba04c3b85c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/166/detail",
+      "status": "online",
+      "lat": -6.616048,
+      "lng": 106.801347,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 167,
+      "name": "CCTV SIMPANG PAHLAWAN 2 -F",
+      "junction_name": "Simpang Pahlawan 2 (Fixed)",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.607898,
+      "longitude": 106.795154,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 175.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/fd56d0ac-e4c7-4915-87d3-0d8e59edef1b.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/fd56d0ac-e4c7-4915-87d3-0d8e59edef1b.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/167/detail",
+      "status": "online",
+      "lat": -6.607898,
+      "lng": 106.795154,
+      "default_azimuth": 175.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 168,
+      "name": "CCTV SIMPANG PAHLAWAN 1 -F",
+      "junction_name": "Simpang Pahlawan 1 (Fixed)",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.60785,
+      "longitude": 106.7951,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 355.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/427eb879-7e41-469f-b1f0-dd2954d154d9.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/427eb879-7e41-469f-b1f0-dd2954d154d9.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/168/detail",
+      "status": "online",
+      "lat": -6.60785,
+      "lng": 106.7951,
+      "default_azimuth": 355.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 169,
+      "name": "CCTV JL.BARU-CIBADAK -P",
+      "junction_name": "Simpang Jl. Baru - Cibadak (Kayumanis)",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5412,
+      "longitude": 106.7628,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/a0db3c9b-7dcc-4296-b5a2-e4a740fd3b5f.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/a0db3c9b-7dcc-4296-b5a2-e4a740fd3b5f.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/169/detail",
+      "status": "online",
+      "lat": -6.5412,
+      "lng": 106.7628,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 170,
+      "name": "CCTV  JL.BARU - CIBADAK 2 -F",
+      "junction_name": "Simpang Jl. Baru - Cibadak 2",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.54115,
+      "longitude": 106.7627,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 295.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/676bd3d3-fbd3-48b4-b40c-15bb4105876f.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/676bd3d3-fbd3-48b4-b40c-15bb4105876f.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/170/detail",
+      "status": "online",
+      "lat": -6.54115,
+      "lng": 106.7627,
+      "default_azimuth": 295.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 171,
+      "name": "CCTV JL.BARU - CIBADAK 3 -F",
+      "junction_name": "Simpang Jl. Baru - Cibadak 3",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5411,
+      "longitude": 106.7626,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 115.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/0ce422a1-9367-40f7-8af4-71b19f32ea5a.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/0ce422a1-9367-40f7-8af4-71b19f32ea5a.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/171/detail",
+      "status": "online",
+      "lat": -6.5411,
+      "lng": 106.7626,
+      "default_azimuth": 115.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 172,
+      "name": "CCTV JL. BARU DEPAN YOGYA 2",
+      "junction_name": "Jl. Sholeh Iskandar Depan Yogya Plaza 2",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5542,
+      "longitude": 106.7865,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 285.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/c9fdf5ba-ae6c-477c-bec2-f1599f534950.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/c9fdf5ba-ae6c-477c-bec2-f1599f534950.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/172/detail",
+      "status": "online",
+      "lat": -6.5542,
+      "lng": 106.7865,
+      "default_azimuth": 285.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 173,
+      "name": "CCTV JL. RAYA TAJUR 1",
+      "junction_name": "Jl. Raya Tajur 1 (Depan Boxies / Ramayana)",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6358,
+      "longitude": 106.8324,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 145.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/53f19db7-f6e7-4c32-aea5-9f73507e2106.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/53f19db7-f6e7-4c32-aea5-9f73507e2106.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/173/detail",
+      "status": "online",
+      "lat": -6.6358,
+      "lng": 106.8324,
+      "default_azimuth": 145.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 174,
+      "name": "CCTV JL. RAYA TAJUR 2",
+      "junction_name": "Jl. Raya Tajur 2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.636,
+      "longitude": 106.8326,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 325.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/5ed5116a-52c7-45b9-bf9b-e2ff355c225e.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/5ed5116a-52c7-45b9-bf9b-e2ff355c225e.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/174/detail",
+      "status": "online",
+      "lat": -6.636,
+      "lng": 106.8326,
+      "default_azimuth": 325.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 175,
+      "name": "CCTV DEPAN PINTU TOL KAYUMANIS 2 - 1",
+      "junction_name": "Depan Pintu Tol BORR Kayumanis 2-1",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5378,
+      "longitude": 106.7562,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 300.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/cdac6674-51b9-4987-95b0-be37ecff1c15.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/cdac6674-51b9-4987-95b0-be37ecff1c15.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/175/detail",
+      "status": "online",
+      "lat": -6.5378,
+      "lng": 106.7562,
+      "default_azimuth": 300.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 176,
+      "name": "CCTV JL. BARU DEPAN YOGYA 1",
+      "junction_name": "Jl. Sholeh Iskandar Depan Yogya Plaza 1",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.554,
+      "longitude": 106.7862,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 105.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f35a34ac-7528-4582-96bb-1f5f0a226f07.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/f35a34ac-7528-4582-96bb-1f5f0a226f07.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/176/detail",
+      "status": "online",
+      "lat": -6.554,
+      "lng": 106.7862,
+      "default_azimuth": 105.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 177,
+      "name": "CCTV DEPAN PINTU TOL KAYUMANIS 2 - 2",
+      "junction_name": "Depan Pintu Tol BORR Kayumanis 2-2",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5376,
+      "longitude": 106.756,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 120.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/6195a071-3f0c-48ad-b9b0-c69f9b17d38c.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/6195a071-3f0c-48ad-b9b0-c69f9b17d38c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/177/detail",
+      "status": "online",
+      "lat": -6.5376,
+      "lng": 106.756,
+      "default_azimuth": 120.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 179,
+      "name": "CCTV PARUNG BANTENG",
+      "junction_name": "Simpang Parung Banteng 1",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.621411,
+      "longitude": 106.824066,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 50.0,
+      "facing_direction": "NE",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/069413b0-dc6c-4c76-b3c1-2a41b427c61c.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/069413b0-dc6c-4c76-b3c1-2a41b427c61c.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/179/detail",
+      "status": "online",
+      "lat": -6.621411,
+      "lng": 106.824066,
+      "default_azimuth": 50.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 180,
+      "name": "CCTV PARUNG BANTENG 2",
+      "junction_name": "Simpang Parung Banteng 2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6215,
+      "longitude": 106.8242,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 230.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/438bb41f-5bc2-40f6-8bb1-fa99cb3fa721.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/438bb41f-5bc2-40f6-8bb1-fa99cb3fa721.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/180/detail",
+      "status": "online",
+      "lat": -6.6215,
+      "lng": 106.8242,
+      "default_azimuth": 230.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 181,
+      "name": "CCTV SIMPANG KATULAMPA 1",
+      "junction_name": "Simpang Katulampa (Bendung Katulampa) 1",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.615226,
+      "longitude": 106.828027,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 40.0,
+      "facing_direction": "NE",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/7c1016d7-cba8-4ed0-995d-6bbd44920698.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/7c1016d7-cba8-4ed0-995d-6bbd44920698.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/181/detail",
+      "status": "online",
+      "lat": -6.615226,
+      "lng": 106.828027,
+      "default_azimuth": 40.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 182,
+      "name": "CCTV SIMPANG KATULAMPA 2",
+      "junction_name": "Simpang Katulampa 2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6153,
+      "longitude": 106.8281,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 220.0,
+      "facing_direction": "SW",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f22e94b8-f52c-4d15-9b09-1b2ab05e980a.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/f22e94b8-f52c-4d15-9b09-1b2ab05e980a.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/182/detail",
+      "status": "online",
+      "lat": -6.6153,
+      "lng": 106.8281,
+      "default_azimuth": 220.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 183,
+      "name": "CCTV KOL AHMAD SYAM 3-1",
+      "junction_name": "Jl. Kolonel Ahmad Syam (R3 Seksi 3) 3-1",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6085,
+      "longitude": 106.8298,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 345.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/0fc635f9-5c54-427a-86f3-0843626ee719.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/0fc635f9-5c54-427a-86f3-0843626ee719.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/183/detail",
+      "status": "online",
+      "lat": -6.6085,
+      "lng": 106.8298,
+      "default_azimuth": 345.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 184,
+      "name": "CCTV KOL AHMAD SYAM 3-2",
+      "junction_name": "Jl. Kolonel Ahmad Syam (R3 Seksi 3) 3-2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6086,
+      "longitude": 106.8299,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 165.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/58f8870f-b68b-4f4b-9a8b-d9b7169c9317.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/58f8870f-b68b-4f4b-9a8b-d9b7169c9317.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/184/detail",
+      "status": "online",
+      "lat": -6.6086,
+      "lng": 106.8299,
+      "default_azimuth": 165.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 185,
+      "name": "CCTV KOL AHMAD SYAM 1-2",
+      "junction_name": "Jl. Kolonel Ahmad Syam (R3 Seksi 1) 1-2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6012,
+      "longitude": 106.8252,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 330.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/83608f94-69a9-4341-a821-beb90fdee6e3.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/83608f94-69a9-4341-a821-beb90fdee6e3.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/185/detail",
+      "status": "online",
+      "lat": -6.6012,
+      "lng": 106.8252,
+      "default_azimuth": 330.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 186,
+      "name": "CCTV KOL AHMAD SYAM 1-1",
+      "junction_name": "Jl. Kolonel Ahmad Syam (R3 Seksi 1) 1-1",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6011,
+      "longitude": 106.8251,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 150.0,
+      "facing_direction": "SE",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/f03456d3-1d6c-4156-b301-e66e85e1b52e.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/f03456d3-1d6c-4156-b301-e66e85e1b52e.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/186/detail",
+      "status": "online",
+      "lat": -6.6011,
+      "lng": 106.8251,
+      "default_azimuth": 150.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 187,
+      "name": "CCTV KOL AHMAD SYAM 2",
+      "junction_name": "Jl. Kolonel Ahmad Syam (R3 Seksi 2) 2",
+      "corridor": "BOGOR_TIMUR_TAJUR_KATULAMPA",
+      "latitude": -6.6052,
+      "longitude": 106.8276,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 340.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/244ee10c-bbb3-4f48-852a-b7bd6fbf5aa1.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/244ee10c-bbb3-4f48-852a-b7bd6fbf5aa1.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/187/detail",
+      "status": "online",
+      "lat": -6.6052,
+      "lng": 106.8276,
+      "default_azimuth": 340.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 188,
+      "name": "CCTV DEPAN BALE BINARUM 1",
+      "junction_name": "Jl. Raya Pajajaran Depan Bale Binarum 1",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.616382,
+      "longitude": 106.815076,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 160.0,
+      "facing_direction": "S",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/21022dbb-0461-42b4-8677-c1f941d40827.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/21022dbb-0461-42b4-8677-c1f941d40827.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/188/detail",
+      "status": "online",
+      "lat": -6.616382,
+      "lng": 106.815076,
+      "default_azimuth": 160.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 189,
+      "name": "CCTV DEPAN BALEBINARUM 2",
+      "junction_name": "Jl. Raya Pajajaran Depan Bale Binarum 2",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.6165,
+      "longitude": 106.8152,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 340.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/3f83b5c2-ad43-4ecd-a935-feab4ebe5654.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/3f83b5c2-ad43-4ecd-a935-feab4ebe5654.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/189/detail",
+      "status": "online",
+      "lat": -6.6165,
+      "lng": 106.8152,
+      "default_azimuth": 340.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 190,
+      "name": "CCTV JL. BARU SEBELUM UNDERPASS 1",
+      "junction_name": "Jl. Baru Sebelum Underpass 1 (Westbound)",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5619,
+      "longitude": 106.8041,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 270.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/d220d1d8-ff5f-40ee-a3f8-019deb6bd019.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/d220d1d8-ff5f-40ee-a3f8-019deb6bd019.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/190/detail",
+      "status": "online",
+      "lat": -6.5619,
+      "lng": 106.8041,
+      "default_azimuth": 270.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 191,
+      "name": "CCTV JL. BARU SEBELUM UNDERPASS 2",
+      "junction_name": "Jl. Baru Sebelum Underpass 2 (Eastbound)",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5618,
+      "longitude": 106.8038,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 90.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/9c47a00d-90ce-44de-835e-1a4d704f7901.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/9c47a00d-90ce-44de-835e-1a4d704f7901.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/191/detail",
+      "status": "online",
+      "lat": -6.5618,
+      "lng": 106.8038,
+      "default_azimuth": 90.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 192,
+      "name": "CCTV SIMPANG MANUNGGAL",
+      "junction_name": "Simpang Jl. Dr. Sumeru - Jl. Manunggal",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.5821,
+      "longitude": 106.7758,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 310.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/fafe128b-2570-4c74-9ca1-da1286fdf59d.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/fafe128b-2570-4c74-9ca1-da1286fdf59d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/192/detail",
+      "status": "online",
+      "lat": -6.5821,
+      "lng": 106.7758,
+      "default_azimuth": 310.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 193,
+      "name": "CCTV SIMPANG YASMIN 1",
+      "junction_name": "Simpang Taman Yasmin / Lotte Mart 1",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.547259,
+      "longitude": 106.774296,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 290.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/c18014c9-7e81-4fc4-a799-b71fe2718e08.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/c18014c9-7e81-4fc4-a799-b71fe2718e08.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/193/detail",
+      "status": "online",
+      "lat": -6.547259,
+      "lng": 106.774296,
+      "default_azimuth": 290.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 194,
+      "name": "CCTV SIMPANG YASMIN 2",
+      "junction_name": "Simpang Taman Yasmin / Lotte Mart 2",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5473,
+      "longitude": 106.77435,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 110.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/fa74138a-dd7e-4f10-8174-69475584073d.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/fa74138a-dd7e-4f10-8174-69475584073d.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/194/detail",
+      "status": "online",
+      "lat": -6.5473,
+      "lng": 106.77435,
+      "default_azimuth": 110.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 195,
+      "name": "CCTV JL. BARU DEPAN UNDERPASS 2",
+      "junction_name": "Jl. Baru Depan Underpass 2 (Westbound Portal)",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.561629,
+      "longitude": 106.802812,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 275.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/ad7725b1-5f9a-4ccb-97e2-9f5a68990865.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/ad7725b1-5f9a-4ccb-97e2-9f5a68990865.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/195/detail",
+      "status": "online",
+      "lat": -6.561629,
+      "lng": 106.802812,
+      "default_azimuth": 275.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 196,
+      "name": "CCTV JL.BARU DEPAN UNDERPASS 1",
+      "junction_name": "Jl. Baru Depan Underpass 1 (Eastbound Portal)",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5616,
+      "longitude": 106.8025,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 95.0,
+      "facing_direction": "E",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/807907af-8920-439d-9ae6-b67daa216818.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/807907af-8920-439d-9ae6-b67daa216818.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/196/detail",
+      "status": "online",
+      "lat": -6.5616,
+      "lng": 106.8025,
+      "default_azimuth": 95.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 197,
+      "name": "CCTV PUTERAN ARAH BONDES 1",
+      "junction_name": "Putaran Arah Bondongan (Bondes) 1",
+      "corridor": "BOGOR_SELATAN_BONDONGAN_PAHLAWAN",
+      "latitude": -6.6094,
+      "longitude": 106.7957,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 5.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer5.kotabogor.go.id/memfs/97adb406-257a-472d-af1f-cd2978c89bdb.m3u8",
+      "embed_url": "https://restreamer5.kotabogor.go.id/97adb406-257a-472d-af1f-cd2978c89bdb.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/197/detail",
+      "status": "online",
+      "lat": -6.6094,
+      "lng": 106.7957,
+      "default_azimuth": 5.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 198,
+      "name": "CCTV SIMPANG RSUD KOTA BOGOR",
+      "junction_name": "Simpang RSUD Kota Bogor (Jl. Dr. Sumeru)",
+      "corridor": "BOGOR_BARAT_DRAMAGA",
+      "latitude": -6.58041,
+      "longitude": 106.778448,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 305.0,
+      "facing_direction": "NW",
+      "stream_url": "https://restreamer4.kotabogor.go.id/memfs/5ef1d418-65ba-41da-83db-edee5beec4ff.m3u8",
+      "embed_url": "https://restreamer4.kotabogor.go.id/5ef1d418-65ba-41da-83db-edee5beec4ff.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/198/detail",
+      "status": "online",
+      "lat": -6.58041,
+      "lng": 106.778448,
+      "default_azimuth": 305.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 199,
+      "name": "CCTV TUGU ARAH OTISTA",
+      "junction_name": "Tugu Kujang Arah Otista",
+      "corridor": "SSA_RING",
+      "latitude": -6.60155,
+      "longitude": 106.8048,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 250.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/c1f83df4-edda-4a5b-aff6-a3543236c1a6.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/c1f83df4-edda-4a5b-aff6-a3543236c1a6.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/199/detail",
+      "status": "online",
+      "lat": -6.60155,
+      "lng": 106.8048,
+      "default_azimuth": 250.0,
+      "fov_deg": 75.0
+    },
+    {
+      "id": 201,
+      "name": "CCTV Simpang A.Yani Dadali 1 -p",
+      "junction_name": "Simpang A. Yani - Dadali (Warung Jambu) 1",
+      "corridor": "PAJAJARAN_CORRIDOR",
+      "latitude": -6.5658,
+      "longitude": 106.8032,
+      "camera_type": "PTZ",
+      "facing_bearing_deg": 0.0,
+      "facing_direction": "N",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/c7615c34-0764-4770-995a-7ef81ebb1e21.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/c7615c34-0764-4770-995a-7ef81ebb1e21.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/201/detail",
+      "status": "online",
+      "lat": -6.5658,
+      "lng": 106.8032,
+      "default_azimuth": 0.0,
+      "fov_deg": 360.0
+    },
+    {
+      "id": 202,
+      "name": "UNDERPASS ARAH PINTU 4",
+      "junction_name": "Underpass Sholeh Iskandar Arah Pintu 4",
+      "corridor": "SHOLEH_ISKANDAR_BORR",
+      "latitude": -6.5614,
+      "longitude": 106.802,
+      "camera_type": "FIXED",
+      "facing_bearing_deg": 280.0,
+      "facing_direction": "W",
+      "stream_url": "https://restreamer6.kotabogor.go.id/memfs/cdc14643-b8fb-4509-bb43-98240d8f275a.m3u8",
+      "embed_url": "https://restreamer6.kotabogor.go.id/cdc14643-b8fb-4509-bb43-98240d8f275a.html",
+      "detail_url": "https://bsw.kotabogor.go.id/cctv/202/detail",
+      "status": "online",
+      "lat": -6.5614,
+      "lng": 106.802,
+      "default_azimuth": 280.0,
+      "fov_deg": 75.0
+    }
+  ],
+  "edges": [
+    {
+      "source_id": 79,
+      "target_id": 199,
+      "exit_direction": "INTERNAL",
+      "road_name": "Tugu Kujang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 246.0
+    },
+    {
+      "source_id": 199,
+      "target_id": 79,
+      "exit_direction": "INTERNAL",
+      "road_name": "Tugu Kujang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 66.0
+    },
+    {
+      "source_id": 199,
+      "target_id": 87,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Otto Iskandardinata (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 420.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        44,
+        138
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 244.1
+    },
+    {
+      "source_id": 79,
+      "target_id": 87,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Otto Iskandardinata (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 430.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        45,
+        140
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 244.3
+    },
+    {
+      "source_id": 87,
+      "target_id": 83,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Otto Iskandardinata (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 260.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        34,
+        117
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 243.5
+    },
+    {
+      "source_id": 83,
+      "target_id": 81,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Otista -> Simpang BTM (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 480.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        64,
+        177
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 269.8
+    },
+    {
+      "source_id": 83,
+      "target_id": 106,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Otista -> Simpang BTM (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 470.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        62,
+        175
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 263.8
+    },
+    {
+      "source_id": 81,
+      "target_id": 106,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 104.1
+    },
+    {
+      "source_id": 81,
+      "target_id": 107,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 159.6
+    },
+    {
+      "source_id": 106,
+      "target_id": 81,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 284.1
+    },
+    {
+      "source_id": 106,
+      "target_id": 107,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 247.6
+    },
+    {
+      "source_id": 107,
+      "target_id": 81,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 339.6
+    },
+    {
+      "source_id": 107,
+      "target_id": 106,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang BTM Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 67.6
+    },
+    {
+      "source_id": 81,
+      "target_id": 85,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Ir. H. Djuanda (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 470.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        41,
+        131
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 348.8
+    },
+    {
+      "source_id": 85,
+      "target_id": 133,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Ir. H. Djuanda (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 290.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        25,
+        98
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 343.2
+    },
+    {
+      "source_id": 133,
+      "target_id": 134,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Ir. H. Djuanda (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        22,
+        91
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 346.2
+    },
+    {
+      "source_id": 134,
+      "target_id": 92,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Ir. H. Djuanda (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        38,
+        124
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 21.8
+    },
+    {
+      "source_id": 134,
+      "target_id": 111,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Ir. H. Djuanda -> Istana Gate (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 340.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        36,
+        120
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 29.3
+    },
+    {
+      "source_id": 92,
+      "target_id": 111,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Denpom Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 143.3
+    },
+    {
+      "source_id": 111,
+      "target_id": 92,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Denpom Cluster",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 323.3
+    },
+    {
+      "source_id": 92,
+      "target_id": 120,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Jalak Harupat (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 320.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        28,
+        104
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 75.4
+    },
+    {
+      "source_id": 111,
+      "target_id": 120,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Jalak Harupat (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 310.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        27,
+        102
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 65.2
+    },
+    {
+      "source_id": 120,
+      "target_id": 131,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Ekspresi Plaza",
+      "is_one_way": false,
+      "road_distance_m": 39.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 56.1
+    },
+    {
+      "source_id": 131,
+      "target_id": 120,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Ekspresi Plaza",
+      "is_one_way": false,
+      "road_distance_m": 39.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 236.1
+    },
+    {
+      "source_id": 120,
+      "target_id": 122,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Jalak Harupat (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 240.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        21,
+        89
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 106.8
+    },
+    {
+      "source_id": 131,
+      "target_id": 122,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Jalak Harupat (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 230.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        20,
+        87
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 115.3
+    },
+    {
+      "source_id": 122,
+      "target_id": 130,
+      "exit_direction": "NORTH",
+      "road_name": "Akses Lapangan Sempur",
+      "is_one_way": false,
+      "road_distance_m": 120.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        21,
+        89
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 80.4
+    },
+    {
+      "source_id": 130,
+      "target_id": 122,
+      "exit_direction": "SOUTH",
+      "road_name": "Akses Lapangan Sempur",
+      "is_one_way": false,
+      "road_distance_m": 120.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        21,
+        89
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 260.4
+    },
+    {
+      "source_id": 130,
+      "target_id": 159,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Sempur Kaler",
+      "is_one_way": false,
+      "road_distance_m": 220.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        39,
+        126
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 12.6
+    },
+    {
+      "source_id": 159,
+      "target_id": 130,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Sempur Kaler",
+      "is_one_way": false,
+      "road_distance_m": 220.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        39,
+        126
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 192.6
+    },
+    {
+      "source_id": 122,
+      "target_id": 132,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Jalak Harupat -> Taman Pangrango (SSA)",
+      "is_one_way": true,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        31,
+        111
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 62.2
+    },
+    {
+      "source_id": 132,
+      "target_id": 79,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran SSA Loop",
+      "is_one_way": true,
+      "road_distance_m": 1150.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        102,
+        257
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 175.5
+    },
+    {
+      "source_id": 132,
+      "target_id": 199,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran SSA Loop",
+      "is_one_way": true,
+      "road_distance_m": 1170.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        103,
+        261
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 177.2
+    },
+    {
+      "source_id": 83,
+      "target_id": 100,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Lawang Seketeng",
+      "is_one_way": true,
+      "road_distance_m": 140.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        24,
+        96
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 200.1
+    },
+    {
+      "source_id": 83,
+      "target_id": 101,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Pedati",
+      "is_one_way": true,
+      "road_distance_m": 130.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        23,
+        93
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 239.9
+    },
+    {
+      "source_id": 83,
+      "target_id": 96,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Suryakencana Gate",
+      "is_one_way": true,
+      "road_distance_m": 160.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        28,
+        104
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 160.1
+    },
+    {
+      "source_id": 101,
+      "target_id": 100,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Lawang Seketeng Cross",
+      "is_one_way": true,
+      "road_distance_m": 70.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        12,
+        70
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 111.9
+    },
+    {
+      "source_id": 101,
+      "target_id": 91,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Pedati Arah Gudang",
+      "is_one_way": true,
+      "road_distance_m": 100.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        17,
+        81
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 159.6
+    },
+    {
+      "source_id": 100,
+      "target_id": 86,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Lawang Seketeng Selatan",
+      "is_one_way": true,
+      "road_distance_m": 130.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        23,
+        93
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 142.6
+    },
+    {
+      "source_id": 91,
+      "target_id": 89,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Gudang",
+      "is_one_way": true,
+      "road_distance_m": 120.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        21,
+        89
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 111.2
+    },
+    {
+      "source_id": 89,
+      "target_id": 86,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Seketeng Gudang Link",
+      "is_one_way": true,
+      "road_distance_m": 90.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        15,
+        78
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 282.2
+    },
+    {
+      "source_id": 96,
+      "target_id": 86,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Suryakencana (One-Way South)",
+      "is_one_way": true,
+      "road_distance_m": 120.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        16,
+        78
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 156.2
+    },
+    {
+      "source_id": 86,
+      "target_id": 75,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Suryakencana (One-Way South)",
+      "is_one_way": true,
+      "road_distance_m": 460.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        61,
+        172
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 150.3
+    },
+    {
+      "source_id": 75,
+      "target_id": 167,
+      "exit_direction": "SOUTHWEST",
+      "road_name": "Jl. Roda -> Jl. Pahlawan / Bondongan",
+      "is_one_way": true,
+      "road_distance_m": 800.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        106,
+        266
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 284.8
+    },
+    {
+      "source_id": 75,
+      "target_id": 188,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Suryakencana Selatan -> Sukasari",
+      "is_one_way": true,
+      "road_distance_m": 1250.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        133,
+        321
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 119.4
+    },
+    {
+      "source_id": 123,
+      "target_id": 161,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Jakarta-Bogor (Kedung Halang)",
+      "is_one_way": false,
+      "road_distance_m": 3200.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        213,
+        488
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 203.6
+    },
+    {
+      "source_id": 161,
+      "target_id": 123,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Jakarta-Bogor (Kedung Halang)",
+      "is_one_way": false,
+      "road_distance_m": 3200.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        213,
+        488
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 23.6
+    },
+    {
+      "source_id": 161,
+      "target_id": 201,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Dadali - A. Yani (Warung Jambu)",
+      "is_one_way": false,
+      "road_distance_m": 5.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 0.0
+    },
+    {
+      "source_id": 201,
+      "target_id": 161,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Dadali - A. Yani (Warung Jambu)",
+      "is_one_way": false,
+      "road_distance_m": 5.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 0.0
+    },
+    {
+      "source_id": 161,
+      "target_id": 118,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran Utara",
+      "is_one_way": false,
+      "road_distance_m": 1050.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        80,
+        211
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 139.2
+    },
+    {
+      "source_id": 118,
+      "target_id": 161,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Pajajaran Utara",
+      "is_one_way": false,
+      "road_distance_m": 1050.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        80,
+        211
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 319.2
+    },
+    {
+      "source_id": 118,
+      "target_id": 119,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Taman Corat Coret",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 113.3
+    },
+    {
+      "source_id": 119,
+      "target_id": 118,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Taman Corat Coret",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 293.3
+    },
+    {
+      "source_id": 118,
+      "target_id": 80,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran (Bantarjati - Ciheleut)",
+      "is_one_way": false,
+      "road_distance_m": 2550.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        194,
+        448
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 186.4
+    },
+    {
+      "source_id": 80,
+      "target_id": 118,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Pajajaran (Bantarjati - Ciheleut)",
+      "is_one_way": false,
+      "road_distance_m": 2550.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        194,
+        448
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 6.4
+    },
+    {
+      "source_id": 80,
+      "target_id": 79,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran (Ciheleut - Tugu Kujang)",
+      "is_one_way": false,
+      "road_distance_m": 480.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        42,
+        133
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 219.6
+    },
+    {
+      "source_id": 79,
+      "target_id": 80,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Pajajaran (Ciheleut - Tugu Kujang)",
+      "is_one_way": false,
+      "road_distance_m": 480.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        42,
+        133
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 39.6
+    },
+    {
+      "source_id": 79,
+      "target_id": 103,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran (Tugu Kujang - Masjid Raya)",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        63,
+        177
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 149.7
+    },
+    {
+      "source_id": 103,
+      "target_id": 79,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Pajajaran (Tugu Kujang - Masjid Raya)",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        63,
+        177
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 329.7
+    },
+    {
+      "source_id": 103,
+      "target_id": 188,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Raya Pajajaran (Masjid Raya - Bale Binarum)",
+      "is_one_way": false,
+      "road_distance_m": 1120.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        85,
+        222
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 144.6
+    },
+    {
+      "source_id": 188,
+      "target_id": 103,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Raya Pajajaran (Masjid Raya - Bale Binarum)",
+      "is_one_way": false,
+      "road_distance_m": 1120.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        85,
+        222
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 324.6
+    },
+    {
+      "source_id": 188,
+      "target_id": 189,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Raya Pajajaran (Bale Binarum)",
+      "is_one_way": false,
+      "road_distance_m": 19.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 133.8
+    },
+    {
+      "source_id": 189,
+      "target_id": 188,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Raya Pajajaran (Bale Binarum)",
+      "is_one_way": false,
+      "road_distance_m": 19.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 313.8
+    },
+    {
+      "source_id": 188,
+      "target_id": 108,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Raya Pajajaran (Bale Binarum - Sukasari)",
+      "is_one_way": false,
+      "road_distance_m": 420.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        37,
+        122
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 139.5
+    },
+    {
+      "source_id": 108,
+      "target_id": 188,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. Raya Pajajaran (Bale Binarum - Sukasari)",
+      "is_one_way": false,
+      "road_distance_m": 420.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        37,
+        122
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 319.5
+    },
+    {
+      "source_id": 118,
+      "target_id": 132,
+      "exit_direction": "SOUTHWEST",
+      "road_name": "Jl. Pajajaran -> Jl. Pangrango",
+      "is_one_way": false,
+      "road_distance_m": 1850.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        164,
+        386
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 202.2
+    },
+    {
+      "source_id": 132,
+      "target_id": 118,
+      "exit_direction": "NORTHEAST",
+      "road_name": "Jl. Pajajaran -> Jl. Pangrango",
+      "is_one_way": false,
+      "road_distance_m": 1850.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        164,
+        386
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 22.2
+    },
+    {
+      "source_id": 161,
+      "target_id": 163,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Akses Warung Jambu",
+      "is_one_way": false,
+      "road_distance_m": 420.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        32,
+        111
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 48.9
+    },
+    {
+      "source_id": 163,
+      "target_id": 161,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar Akses Warung Jambu",
+      "is_one_way": false,
+      "road_distance_m": 420.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        32,
+        111
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 228.9
+    },
+    {
+      "source_id": 163,
+      "target_id": 190,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Menuju Underpass",
+      "is_one_way": false,
+      "road_distance_m": 310.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        23,
+        94
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 301.9
+    },
+    {
+      "source_id": 190,
+      "target_id": 163,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar Menuju Underpass",
+      "is_one_way": false,
+      "road_distance_m": 310.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        23,
+        94
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 121.9
+    },
+    {
+      "source_id": 190,
+      "target_id": 191,
+      "exit_direction": "INTERNAL",
+      "road_name": "Sebelum Underpass Kedung Badak",
+      "is_one_way": false,
+      "road_distance_m": 35.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 288.5
+    },
+    {
+      "source_id": 191,
+      "target_id": 190,
+      "exit_direction": "INTERNAL",
+      "road_name": "Sebelum Underpass Kedung Badak",
+      "is_one_way": false,
+      "road_distance_m": 35.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 108.5
+    },
+    {
+      "source_id": 190,
+      "target_id": 195,
+      "exit_direction": "WEST",
+      "road_name": "Underpass Kedung Badak (Westbound)",
+      "is_one_way": true,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        14,
+        74
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 282.0
+    },
+    {
+      "source_id": 196,
+      "target_id": 191,
+      "exit_direction": "EAST",
+      "road_name": "Underpass Kedung Badak (Eastbound)",
+      "is_one_way": true,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        14,
+        74
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 98.8
+    },
+    {
+      "source_id": 195,
+      "target_id": 196,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 34.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 275.3
+    },
+    {
+      "source_id": 195,
+      "target_id": 202,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 285.8
+    },
+    {
+      "source_id": 196,
+      "target_id": 195,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 34.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 95.3
+    },
+    {
+      "source_id": 196,
+      "target_id": 202,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 291.9
+    },
+    {
+      "source_id": 202,
+      "target_id": 195,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 105.8
+    },
+    {
+      "source_id": 202,
+      "target_id": 196,
+      "exit_direction": "INTERNAL",
+      "road_name": "Underpass Portal & Pintu 4",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 111.9
+    },
+    {
+      "source_id": 195,
+      "target_id": 172,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Westbound",
+      "is_one_way": true,
+      "road_distance_m": 1650.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        110,
+        273
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 294.6
+    },
+    {
+      "source_id": 176,
+      "target_id": 196,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar Eastbound",
+      "is_one_way": true,
+      "road_distance_m": 1650.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        110,
+        273
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 115.1
+    },
+    {
+      "source_id": 172,
+      "target_id": 176,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Sholeh Iskandar (Yogya Plaza Cimanggu)",
+      "is_one_way": false,
+      "road_distance_m": 39.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 303.9
+    },
+    {
+      "source_id": 176,
+      "target_id": 172,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Sholeh Iskandar (Yogya Plaza Cimanggu)",
+      "is_one_way": false,
+      "road_distance_m": 39.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 123.9
+    },
+    {
+      "source_id": 172,
+      "target_id": 193,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Westbound",
+      "is_one_way": true,
+      "road_distance_m": 1250.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        83,
+        218
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 299.8
+    },
+    {
+      "source_id": 194,
+      "target_id": 176,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar Eastbound",
+      "is_one_way": true,
+      "road_distance_m": 1250.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        83,
+        218
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 119.6
+    },
+    {
+      "source_id": 193,
+      "target_id": 194,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Taman Yasmin / Lotte Mart",
+      "is_one_way": false,
+      "road_distance_m": 7.5,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 127.4
+    },
+    {
+      "source_id": 194,
+      "target_id": 193,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Taman Yasmin / Lotte Mart",
+      "is_one_way": false,
+      "road_distance_m": 7.5,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 307.4
+    },
+    {
+      "source_id": 193,
+      "target_id": 170,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Westbound",
+      "is_one_way": true,
+      "road_distance_m": 1320.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        88,
+        227
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 297.9
+    },
+    {
+      "source_id": 171,
+      "target_id": 194,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar Eastbound",
+      "is_one_way": true,
+      "road_distance_m": 1320.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        88,
+        227
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 118.0
+    },
+    {
+      "source_id": 169,
+      "target_id": 170,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 12.4,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 296.7
+    },
+    {
+      "source_id": 169,
+      "target_id": 171,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 24.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 296.7
+    },
+    {
+      "source_id": 170,
+      "target_id": 169,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 12.4,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 116.7
+    },
+    {
+      "source_id": 170,
+      "target_id": 171,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 12.4,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 296.7
+    },
+    {
+      "source_id": 171,
+      "target_id": 169,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 24.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 116.7
+    },
+    {
+      "source_id": 171,
+      "target_id": 170,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Cibadak - Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 12.4,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 116.7
+    },
+    {
+      "source_id": 170,
+      "target_id": 175,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sholeh Iskandar Ujung Tol Kayumanis",
+      "is_one_way": true,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 297.4
+    },
+    {
+      "source_id": 177,
+      "target_id": 171,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sholeh Iskandar dari Tol Kayumanis",
+      "is_one_way": true,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 118.1
+    },
+    {
+      "source_id": 175,
+      "target_id": 177,
+      "exit_direction": "INTERNAL",
+      "road_name": "Gerbang Tol BORR Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 31.3,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 177,
+      "target_id": 175,
+      "exit_direction": "INTERNAL",
+      "road_name": "Gerbang Tol BORR Kayumanis",
+      "is_one_way": false,
+      "road_distance_m": 31.3,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 192,
+      "target_id": 198,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang RSUD - Manunggal (Jl. Dr. Sumeru)",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 57.3
+    },
+    {
+      "source_id": 198,
+      "target_id": 192,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang RSUD - Manunggal (Jl. Dr. Sumeru)",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 237.3
+    },
+    {
+      "source_id": 198,
+      "target_id": 154,
+      "exit_direction": "WEST",
+      "road_name": "Jl. KH Tubagus Muhammad Falak",
+      "is_one_way": false,
+      "road_distance_m": 680.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        60,
+        170
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 235.5
+    },
+    {
+      "source_id": 154,
+      "target_id": 198,
+      "exit_direction": "EAST",
+      "road_name": "Jl. KH Tubagus Muhammad Falak",
+      "is_one_way": false,
+      "road_distance_m": 680.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        60,
+        170
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 55.5
+    },
+    {
+      "source_id": 154,
+      "target_id": 145,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Sindang Barang - Loji",
+      "is_one_way": false,
+      "road_distance_m": 1750.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        133,
+        321
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 288.3
+    },
+    {
+      "source_id": 145,
+      "target_id": 154,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Sindang Barang - Loji",
+      "is_one_way": false,
+      "road_distance_m": 1750.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        133,
+        321
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 108.3
+    },
+    {
+      "source_id": 143,
+      "target_id": 145,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 7.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 143,
+      "target_id": 146,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 7.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 145,
+      "target_id": 143,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 7.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 145,
+      "target_id": 146,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 146,
+      "target_id": 143,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 7.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 146,
+      "target_id": 145,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 145,
+      "target_id": 151,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Raya Dramaga (Bubulak - Laladon)",
+      "is_one_way": false,
+      "road_distance_m": 1150.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        102,
+        257
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 303.7
+    },
+    {
+      "source_id": 151,
+      "target_id": 145,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Raya Dramaga (Bubulak - Laladon)",
+      "is_one_way": false,
+      "road_distance_m": 1150.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        102,
+        257
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 123.7
+    },
+    {
+      "source_id": 193,
+      "target_id": 198,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. KH. R. Abdullah Bin Nuh",
+      "is_one_way": false,
+      "road_distance_m": 2850.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        217,
+        495
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 172.9
+    },
+    {
+      "source_id": 198,
+      "target_id": 193,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. KH. R. Abdullah Bin Nuh",
+      "is_one_way": false,
+      "road_distance_m": 2850.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        217,
+        495
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 352.9
+    },
+    {
+      "source_id": 81,
+      "target_id": 82,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. Paledang / Kapten Muslihat",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        96,
+        244
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 332.8
+    },
+    {
+      "source_id": 82,
+      "target_id": 81,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Paledang / Kapten Muslihat",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        96,
+        244
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 152.8
+    },
+    {
+      "source_id": 82,
+      "target_id": 116,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Kapten Muslihat -> MA Salmun",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 292.2
+    },
+    {
+      "source_id": 116,
+      "target_id": 82,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Kapten Muslihat -> MA Salmun",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 112.2
+    },
+    {
+      "source_id": 114,
+      "target_id": 115,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 139.6
+    },
+    {
+      "source_id": 114,
+      "target_id": 116,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 185.2
+    },
+    {
+      "source_id": 115,
+      "target_id": 114,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 319.6
+    },
+    {
+      "source_id": 115,
+      "target_id": 116,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 199.0
+    },
+    {
+      "source_id": 116,
+      "target_id": 114,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 5.2
+    },
+    {
+      "source_id": 116,
+      "target_id": 115,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. MA Salmun Pasar Anyar",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 19.0
+    },
+    {
+      "source_id": 114,
+      "target_id": 150,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. M.A. Salmun -> Pasar Mawar",
+      "is_one_way": false,
+      "road_distance_m": 260.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        46,
+        141
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 293.7
+    },
+    {
+      "source_id": 150,
+      "target_id": 114,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. M.A. Salmun -> Pasar Mawar",
+      "is_one_way": false,
+      "road_distance_m": 260.0,
+      "typical_speed_kmh": 15.0,
+      "travel_time_window_s": [
+        46,
+        141
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 113.7
+    },
+    {
+      "source_id": 150,
+      "target_id": 152,
+      "exit_direction": "INTERNAL",
+      "road_name": "Pasar Mawar Belakang",
+      "is_one_way": false,
+      "road_distance_m": 6.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 136.5
+    },
+    {
+      "source_id": 152,
+      "target_id": 150,
+      "exit_direction": "INTERNAL",
+      "road_name": "Pasar Mawar Belakang",
+      "is_one_way": false,
+      "road_distance_m": 6.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 316.5
+    },
+    {
+      "source_id": 150,
+      "target_id": 136,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Mawar Merdeka",
+      "is_one_way": false,
+      "road_distance_m": 240.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        32,
+        111
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 12.4
+    },
+    {
+      "source_id": 136,
+      "target_id": 150,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Mawar Merdeka",
+      "is_one_way": false,
+      "road_distance_m": 240.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        32,
+        111
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 192.4
+    },
+    {
+      "source_id": 136,
+      "target_id": 137,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Mawar Barat",
+      "is_one_way": false,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        28,
+        103
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 236.4
+    },
+    {
+      "source_id": 137,
+      "target_id": 136,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Mawar Barat",
+      "is_one_way": false,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        28,
+        103
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 56.4
+    },
+    {
+      "source_id": 137,
+      "target_id": 157,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Mawar -> Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        38,
+        124
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 309.7
+    },
+    {
+      "source_id": 157,
+      "target_id": 137,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Mawar -> Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        38,
+        124
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 129.7
+    },
+    {
+      "source_id": 157,
+      "target_id": 158,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 158,
+      "target_id": 157,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 157,
+      "target_id": 192,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Dr. Sumeru (Mawar - Manunggal)",
+      "is_one_way": false,
+      "road_distance_m": 560.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        59,
+        169
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 294.1
+    },
+    {
+      "source_id": 192,
+      "target_id": 157,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Dr. Sumeru (Mawar - Manunggal)",
+      "is_one_way": false,
+      "road_distance_m": 560.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        59,
+        169
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 114.1
+    },
+    {
+      "source_id": 116,
+      "target_id": 149,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Veteran Jembatan Merah",
+      "is_one_way": false,
+      "road_distance_m": 760.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        101,
+        255
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 267.7
+    },
+    {
+      "source_id": 149,
+      "target_id": 116,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Veteran Jembatan Merah",
+      "is_one_way": false,
+      "road_distance_m": 760.0,
+      "typical_speed_kmh": 20.0,
+      "travel_time_window_s": [
+        101,
+        255
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 87.7
+    },
+    {
+      "source_id": 147,
+      "target_id": 149,
+      "exit_direction": "INTERNAL",
+      "road_name": "Pasar Gunung Batu (Jl. Veteran)",
+      "is_one_way": false,
+      "road_distance_m": 5.2,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 136.9
+    },
+    {
+      "source_id": 149,
+      "target_id": 147,
+      "exit_direction": "INTERNAL",
+      "road_name": "Pasar Gunung Batu (Jl. Veteran)",
+      "is_one_way": false,
+      "road_distance_m": 5.2,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 316.9
+    },
+    {
+      "source_id": 147,
+      "target_id": 157,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Veteran -> Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 680.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        72,
+        195
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 17.8
+    },
+    {
+      "source_id": 157,
+      "target_id": 147,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Veteran -> Jl. Dr. Sumeru",
+      "is_one_way": false,
+      "road_distance_m": 680.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        72,
+        195
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 197.8
+    },
+    {
+      "source_id": 147,
+      "target_id": 139,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Mayjen Ishak Djuarsa (Gunung Batu - Pasir Kuda)",
+      "is_one_way": false,
+      "road_distance_m": 1350.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        144,
+        344
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 156.9
+    },
+    {
+      "source_id": 139,
+      "target_id": 147,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Mayjen Ishak Djuarsa (Gunung Batu - Pasir Kuda)",
+      "is_one_way": false,
+      "road_distance_m": 1350.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        144,
+        344
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 336.9
+    },
+    {
+      "source_id": 138,
+      "target_id": 139,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Pasir Kuda",
+      "is_one_way": false,
+      "road_distance_m": 27.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 322.1
+    },
+    {
+      "source_id": 139,
+      "target_id": 138,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Pasir Kuda",
+      "is_one_way": false,
+      "road_distance_m": 27.9,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 142.1
+    },
+    {
+      "source_id": 139,
+      "target_id": 143,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. Pasir Kuda -> Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 3250.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        288,
+        645
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 315.3
+    },
+    {
+      "source_id": 143,
+      "target_id": 139,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Pasir Kuda -> Sindang Barang",
+      "is_one_way": false,
+      "road_distance_m": 3250.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        288,
+        645
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 135.3
+    },
+    {
+      "source_id": 138,
+      "target_id": 142,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Aria Surialaga (Pancasan - Bondongan)",
+      "is_one_way": false,
+      "road_distance_m": 1250.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        133,
+        321
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 101.7
+    },
+    {
+      "source_id": 142,
+      "target_id": 138,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Aria Surialaga (Pancasan - Bondongan)",
+      "is_one_way": false,
+      "road_distance_m": 1250.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        133,
+        321
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 281.7
+    },
+    {
+      "source_id": 142,
+      "target_id": 197,
+      "exit_direction": "INTERNAL",
+      "road_name": "Putaran Bondongan (Bondes)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 197,
+      "target_id": 142,
+      "exit_direction": "INTERNAL",
+      "road_name": "Putaran Bondongan (Bondes)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 107,
+      "target_id": 142,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Empang -> Puteran Bondes",
+      "is_one_way": true,
+      "road_distance_m": 660.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        70,
+        191
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 183.3
+    },
+    {
+      "source_id": 142,
+      "target_id": 167,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Pahlawan (Bondes - Simpang Pahlawan)",
+      "is_one_way": false,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        22,
+        91
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 338.2
+    },
+    {
+      "source_id": 167,
+      "target_id": 142,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Pahlawan (Bondes - Simpang Pahlawan)",
+      "is_one_way": false,
+      "road_distance_m": 210.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        22,
+        91
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 158.2
+    },
+    {
+      "source_id": 167,
+      "target_id": 168,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Pahlawan",
+      "is_one_way": false,
+      "road_distance_m": 8.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 311.8
+    },
+    {
+      "source_id": 168,
+      "target_id": 167,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Pahlawan",
+      "is_one_way": false,
+      "road_distance_m": 8.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 131.8
+    },
+    {
+      "source_id": 167,
+      "target_id": 166,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Pahlawan (Simpang Pahlawan - Simpang Dreded)",
+      "is_one_way": false,
+      "road_distance_m": 920.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        81,
+        214
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 143.0
+    },
+    {
+      "source_id": 166,
+      "target_id": 167,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Pahlawan (Simpang Pahlawan - Simpang Dreded)",
+      "is_one_way": false,
+      "road_distance_m": 920.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        81,
+        214
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 323.0
+    },
+    {
+      "source_id": 167,
+      "target_id": 108,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Pahlawan -> Batutulis -> Jl. Siliwangi -> Kominfo",
+      "is_one_way": false,
+      "road_distance_m": 1950.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        173,
+        405
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 117.0
+    },
+    {
+      "source_id": 108,
+      "target_id": 167,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Pahlawan -> Batutulis -> Jl. Siliwangi -> Kominfo",
+      "is_one_way": false,
+      "road_distance_m": 1950.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        173,
+        405
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 297.0
+    },
+    {
+      "source_id": 108,
+      "target_id": 174,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Raya Tajur (Sukasari - Boxies)",
+      "is_one_way": false,
+      "road_distance_m": 2450.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        217,
+        497
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 138.2
+    },
+    {
+      "source_id": 174,
+      "target_id": 108,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. Raya Tajur (Sukasari - Boxies)",
+      "is_one_way": false,
+      "road_distance_m": 2450.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        217,
+        497
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 318.2
+    },
+    {
+      "source_id": 173,
+      "target_id": 174,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Raya Tajur (Ramayana / Boxies)",
+      "is_one_way": false,
+      "road_distance_m": 31.3,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 174,
+      "target_id": 173,
+      "exit_direction": "INTERNAL",
+      "road_name": "Jl. Raya Tajur (Ramayana / Boxies)",
+      "is_one_way": false,
+      "road_distance_m": 31.3,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 173,
+      "target_id": 180,
+      "exit_direction": "NORTHEAST",
+      "road_name": "Jl. Parung Banteng (Tajur - R3)",
+      "is_one_way": false,
+      "road_distance_m": 1850.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        164,
+        386
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 330.3
+    },
+    {
+      "source_id": 180,
+      "target_id": 173,
+      "exit_direction": "SOUTHWEST",
+      "road_name": "Jl. Parung Banteng (Tajur - R3)",
+      "is_one_way": false,
+      "road_distance_m": 1850.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        164,
+        386
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 150.3
+    },
+    {
+      "source_id": 179,
+      "target_id": 180,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Parung Banteng",
+      "is_one_way": false,
+      "road_distance_m": 17.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 123.8
+    },
+    {
+      "source_id": 180,
+      "target_id": 179,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Parung Banteng",
+      "is_one_way": false,
+      "road_distance_m": 17.8,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 303.8
+    },
+    {
+      "source_id": 179,
+      "target_id": 181,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Katulampa (Parung Banteng - Bendung)",
+      "is_one_way": false,
+      "road_distance_m": 820.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        72,
+        196
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 32.5
+    },
+    {
+      "source_id": 181,
+      "target_id": 179,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Katulampa (Parung Banteng - Bendung)",
+      "is_one_way": false,
+      "road_distance_m": 820.0,
+      "typical_speed_kmh": 30.0,
+      "travel_time_window_s": [
+        72,
+        196
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 212.5
+    },
+    {
+      "source_id": 181,
+      "target_id": 182,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Katulampa",
+      "is_one_way": false,
+      "road_distance_m": 11.5,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.6
+    },
+    {
+      "source_id": 182,
+      "target_id": 181,
+      "exit_direction": "INTERNAL",
+      "road_name": "Simpang Katulampa",
+      "is_one_way": false,
+      "road_distance_m": 11.5,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.6
+    },
+    {
+      "source_id": 181,
+      "target_id": 184,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Katulampa -> R3 Seksi 3",
+      "is_one_way": false,
+      "road_distance_m": 760.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        57,
+        165
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 15.7
+    },
+    {
+      "source_id": 184,
+      "target_id": 181,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Katulampa -> R3 Seksi 3",
+      "is_one_way": false,
+      "road_distance_m": 760.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        57,
+        165
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 195.7
+    },
+    {
+      "source_id": 183,
+      "target_id": 184,
+      "exit_direction": "INTERNAL",
+      "road_name": "R3 Seksi 3 (Kolonel Ahmad Syam)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 184,
+      "target_id": 183,
+      "exit_direction": "INTERNAL",
+      "road_name": "R3 Seksi 3 (Kolonel Ahmad Syam)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 183,
+      "target_id": 187,
+      "exit_direction": "NORTH",
+      "road_name": "R3 Seksi 3 -> Seksi 2",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 326.5
+    },
+    {
+      "source_id": 187,
+      "target_id": 183,
+      "exit_direction": "SOUTH",
+      "road_name": "R3 Seksi 3 -> Seksi 2",
+      "is_one_way": false,
+      "road_distance_m": 720.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        48,
+        144
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 146.5
+    },
+    {
+      "source_id": 187,
+      "target_id": 186,
+      "exit_direction": "NORTH",
+      "road_name": "R3 Seksi 2 -> Seksi 1",
+      "is_one_way": false,
+      "road_distance_m": 820.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        54,
+        158
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 328.8
+    },
+    {
+      "source_id": 186,
+      "target_id": 187,
+      "exit_direction": "SOUTH",
+      "road_name": "R3 Seksi 2 -> Seksi 1",
+      "is_one_way": false,
+      "road_distance_m": 820.0,
+      "typical_speed_kmh": 40.0,
+      "travel_time_window_s": [
+        54,
+        158
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 148.8
+    },
+    {
+      "source_id": 185,
+      "target_id": 186,
+      "exit_direction": "INTERNAL",
+      "road_name": "R3 Seksi 1 (Kolonel Ahmad Syam)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 315.2
+    },
+    {
+      "source_id": 186,
+      "target_id": 185,
+      "exit_direction": "INTERNAL",
+      "road_name": "R3 Seksi 1 (Kolonel Ahmad Syam)",
+      "is_one_way": false,
+      "road_distance_m": 15.7,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 135.2
+    },
+    {
+      "source_id": 185,
+      "target_id": 119,
+      "exit_direction": "NORTHWEST",
+      "road_name": "Jl. Achmad Adnawijaya (R3 - Pandu Raya)",
+      "is_one_way": false,
+      "road_distance_m": 3150.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        240,
+        543
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 332.5
+    },
+    {
+      "source_id": 119,
+      "target_id": 185,
+      "exit_direction": "SOUTHEAST",
+      "road_name": "Jl. Achmad Adnawijaya (R3 - Pandu Raya)",
+      "is_one_way": false,
+      "road_distance_m": 3150.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        240,
+        543
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 152.5
+    },
+    {
+      "source_id": 121,
+      "target_id": 124,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 101.7
+    },
+    {
+      "source_id": 121,
+      "target_id": 126,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 37.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 156.5
+    },
+    {
+      "source_id": 121,
+      "target_id": 127,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 268.8
+    },
+    {
+      "source_id": 121,
+      "target_id": 160,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 54.6
+    },
+    {
+      "source_id": 124,
+      "target_id": 121,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 281.7
+    },
+    {
+      "source_id": 124,
+      "target_id": 126,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 243.3
+    },
+    {
+      "source_id": 124,
+      "target_id": 127,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 275.7
+    },
+    {
+      "source_id": 124,
+      "target_id": 160,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 23.1
+    },
+    {
+      "source_id": 126,
+      "target_id": 121,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 37.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 336.5
+    },
+    {
+      "source_id": 126,
+      "target_id": 124,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 63.3
+    },
+    {
+      "source_id": 126,
+      "target_id": 127,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 296.7
+    },
+    {
+      "source_id": 126,
+      "target_id": 160,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 37.7
+    },
+    {
+      "source_id": 127,
+      "target_id": 121,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 88.8
+    },
+    {
+      "source_id": 127,
+      "target_id": 124,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 95.7
+    },
+    {
+      "source_id": 127,
+      "target_id": 126,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 116.7
+    },
+    {
+      "source_id": 127,
+      "target_id": 160,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 65.1
+    },
+    {
+      "source_id": 160,
+      "target_id": 121,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 234.6
+    },
+    {
+      "source_id": 160,
+      "target_id": 124,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 203.1
+    },
+    {
+      "source_id": 160,
+      "target_id": 126,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 217.7
+    },
+    {
+      "source_id": 160,
+      "target_id": 127,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Heulang Hub",
+      "is_one_way": false,
+      "road_distance_m": 15.0,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        5,
+        53
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 245.1
+    },
+    {
+      "source_id": 126,
+      "target_id": 161,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Pemuda / Heulang -> Simpang Dadali",
+      "is_one_way": false,
+      "road_distance_m": 620.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        66,
+        182
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 15.3
+    },
+    {
+      "source_id": 161,
+      "target_id": 126,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Pemuda / Heulang -> Simpang Dadali",
+      "is_one_way": false,
+      "road_distance_m": 620.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        66,
+        182
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 195.3
+    },
+    {
+      "source_id": 128,
+      "target_id": 129,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Kencana Plaza",
+      "is_one_way": false,
+      "road_distance_m": 13.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 133.5
+    },
+    {
+      "source_id": 129,
+      "target_id": 128,
+      "exit_direction": "INTERNAL",
+      "road_name": "Taman Kencana Plaza",
+      "is_one_way": false,
+      "road_distance_m": 13.6,
+      "typical_speed_kmh": 10.0,
+      "travel_time_window_s": [
+        1,
+        15
+      ],
+      "transition_probability": 0.9,
+      "compass_bearing_deg": 313.5
+    },
+    {
+      "source_id": 128,
+      "target_id": 122,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Salak (Taman Kencana - Sempur)",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        38,
+        124
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 214.5
+    },
+    {
+      "source_id": 122,
+      "target_id": 128,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Salak (Taman Kencana - Sempur)",
+      "is_one_way": false,
+      "road_distance_m": 360.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        38,
+        124
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 34.5
+    },
+    {
+      "source_id": 128,
+      "target_id": 132,
+      "exit_direction": "EAST",
+      "road_name": "Jl. Taman Kencana -> Taman Pangrango",
+      "is_one_way": false,
+      "road_distance_m": 260.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        27,
+        102
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 106.4
+    },
+    {
+      "source_id": 132,
+      "target_id": 128,
+      "exit_direction": "WEST",
+      "road_name": "Jl. Taman Kencana -> Taman Pangrango",
+      "is_one_way": false,
+      "road_distance_m": 260.0,
+      "typical_speed_kmh": 25.0,
+      "travel_time_window_s": [
+        27,
+        102
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 286.4
+    },
+    {
+      "source_id": 92,
+      "target_id": 161,
+      "exit_direction": "NORTH",
+      "road_name": "Jl. Jend. Sudirman -> Warung Jambu",
+      "is_one_way": false,
+      "road_distance_m": 2250.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        171,
+        401
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 17.1
+    },
+    {
+      "source_id": 161,
+      "target_id": 92,
+      "exit_direction": "SOUTH",
+      "road_name": "Jl. Jend. Sudirman -> Warung Jambu",
+      "is_one_way": false,
+      "road_distance_m": 2250.0,
+      "typical_speed_kmh": 35.0,
+      "travel_time_window_s": [
+        171,
+        401
+      ],
+      "transition_probability": 1.0,
+      "compass_bearing_deg": 197.1
+    }
+  ],
+  "adjacency_by_exit": {
+    "79:INTERNAL": [
+      199
+    ],
+    "199:INTERNAL": [
+      79
+    ],
+    "199:WEST": [
+      87
+    ],
+    "79:WEST": [
+      87
+    ],
+    "87:WEST": [
+      83
+    ],
+    "83:WEST": [
+      81,
+      106
+    ],
+    "81:INTERNAL": [
+      106,
+      107
+    ],
+    "106:INTERNAL": [
+      81,
+      107
+    ],
+    "107:INTERNAL": [
+      81,
+      106
+    ],
+    "81:NORTH": [
+      85
+    ],
+    "85:NORTH": [
+      133
+    ],
+    "133:NORTH": [
+      134
+    ],
+    "134:NORTH": [
+      92,
+      111
+    ],
+    "92:INTERNAL": [
+      111
+    ],
+    "111:INTERNAL": [
+      92
+    ],
+    "92:EAST": [
+      120
+    ],
+    "111:EAST": [
+      120
+    ],
+    "120:INTERNAL": [
+      131
+    ],
+    "131:INTERNAL": [
+      120
+    ],
+    "120:EAST": [
+      122
+    ],
+    "131:EAST": [
+      122
+    ],
+    "122:NORTH": [
+      130,
+      128
+    ],
+    "130:SOUTH": [
+      122
+    ],
+    "130:NORTH": [
+      159
+    ],
+    "159:SOUTH": [
+      130
+    ],
+    "122:EAST": [
+      132
+    ],
+    "132:SOUTH": [
+      79,
+      199
+    ],
+    "83:SOUTH": [
+      100,
+      101,
+      96
+    ],
+    "101:EAST": [
+      100
+    ],
+    "101:SOUTH": [
+      91
+    ],
+    "100:SOUTH": [
+      86
+    ],
+    "91:EAST": [
+      89
+    ],
+    "89:WEST": [
+      86
+    ],
+    "96:SOUTH": [
+      86
+    ],
+    "86:SOUTH": [
+      75
+    ],
+    "75:SOUTHWEST": [
+      167
+    ],
+    "75:SOUTHEAST": [
+      188
+    ],
+    "123:SOUTH": [
+      161
+    ],
+    "161:NORTH": [
+      123,
+      126
+    ],
+    "161:INTERNAL": [
+      201
+    ],
+    "201:INTERNAL": [
+      161
+    ],
+    "161:SOUTH": [
+      118,
+      92
+    ],
+    "118:NORTH": [
+      161
+    ],
+    "118:INTERNAL": [
+      119
+    ],
+    "119:INTERNAL": [
+      118
+    ],
+    "118:SOUTH": [
+      80
+    ],
+    "80:NORTH": [
+      118
+    ],
+    "80:SOUTH": [
+      79
+    ],
+    "79:NORTH": [
+      80
+    ],
+    "79:SOUTH": [
+      103
+    ],
+    "103:NORTH": [
+      79
+    ],
+    "103:SOUTH": [
+      188
+    ],
+    "188:NORTH": [
+      103
+    ],
+    "188:INTERNAL": [
+      189
+    ],
+    "189:INTERNAL": [
+      188
+    ],
+    "188:SOUTHEAST": [
+      108
+    ],
+    "108:NORTHWEST": [
+      188
+    ],
+    "118:SOUTHWEST": [
+      132
+    ],
+    "132:NORTHEAST": [
+      118
+    ],
+    "161:WEST": [
+      163
+    ],
+    "163:EAST": [
+      161
+    ],
+    "163:WEST": [
+      190
+    ],
+    "190:EAST": [
+      163
+    ],
+    "190:INTERNAL": [
+      191
+    ],
+    "191:INTERNAL": [
+      190
+    ],
+    "190:WEST": [
+      195
+    ],
+    "196:EAST": [
+      191
+    ],
+    "195:INTERNAL": [
+      196,
+      202
+    ],
+    "196:INTERNAL": [
+      195,
+      202
+    ],
+    "202:INTERNAL": [
+      195,
+      196
+    ],
+    "195:WEST": [
+      172
+    ],
+    "176:EAST": [
+      196
+    ],
+    "172:INTERNAL": [
+      176
+    ],
+    "176:INTERNAL": [
+      172
+    ],
+    "172:WEST": [
+      193
+    ],
+    "194:EAST": [
+      176
+    ],
+    "193:INTERNAL": [
+      194
+    ],
+    "194:INTERNAL": [
+      193
+    ],
+    "193:WEST": [
+      170
+    ],
+    "171:EAST": [
+      194
+    ],
+    "169:INTERNAL": [
+      170,
+      171
+    ],
+    "170:INTERNAL": [
+      169,
+      171
+    ],
+    "171:INTERNAL": [
+      169,
+      170
+    ],
+    "170:WEST": [
+      175
+    ],
+    "177:EAST": [
+      171
+    ],
+    "175:INTERNAL": [
+      177
+    ],
+    "177:INTERNAL": [
+      175
+    ],
+    "192:INTERNAL": [
+      198
+    ],
+    "198:INTERNAL": [
+      192
+    ],
+    "198:WEST": [
+      154
+    ],
+    "154:EAST": [
+      198
+    ],
+    "154:WEST": [
+      145
+    ],
+    "145:EAST": [
+      154
+    ],
+    "143:INTERNAL": [
+      145,
+      146
+    ],
+    "145:INTERNAL": [
+      143,
+      146
+    ],
+    "146:INTERNAL": [
+      143,
+      145
+    ],
+    "145:WEST": [
+      151
+    ],
+    "151:EAST": [
+      145
+    ],
+    "193:SOUTH": [
+      198
+    ],
+    "198:NORTH": [
+      193
+    ],
+    "81:NORTHWEST": [
+      82
+    ],
+    "82:SOUTHEAST": [
+      81
+    ],
+    "82:NORTH": [
+      116
+    ],
+    "116:SOUTH": [
+      82
+    ],
+    "114:INTERNAL": [
+      115,
+      116
+    ],
+    "115:INTERNAL": [
+      114,
+      116
+    ],
+    "116:INTERNAL": [
+      114,
+      115
+    ],
+    "114:NORTHWEST": [
+      150
+    ],
+    "150:SOUTHEAST": [
+      114
+    ],
+    "150:INTERNAL": [
+      152
+    ],
+    "152:INTERNAL": [
+      150
+    ],
+    "150:NORTH": [
+      136
+    ],
+    "136:SOUTH": [
+      150
+    ],
+    "136:WEST": [
+      137
+    ],
+    "137:EAST": [
+      136
+    ],
+    "137:WEST": [
+      157
+    ],
+    "157:EAST": [
+      137
+    ],
+    "157:INTERNAL": [
+      158
+    ],
+    "158:INTERNAL": [
+      157
+    ],
+    "157:WEST": [
+      192
+    ],
+    "192:EAST": [
+      157
+    ],
+    "116:WEST": [
+      149
+    ],
+    "149:EAST": [
+      116
+    ],
+    "147:INTERNAL": [
+      149
+    ],
+    "149:INTERNAL": [
+      147
+    ],
+    "147:NORTH": [
+      157
+    ],
+    "157:SOUTH": [
+      147
+    ],
+    "147:SOUTH": [
+      139
+    ],
+    "139:NORTH": [
+      147
+    ],
+    "138:INTERNAL": [
+      139
+    ],
+    "139:INTERNAL": [
+      138
+    ],
+    "139:NORTHWEST": [
+      143
+    ],
+    "143:SOUTHEAST": [
+      139
+    ],
+    "138:EAST": [
+      142
+    ],
+    "142:WEST": [
+      138
+    ],
+    "142:INTERNAL": [
+      197
+    ],
+    "197:INTERNAL": [
+      142
+    ],
+    "107:SOUTH": [
+      142
+    ],
+    "142:SOUTH": [
+      167
+    ],
+    "167:NORTH": [
+      142
+    ],
+    "167:INTERNAL": [
+      168
+    ],
+    "168:INTERNAL": [
+      167
+    ],
+    "167:SOUTH": [
+      166
+    ],
+    "166:NORTH": [
+      167
+    ],
+    "167:EAST": [
+      108
+    ],
+    "108:WEST": [
+      167
+    ],
+    "108:SOUTHEAST": [
+      174
+    ],
+    "174:NORTHWEST": [
+      108
+    ],
+    "173:INTERNAL": [
+      174
+    ],
+    "174:INTERNAL": [
+      173
+    ],
+    "173:NORTHEAST": [
+      180
+    ],
+    "180:SOUTHWEST": [
+      173
+    ],
+    "179:INTERNAL": [
+      180
+    ],
+    "180:INTERNAL": [
+      179
+    ],
+    "179:NORTH": [
+      181
+    ],
+    "181:SOUTH": [
+      179
+    ],
+    "181:INTERNAL": [
+      182
+    ],
+    "182:INTERNAL": [
+      181
+    ],
+    "181:NORTH": [
+      184
+    ],
+    "184:SOUTH": [
+      181
+    ],
+    "183:INTERNAL": [
+      184
+    ],
+    "184:INTERNAL": [
+      183
+    ],
+    "183:NORTH": [
+      187
+    ],
+    "187:SOUTH": [
+      183
+    ],
+    "187:NORTH": [
+      186
+    ],
+    "186:SOUTH": [
+      187
+    ],
+    "185:INTERNAL": [
+      186
+    ],
+    "186:INTERNAL": [
+      185
+    ],
+    "185:NORTHWEST": [
+      119
+    ],
+    "119:SOUTHEAST": [
+      185
+    ],
+    "121:INTERNAL": [
+      124,
+      126,
+      127,
+      160
+    ],
+    "124:INTERNAL": [
+      121,
+      126,
+      127,
+      160
+    ],
+    "126:INTERNAL": [
+      121,
+      124,
+      127,
+      160
+    ],
+    "127:INTERNAL": [
+      121,
+      124,
+      126,
+      160
+    ],
+    "160:INTERNAL": [
+      121,
+      124,
+      126,
+      127
+    ],
+    "126:SOUTH": [
+      161
+    ],
+    "128:INTERNAL": [
+      129
+    ],
+    "129:INTERNAL": [
+      128
+    ],
+    "128:SOUTH": [
+      122
+    ],
+    "128:EAST": [
+      132
+    ],
+    "132:WEST": [
+      128
+    ],
+    "92:NORTH": [
+      161
+    ]
+  }
+}

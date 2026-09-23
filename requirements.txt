@@ -1,0 +1,24 @@
+# Core Deep Learning & Apple Neural Engine (ANE) Inference
+ultralytics>=8.3.0
+coremltools>=8.0
+torch>=2.2.0
+torchvision>=0.17.0
+lapx>=0.5.5   # ByteTrack linear assignment solver
+
+# Computer Vision & Video Processing
+opencv-python>=4.9.0
+numpy>=1.26.0
+Pillow>=10.0.0
+
+# Backend Web Server & APIs
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+websockets>=12.0
+requests>=2.31.0
+aiofiles>=23.2.1
+
+# Testing & Verification
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
