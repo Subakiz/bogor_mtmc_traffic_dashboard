@@ -22,19 +22,44 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
-# Dynamically ensure cv2 from reference venv is accessible if not in base environment
+# Keep OpenCV/FFmpeg quiet: joining a live HLS stream mid-GOP prints harmless h264 "reference
+# picture missing" warnings for every capture, and dead cameras are reported by the rolling tracker.
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "8")   # AV_LOG_FATAL
+
+# Ensure cv2 from the engine virtualenv is accessible if not in the base environment
 try:
     import cv2
 except ImportError:
-    for p in glob.glob("/Users/nabils/cctv_yolo_ane/.venv/lib/python*/site-packages"):
-        if p not in sys.path:
-            sys.path.append(p)
+    from backend.config import ensure_engine_importable
+
+    ensure_engine_importable()
     try:
         import cv2
     except ImportError:
         cv2 = None
 
+if cv2 is not None:
+    try:   # cv2 may already have been imported (and its log level fixed) by the caller
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except AttributeError:
+        pass
+
 logger = logging.getLogger("stream_capture")
+
+# Low-latency FFmpeg options for HLS (without them OpenCV drifts 15-25 s behind live). Set once
+# for the whole process so captures can be opened concurrently: an open takes 2-13 s, and
+# serialising them behind a lock left the rolling tracker connecting most of the time.
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", (
+    "protocol_whitelist;file,http,https,tcp,tls,crypto,httpproxy,rtp,udp|"
+    "fflags;nobuffer|flags;low_delay|"
+    "live_start_index;-1|"
+    "http_persistent;1|"
+    "reorder_queue_size;0|"
+    "probesize;32768|analyzeduration;0|"
+    "max_delay;500000|"
+    "timeout;5000000"
+))
 
 
 class MockVideoCapture:
@@ -71,6 +96,11 @@ class MockVideoCapture:
             return self.retrieve()
         return False, None
 
+    def get(self, prop_id: int) -> float:
+        if cv2 is not None and prop_id == cv2.CAP_PROP_POS_MSEC:
+            return float(self._frame_count * (1000.0 / self.fps))
+        return 0.0
+
     def release(self):
         self._opened = False
 
@@ -103,6 +133,7 @@ class ThreadedStreamCapture:
         self.buffer_size = buffer_size
 
         self._lock = threading.Lock()
+        self._cap_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._frame_available = threading.Condition(self._lock)
 
@@ -120,6 +151,7 @@ class ThreadedStreamCapture:
         # Ring buffer retaining only the newest frames
         self._ring_buffer = collections.deque(maxlen=self.buffer_size)
         self._cached_frame: Optional[np.ndarray] = None
+        self._frame_seq = 0
         self._has_new_grab = False
 
         if auto_start:
@@ -149,19 +181,16 @@ class ThreadedStreamCapture:
             return MockVideoCapture()
 
         try:
-            if isinstance(self.source, str) and (
-                self.source.startswith("http://") or self.source.startswith("https://")
-            ):
-                # Configure low latency environment flags for FFmpeg backend
-                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                    "fflags;nobuffer|flags;low_delay|reorder_queue_size;0|timeout;5000000"
-                )
-            cap = cv2.VideoCapture(self.source)
+            # FFmpeg only for URLs: on failure OpenCV would otherwise fall back to its image-sequence
+            # reader, which fails again and logs "Couldn't read video stream from file".
+            if isinstance(self.source, str):
+                cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+            else:
+                cap = cv2.VideoCapture(self.source)
             if cap.isOpened():
                 return cap
-            else:
-                logger.debug(f"VideoCapture({self.source}) failed to open.")
-                return None
+            logger.debug(f"VideoCapture({self.source}) failed to open.")
+            return None
         except Exception as e:
             logger.debug(f"Exception initializing capture for {self.source}: {e}")
             return None
@@ -189,6 +218,9 @@ class ThreadedStreamCapture:
         and manages reconnection with exponential backoff on stream drops.
         """
         min_sleep = 1.0 / max(1.0, self.max_fps * 1.5)
+        start_wall = time.time()
+        start_video_msec: Optional[float] = None
+        max_tolerated_lag_ms = 3500.0
 
         while not self._stop_event.is_set():
             # Ensure capture is open
@@ -198,29 +230,97 @@ class ThreadedStreamCapture:
                     break
                 if not self._is_opened:
                     continue
+                start_wall = time.time()
+                start_video_msec = None
 
-            # Tight loop packet flushing via grab()
+            if self._stop_event.is_set():
+                break
+
+            grabbed = False
             try:
-                grabbed = self._cap.grab()
+                with self._cap_lock:
+                    if not self._stop_event.is_set() and self._cap is not None:
+                        grabbed = self._cap.grab()
             except Exception as e:
                 logger.debug(f"Stream error during grab on {self.name}: {e}")
                 grabbed = False
 
             if grabbed:
-                with self._lock:
-                    self._grab_count += 1
-                    self._has_new_grab = True
-                    self._consecutive_failures = 0
-                    self.current_backoff = self.initial_backoff
-                    self._frame_available.notify_all()
+                # Fast backlog drainage for network streams to maintain live edge
+                pos_msec = 0.0
+                if hasattr(self._cap, "get") and cv2 is not None:
+                    try:
+                        pos_msec = float(self._cap.get(cv2.CAP_PROP_POS_MSEC))
+                    except Exception:
+                        pos_msec = 0.0
+
+                if start_video_msec is None and pos_msec > 0:
+                    start_video_msec = pos_msec
+                    start_wall = time.time()
+
+                if start_video_msec is not None and pos_msec >= start_video_msec:
+                    wall_ms = (time.time() - start_wall) * 1000.0
+                    video_ms = pos_msec - start_video_msec
+                    lag_ms = wall_ms - video_ms
+
+                    if lag_ms > max_tolerated_lag_ms:
+                        dropped = 0
+                        while lag_ms > 2200.0 and dropped < 60 and not self._stop_event.is_set():
+                            t_g0 = time.perf_counter()
+                            with self._cap_lock:
+                                if self._cap is None:
+                                    break
+                                ret_drain = self._cap.grab()
+                            if not ret_drain or (time.perf_counter() - t_g0) > 0.015:
+                                break
+                            dropped += 1
+                            if hasattr(self._cap, "get") and cv2 is not None:
+                                try:
+                                    pos_msec = float(self._cap.get(cv2.CAP_PROP_POS_MSEC))
+                                except Exception:
+                                    break
+                            wall_ms = (time.time() - start_wall) * 1000.0
+                            video_ms = pos_msec - start_video_msec
+                            lag_ms = wall_ms - video_ms
+                        self._dropped_frames_count += dropped
+
+                # Decode only the freshest frame at the live edge
+                ret, frame = False, None
+                try:
+                    with self._cap_lock:
+                        if not self._stop_event.is_set() and self._cap is not None:
+                            ret, frame = self._cap.retrieve()
+                except Exception as e:
+                    logger.debug(f"Stream error during retrieve on {self.name}: {e}")
+                    ret, frame = False, None
+
+                if ret and frame is not None:
+                    with self._lock:
+                        self._grab_count += 1
+                        self._cached_frame = frame
+                        self._frame_seq += 1
+                        self._has_new_grab = True
+                        self._consecutive_failures = 0
+                        self.current_backoff = self.initial_backoff
+                        self._last_frame_time = time.time()
+                        self._frame_available.notify_all()
+                else:
+                    with self._lock:
+                        self._consecutive_failures += 1
             else:
                 with self._lock:
                     self._consecutive_failures += 1
-                    if self._consecutive_failures >= 5:
+                    # In tests / mock captures, failure threshold is 5; for real network streams tolerate brief packet jitter
+                    fail_limit = 5 if not isinstance(self.source, str) else 25
+                    now = time.time()
+                    time_since_frame = (now - self._last_frame_time) if self._last_frame_time > 0 else 999.0
+                    if self._consecutive_failures >= fail_limit and (not isinstance(self.source, str) or time_since_frame >= 1.5):
                         self._is_opened = False
                         if self._cap is not None:
                             try:
-                                self._cap.release()
+                                with self._cap_lock:
+                                    if self._cap is not None:
+                                        self._cap.release()
                             except Exception:
                                 pass
                             self._cap = None
@@ -233,8 +333,16 @@ class ThreadedStreamCapture:
         if self._stop_event.is_set():
             return
 
+        with self._lock:
+            self._reconnect_attempts = getattr(self, "_reconnect_attempts", 0) + 1
+            if not isinstance(self.source, str) and self._reconnect_attempts > 5:
+                # Max reconnect attempts reached in tests / mock captures: stop cleanly
+                self._is_opened = False
+                self._stop_event.set()
+                return
+
         time.sleep(self.current_backoff)
-        self.current_backoff = min(self.current_backoff * 1.8, self.max_backoff)
+        self.current_backoff = min(self.current_backoff * 1.5, self.max_backoff)
 
         cap = self._create_capture()
         with self._lock:
@@ -242,7 +350,9 @@ class ThreadedStreamCapture:
                 self._cap = cap
                 self._is_opened = True
                 self._consecutive_failures = 0
+                self._reconnect_attempts = 0
                 self.current_backoff = self.initial_backoff
+                self._last_frame_time = time.time()
                 logger.debug(f"Connected to stream {self.name}.")
             else:
                 self._is_opened = False
@@ -250,33 +360,35 @@ class ThreadedStreamCapture:
 
     def get_frame(self, timeout: float = 0.5) -> Tuple[bool, Optional[np.ndarray]]:
         """
-        Retrieves the freshest decoded frame.
-        Guarantees low latency by decoding (cap.retrieve) only when requested.
+        Retrieves the freshest decoded frame safely from cached frame.
+        Non-blocking and eliminates multithreaded VideoCapture race conditions.
         """
         with self._lock:
-            # If not connected, wait briefly for frame availability
-            if not self._has_new_grab and self._cached_frame is not None:
-                # No newer frame grabbed yet; return latest cached frame
-                return True, self._cached_frame.copy()
-
-            if self._cap is None:
-                return False, None
-
-            ret, frame = self._cap.retrieve()
-            if ret and frame is not None:
-                self._cached_frame = frame
-                self._has_new_grab = False
+            if self._cached_frame is not None:
                 self._retrieve_count += 1
-                self._last_frame_time = time.time()
-                # Maintain bounded history in ring buffer
                 self._ring_buffer.append(
-                    {"frame_id": self._retrieve_count, "timestamp": self._last_frame_time}
+                    {"frame_id": self._retrieve_count, "timestamp": time.time()}
                 )
-                return True, frame.copy()
-            elif self._cached_frame is not None:
                 return True, self._cached_frame.copy()
 
             return False, None
+
+    def get_new_frame(
+        self, last_seq: int = 0, timeout: float = 0.5, copy: bool = False
+    ) -> Tuple[bool, int, Optional[np.ndarray]]:
+        """
+        Blocks up to ``timeout`` seconds for a frame newer than ``last_seq``.
+        Returns (ok, seq, frame). Frames are never mutated after caching, so the default
+        ``copy=False`` is safe for read-only consumers and avoids a per-frame memcpy.
+        """
+        with self._frame_available:
+            if self._frame_seq <= last_seq or self._cached_frame is None:
+                self._frame_available.wait(timeout=timeout)
+            if self._cached_frame is None or self._frame_seq <= last_seq:
+                return False, last_seq, None
+            self._retrieve_count += 1
+            frame = self._cached_frame.copy() if copy else self._cached_frame
+            return True, self._frame_seq, frame
 
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
         """Standard OpenCV-compatible interface for get_frame()."""
@@ -313,7 +425,8 @@ class ThreadedStreamCapture:
         with self._lock:
             if self._cap is not None:
                 try:
-                    self._cap.release()
+                    with self._cap_lock:
+                        self._cap.release()
                 except Exception:
                     pass
                 self._cap = None

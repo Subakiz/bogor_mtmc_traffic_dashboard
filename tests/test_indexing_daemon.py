@@ -20,6 +20,7 @@ import numpy as np
 from backend.database import Database
 from backend.detector import ANEVehicleDetector
 from backend.indexing_daemon import IndexingDaemon
+from tests import TOTAL_CAMERAS
 
 
 class TestIndexingDaemonUnit(unittest.TestCase):
@@ -39,13 +40,13 @@ class TestIndexingDaemonUnit(unittest.TestCase):
 
     def test_3tier_partitioning_counts(self):
         """Verify all 94 Kota Bogor cameras are partitioned across the 3 tiers."""
-        self.assertEqual(len(self.daemon.all_camera_ids), 94)
+        self.assertEqual(len(self.daemon.all_camera_ids), TOTAL_CAMERAS)
         c1 = self.daemon.get_cameras_in_tier(1)
         c2 = self.daemon.get_cameras_in_tier(2)
         c3 = self.daemon.get_cameras_in_tier(3)
 
         total_partitioned = len(c1) + len(c2) + len(c3)
-        self.assertEqual(total_partitioned, 94)
+        self.assertEqual(total_partitioned, TOTAL_CAMERAS)
         # Disjoint sets
         self.assertEqual(len(c1 & c2), 0)
         self.assertEqual(len(c2 & c3), 0)
@@ -100,7 +101,7 @@ class TestIndexingDaemonUnit(unittest.TestCase):
         time.sleep(0.1)
         status = self.daemon.get_status()
         self.assertTrue(status["running"])
-        self.assertEqual(status["total_cameras"], 94)
+        self.assertEqual(status["total_cameras"], TOTAL_CAMERAS)
         self.assertIn(1, status["tiers"])
         self.assertIn(2, status["tiers"])
         self.assertIn(3, status["tiers"])

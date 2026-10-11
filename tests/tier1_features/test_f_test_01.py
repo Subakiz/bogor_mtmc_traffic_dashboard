@@ -8,6 +8,7 @@ import json
 import unittest
 import numpy as np
 
+from tests import TOTAL_CAMERAS
 from tests.mock_stream import (
     MockCameraNetwork,
     MockHLSStreamServer,
@@ -59,7 +60,7 @@ class TestFTEST01DeterministicSimulation(unittest.TestCase):
     def test_f_test_01_mock_camera_network_state_tracking(self):
         """Test 4: MockCameraNetwork manages 94 camera simulation states and tier assignments."""
         net = MockCameraNetwork()
-        self.assertEqual(len(net.camera_states), 94)
+        self.assertEqual(len(net.camera_states), TOTAL_CAMERAS)
         # Change tier
         net.set_camera_tier(79, 1)
         self.assertEqual(net.camera_states[79]["tier"], 1)

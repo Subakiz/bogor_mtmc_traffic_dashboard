@@ -15,6 +15,7 @@ from tests.mock_stream import (
     SyntheticFrameGenerator,
     SyntheticTrajectorySimulator,
 )
+from tests import TOTAL_CAMERAS, TOTAL_EDGES
 from tests.reference_contracts import (
     DatabaseContract,
     GlobalIDPreserverContract,
@@ -201,7 +202,7 @@ class TestTier3PairwiseCombinations(unittest.TestCase):
             {"id": cid, "lat": n.get("latitude", n.get("lat")), "lng": n.get("longitude", n.get("lng"))}
             for cid, n in self.topo.nodes.items()
         ]
-        self.assertEqual(len(markers), 94)
+        self.assertEqual(len(markers), TOTAL_CAMERAS)
 
     def test_p14_player_auto_switcher_plus_websocket_event(self):
         """Pair 14 (F-DASH-02 + F-API-02): Video player updates active stream URL upon CAMERA_SWITCH."""
@@ -310,7 +311,7 @@ class TestTier3PairwiseCombinations(unittest.TestCase):
     def test_p23_fastapi_rest_topology_plus_edge_database(self):
         """Pair 23 (F-API-01 + F-GEO-02): REST topology structure serves full 220 edge network."""
         edges = self.topo.edges
-        self.assertEqual(len(edges), 220)
+        self.assertEqual(len(edges), TOTAL_EDGES)
 
     def test_p24_appearance_color_signature_plus_disambiguation(self):
         """Pair 24 (FEAT-M3 + FEAT-M7): Color histogram separates two vehicles of identical car model."""

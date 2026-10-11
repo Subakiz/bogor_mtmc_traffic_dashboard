@@ -10,6 +10,7 @@ import unittest
 import numpy as np
 
 from tests.reference_contracts import TopologyContract, DatabaseContract, GlobalIDPreserverContract
+from tests import TOTAL_CAMERAS, TOTAL_EDGES
 
 
 class TestFAPI01FastAPIServices(unittest.TestCase):
@@ -30,7 +31,7 @@ class TestFAPI01FastAPIServices(unittest.TestCase):
     def test_f_api_01_cameras_endpoint_contract(self):
         """Test 1: Cameras endpoint returns 94 camera objects with required fields."""
         cameras = [self.topo.get_camera_info(cid) for cid in self.topo.nodes.keys()]
-        self.assertEqual(len(cameras), 94)
+        self.assertEqual(len(cameras), TOTAL_CAMERAS)
         required_keys = {"id", "name", "lat", "lng", "corridor", "stream_url", "default_azimuth", "fov_deg"}
         for cam in cameras:
             self.assertTrue(required_keys.issubset(cam.keys()))
@@ -38,7 +39,7 @@ class TestFAPI01FastAPIServices(unittest.TestCase):
     def test_f_api_01_topology_endpoint_contract(self):
         """Test 2: Topology endpoint returns 220 edges and adjacency mapping."""
         edges = self.topo.edges
-        self.assertEqual(len(edges), 220)
+        self.assertEqual(len(edges), TOTAL_EDGES)
         adj = self.topo.adjacency_by_exit
         self.assertGreaterEqual(len(adj), 150)
 
@@ -169,7 +170,7 @@ class TestFDASH01InteractiveLeafletMapView(unittest.TestCase):
             {"id": cid, "lat": n.get("latitude", n.get("lat")), "lng": n.get("longitude", n.get("lng"))}
             for cid, n in self.topo.nodes.items()
         ]
-        self.assertEqual(len(markers), 94)
+        self.assertEqual(len(markers), TOTAL_CAMERAS)
         for m in markers:
             self.assertIsNotNone(m["lat"])
             self.assertIsNotNone(m["lng"])

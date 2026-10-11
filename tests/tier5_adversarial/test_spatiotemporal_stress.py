@@ -16,6 +16,7 @@ import unittest
 import math
 import random
 import time
+from tests import TOTAL_CAMERAS, TOTAL_EDGES
 from backend.topology_engine import (
     TopologyEngine,
     is_valid_transition,
@@ -33,7 +34,7 @@ class TestSpatiotemporalAdversarial(unittest.TestCase):
 
     def test_all_220_edges_arrival_window_invariants(self):
         """Verify t_min > 0, t_max > t_min, and distance > 0 across all 220 edges."""
-        self.assertEqual(len(self.edges), 220)
+        self.assertEqual(len(self.edges), TOTAL_EDGES)
         for edge in self.edges:
             u = edge["source_id"]
             v = edge["target_id"]
@@ -182,7 +183,7 @@ class TestSpatiotemporalAdversarial(unittest.TestCase):
                 self.assertGreater(t_min, 0.0)
                 self.assertGreater(t_max, t_min)
                 reachable += 1
-        self.assertEqual(reachable, 94 * 93)
+        self.assertEqual(reachable, TOTAL_CAMERAS * (TOTAL_CAMERAS - 1))
 
     def test_sub_millisecond_query_latency_benchmark(self):
         """Benchmark 10,000 queries and confirm sub-millisecond execution."""

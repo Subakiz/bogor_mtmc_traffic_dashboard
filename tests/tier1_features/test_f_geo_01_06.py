@@ -8,6 +8,7 @@ import json
 import os
 import unittest
 from tests.reference_contracts import TopologyContract
+from tests import TOTAL_CAMERAS, TOTAL_EDGES
 
 
 class TestFGEO01GeocodingMasterDatabase(unittest.TestCase):
@@ -23,9 +24,9 @@ class TestFGEO01GeocodingMasterDatabase(unittest.TestCase):
 
     def test_f_geo_01_total_camera_count_and_unique_ids(self):
         """Test 1: Exactly 94 unique camera nodes exist in the geocoding database."""
-        self.assertEqual(len(self.nodes), 94)
+        self.assertEqual(len(self.nodes), TOTAL_CAMERAS)
         node_ids = [n["id"] for n in self.nodes.values()]
-        self.assertEqual(len(set(node_ids)), 94)
+        self.assertEqual(len(set(node_ids)), TOTAL_CAMERAS)
 
     def test_f_geo_01_wgs84_bounding_box(self):
         """Test 2: All cameras lie within verified Kota Bogor administrative bounds."""
@@ -102,7 +103,7 @@ class TestFGEO02DirectedTopologyGraph(unittest.TestCase):
 
     def test_f_geo_02_total_edge_count(self):
         """Test 1: Directed topology graph contains exactly 220 validated edges."""
-        self.assertEqual(len(self.edges), 220)
+        self.assertEqual(len(self.edges), TOTAL_EDGES)
 
     def test_f_geo_02_edge_node_referential_integrity(self):
         """Test 2: Every edge connects existing source and target camera IDs."""

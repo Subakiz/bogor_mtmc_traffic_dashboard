@@ -162,7 +162,7 @@ class TestGraphTraversalAdversarial(unittest.TestCase):
 
         # Wildcard queries return all candidates
         all_cands = get_downstream_candidates(79, "*")
-        self.assertEqual(len(all_cands), 4)
+        self.assertEqual(len(all_cands), 7)   # 80, 87, 103, 199 + Lawang 9 (204, 205) and Otista 207
 
         # Unknown directions return empty list
         self.assertEqual(get_downstream_candidates(79, "NONEXISTENT_DIR"), [])

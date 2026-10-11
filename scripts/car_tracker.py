@@ -169,7 +169,7 @@ def track_stream(stream_url, camera_name="CCTV Camera", model_path="yolov8m.mlpa
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
 
                     # Draw ID Label Badge
-                    label = f"{cls_name.capitalize()} #{track_id} ({score:.2f})"
+                    label = f"{cls_name.capitalize()} ({score:.2f})"
                     (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
                     badge_y1 = max(y1 - 18, 0)
                     cv2.rectangle(annotated, (x1, badge_y1), (x1 + tw + 6, badge_y1 + 18), color, -1)

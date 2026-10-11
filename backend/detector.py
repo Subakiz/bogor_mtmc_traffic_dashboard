@@ -4,28 +4,24 @@ BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Da
 CoreML Detection Service on Apple Neural Engine (FEAT-M1).
 
 Implements:
-- CoreML YOLOv8 detection wrapper leveraging Apple Silicon Neural Engine (ct.ComputeUnit.CPU_AND_NE).
-- Default weights: yolov8m.mlpackage (or yolov8x.mlpackage) from /Users/nabils/cctv_yolo_ane.
+- Shared CoreML YOLOv8 detector (ct.ComputeUnit.CPU_AND_NE) from the cctv_yolo_ane engine.
+- Independent ByteTrack state per camera, so several cameras can be tracked through the
+  same model without mixing their tracks (required for rolling multi-camera tracking).
 - Strict vehicle class filtering (car, motorcycle, bus, truck; COCO IDs 2, 3, 5, 7).
-- Intra-camera tracking and trajectory history buffer (deque with maxlen=24).
 - Motion vector, speed (px/s), and real-world road exit heading angle Theta in [0, 360) deg.
-- Resilient fallback for headless test environments and cross-Python-version test runners.
+- Deterministic synthetic tracker for headless test environments.
 """
 
 import collections
-import glob
 import math
 import os
-import sys
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-# Dynamically add reference venv site-packages to sys.path
-for p in glob.glob("/Users/nabils/cctv_yolo_ane/.venv/lib/python*/site-packages"):
-    if p not in sys.path:
-        sys.path.append(p)
+from backend.config import DEFAULT_MODEL_PATH, ensure_engine_importable
 
 # COCO Vehicle classes: 2: car, 3: motorcycle, 5: bus, 7: truck
 ALLOWED_VEHICLE_CLASSES = {
@@ -36,18 +32,38 @@ ALLOWED_VEHICLE_CLASSES = {
 }
 ALLOWED_CLASS_NAMES = {"car", "motorcycle", "bus", "truck"}
 
-DEFAULT_MODEL_PATH = "/Users/nabils/cctv_yolo_ane/yolov8m.mlpackage"
+_HISTORY_TTL_S = 60.0   # drop heading history of tracks not seen for this long
+
+_SHARED_DETECTOR = None
+_SHARED_DETECTOR_LOCK = threading.Lock()
+
+
+def get_shared_detector(model_path: str = DEFAULT_MODEL_PATH):
+    """Returns the process-wide engine ``VehicleDetector`` (one CoreML model, per-camera trackers)."""
+    global _SHARED_DETECTOR
+    with _SHARED_DETECTOR_LOCK:
+        if _SHARED_DETECTOR is None and os.path.exists(model_path):
+            try:
+                ensure_engine_importable()
+                from car_tracker import VehicleDetector
+
+                _SHARED_DETECTOR = VehicleDetector(model_path)
+            except Exception as exc:  # noqa: BLE001 - fall back to synthetic mode
+                print(f"[detector] Could not load {model_path}: {exc}")
+                _SHARED_DETECTOR = None
+        return _SHARED_DETECTOR
 
 
 class ANEVehicleDetector:
     """
-    Apple Neural Engine (ANE) Accelerated YOLOv8 Vehicle Detector & Motion Heading Tracker.
+    Apple Neural Engine (ANE) accelerated YOLOv8 vehicle detector with per-camera tracking
+    and a motion heading tracker.
     """
 
     def __init__(
         self,
         model_path: str = DEFAULT_MODEL_PATH,
-        conf_threshold: float = 0.35,
+        conf_threshold: float = 0.25,
         compute_unit: str = "CPU_AND_NE",
         test_mode: bool = False,
     ):
@@ -62,25 +78,23 @@ class ANEVehicleDetector:
         )
         self._next_track_id = 1
         self._active_tracks: Dict[int, Dict[str, Any]] = {}
-        self._model = None
+        self._engine = None
         self._is_native_loaded = False
+        self.last_inference_ms = 0.0
+        self._last_prune = 0.0
 
         if not self.test_mode:
             self._load_coreml_model()
 
-    def _load_coreml_model(self):
-        """Attempts to load CoreML model via Ultralytics."""
-        if not os.path.exists(self.model_path):
-            return
+    @property
+    def _model(self):
+        """Backwards-compatible handle to the underlying CoreML model (None in test mode)."""
+        return self._engine.model if self._engine is not None else None
 
-        try:
-            from ultralytics import YOLO
-            self._model = YOLO(self.model_path)
-            self._is_native_loaded = True
-        except Exception:
-            # Model cannot be loaded in this specific Python process (e.g. C-extension mismatch)
-            self._is_native_loaded = False
-            self._model = None
+    def _load_coreml_model(self):
+        """Attaches to the shared engine detector singleton."""
+        self._engine = get_shared_detector(self.model_path)
+        self._is_native_loaded = self._engine is not None
 
     def compute_heading_and_speed(
         self,
@@ -99,7 +113,6 @@ class ANEVehicleDetector:
         if len(history) < 2:
             return float(camera_azimuth_deg % 360.0), 0.0
 
-        # Use point from history separated by at least 0.05s, or oldest
         old_cx, old_cy, old_time = history[0]
         dt = current_time - old_time
         if dt <= 1e-4:
@@ -114,11 +127,18 @@ class ANEVehicleDetector:
             # Negligible displacement: default to camera mounting azimuth
             heading_deg = camera_azimuth_deg % 360.0
         else:
-            # Standard screen motion angle offset by camera azimuth
             angle_rad = math.atan2(dy, dx)
             heading_deg = (math.degrees(angle_rad) + camera_azimuth_deg) % 360.0
 
         return float(heading_deg), float(speed_px_s)
+
+    def _prune_history(self, now: float) -> None:
+        """Track ids are never reused, so stale histories must be dropped to bound memory."""
+        if now - self._last_prune < _HISTORY_TTL_S:
+            return
+        self._last_prune = now
+        for tid in [t for t, h in self.track_history.items() if not h or now - h[-1][2] > _HISTORY_TTL_S]:
+            del self.track_history[tid]
 
     def detect(
         self,
@@ -126,63 +146,52 @@ class ANEVehicleDetector:
         camera_azimuth_deg: float = 0.0,
         timestamp: Optional[float] = None,
         synthetic_objects: Optional[List[Dict[str, Any]]] = None,
+        camera_id: int = 0,
     ) -> List[Dict[str, Any]]:
         """
-        Runs vehicle detection and tracking on input RGB/BGR frame.
-        Filters for allowed vehicle classes and computes speed and exit heading.
+        Runs vehicle detection and tracking for ``camera_id`` on a BGR frame.
+        Each camera has its own tracker state; track ids are unique across cameras.
         """
         curr_time = timestamp or time.time()
         h, w = frame.shape[:2]
+        self._prune_history(curr_time)
 
-        # 1. Native ANE CoreML YOLO Execution
-        if self._is_native_loaded and self._model is not None and not self.test_mode:
+        # 1. Native ANE CoreML YOLO execution
+        if self._is_native_loaded and self._engine is not None and not self.test_mode:
             try:
-                results = self._model.track(
-                    frame,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    classes=[2, 3, 5, 7],
-                    conf=self.conf_threshold,
-                    verbose=False,
-                )
-                res = results[0]
+                raw = self._engine.track(camera_id, frame)
+                self.last_inference_ms = self._engine.last_inference_ms
+            except Exception as exc:  # noqa: BLE001
+                print(f"[detector] inference failed on camera {camera_id}: {exc}")
+                raw = None
+
+            if raw is not None:
                 detections = []
-                if res.boxes and res.boxes.id is not None:
-                    boxes = res.boxes.xyxy.cpu().numpy().astype(int)
-                    track_ids = res.boxes.id.cpu().numpy().astype(int)
-                    classes = res.boxes.cls.cpu().numpy().astype(int)
-                    confs = res.boxes.conf.cpu().numpy()
-
-                    for box, track_id, cls_id, score in zip(boxes, track_ids, classes, confs):
-                        if cls_id not in ALLOWED_VEHICLE_CLASSES:
-                            continue
-                        cls_name = ALLOWED_VEHICLE_CLASSES[cls_id]
-                        x1 = max(0, min(int(box[0]), w - 1))
-                        y1 = max(0, min(int(box[1]), h - 1))
-                        x2 = max(x1 + 1, min(int(box[2]), w))
-                        y2 = max(y1 + 1, min(int(box[3]), h))
-                        cx = int((x1 + x2) / 2)
-                        cy = int((y1 + y2) / 2)
-
-                        heading, speed = self.compute_heading_and_speed(
-                            int(track_id), (cx, cy), curr_time, camera_azimuth_deg
-                        )
-
-                        detections.append({
-                            "track_id": int(track_id),
-                            "class_name": cls_name,
-                            "class_id": int(cls_id),
-                            "confidence": float(score),
-                            "bbox": (x1, y1, x2, y2),
-                            "centroid": (cx, cy),
-                            "heading_deg": float(heading),
-                            "speed_px_s": float(speed),
-                        })
+                for det in raw:
+                    if det["class_id"] not in ALLOWED_VEHICLE_CLASSES or det["conf"] < self.conf_threshold:
+                        continue
+                    x1 = max(0, min(det["box"][0], w - 1))
+                    y1 = max(0, min(det["box"][1], h - 1))
+                    x2 = max(x1 + 1, min(det["box"][2], w))
+                    y2 = max(y1 + 1, min(det["box"][3], h))
+                    cx = int((x1 + x2) / 2)
+                    cy = int((y1 + y2) / 2)
+                    heading, speed = self.compute_heading_and_speed(
+                        det["track_id"], (cx, cy), curr_time, camera_azimuth_deg
+                    )
+                    detections.append({
+                        "track_id": det["track_id"],
+                        "class_name": det["class_name"],
+                        "class_id": det["class_id"],
+                        "confidence": float(det["conf"]),
+                        "bbox": (x1, y1, x2, y2),
+                        "centroid": (cx, cy),
+                        "heading_deg": float(heading),
+                        "speed_px_s": float(speed),
+                    })
                 return detections
-            except Exception:
-                pass  # Fall through to synthetic/mock tracker
 
-        # 2. Resilient Test / Synthetic Tracker Mode
+        # 2. Resilient test / synthetic tracker mode
         raw_objects = synthetic_objects or self._extract_synthetic_objects(frame)
         detections = []
 
@@ -203,8 +212,7 @@ class ANEVehicleDetector:
             cx = int((x1 + x2) / 2)
             cy = int((y1 + y2) / 2)
 
-            # Match or assign persistent track ID
-            track_id = self._match_or_create_track(cx, cy, cls_name, curr_time)
+            track_id = self._match_or_create_track(cx, cy, cls_name, curr_time, camera_id=camera_id)
 
             heading, speed = self.compute_heading_and_speed(
                 track_id, (cx, cy), curr_time, camera_azimuth_deg
@@ -228,8 +236,6 @@ class ANEVehicleDetector:
         Extracts foreground colored bounding boxes in synthetic test frames.
         """
         h, w = frame.shape[:2]
-        # In synthetic frames, look for non-neutral regions or return a deterministic center vehicle
-        # Check center variance
         sub = frame[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
         if np.std(sub) > 10.0:
             return [{
@@ -240,9 +246,10 @@ class ANEVehicleDetector:
         return []
 
     def _match_or_create_track(
-        self, cx: int, cy: int, cls_name: str, curr_time: float, max_dist: float = 120.0
+        self, cx: int, cy: int, cls_name: str, curr_time: float,
+        max_dist: float = 120.0, camera_id: int = 0,
     ) -> int:
-        """Associates centroid with active track or creates new track ID."""
+        """Associates centroid with an active track on the same camera or creates a new track ID."""
         best_id = None
         best_dist = float("inf")
 
@@ -252,7 +259,7 @@ class ANEVehicleDetector:
                 del self._active_tracks[tid]
                 continue
 
-            if tinfo["class"] == cls_name:
+            if tinfo["class"] == cls_name and tinfo.get("camera_id", 0) == camera_id:
                 dist = math.hypot(cx - tinfo["cx"], cy - tinfo["cy"])
                 if dist < max_dist and dist < best_dist:
                     best_dist = dist
@@ -264,19 +271,28 @@ class ANEVehicleDetector:
             self._active_tracks[best_id]["last_seen"] = curr_time
             return best_id
 
-        # Create new track
         new_id = self._next_track_id
         self._next_track_id += 1
         self._active_tracks[new_id] = {
             "cx": cx,
             "cy": cy,
             "class": cls_name,
+            "camera_id": camera_id,
             "last_seen": curr_time,
         }
         return new_id
 
-    def reset_tracks(self):
-        """Clears all tracking histories and resets track ID generator."""
-        self.track_history.clear()
-        self._active_tracks.clear()
-        self._next_track_id = 1
+    def reset_tracks(self, camera_id: Optional[int] = None):
+        """Clears tracking state. With ``camera_id`` only that camera's tracker is reset."""
+        if camera_id is None:
+            self.track_history.clear()
+            self._active_tracks.clear()
+            self._next_track_id = 1
+            if self._engine is not None:
+                for cid in self._engine.pool.active_cameras():
+                    self._engine.reset(cid)
+            return
+        for tid in [t for t, i in self._active_tracks.items() if i.get("camera_id", 0) == camera_id]:
+            del self._active_tracks[tid]
+        if self._engine is not None:
+            self._engine.reset(camera_id)

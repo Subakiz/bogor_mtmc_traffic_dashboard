@@ -22,6 +22,7 @@ import time
 import unittest
 import numpy as np
 
+from tests import TOTAL_CAMERAS
 from backend.database import (
     Database,
     get_db_connection,
@@ -82,7 +83,7 @@ class TestDatabaseUnit(unittest.TestCase):
         cur = self.db.conn.cursor()
         cur.execute("SELECT count(*) FROM cameras;")
         cam_count = cur.fetchone()[0]
-        self.assertEqual(cam_count, 94, f"Expected 94 cameras, found {cam_count}")
+        self.assertEqual(cam_count, TOTAL_CAMERAS, f"Expected {TOTAL_CAMERAS} cameras, found {cam_count}")
 
         cur.execute("SELECT count(*) FROM topology_edges;")
         edge_count = cur.fetchone()[0]
@@ -245,7 +246,49 @@ class TestDatabaseUnit(unittest.TestCase):
         # Confirm cameras table still exists and has 94 rows
         cur = self.db.conn.cursor()
         cur.execute("SELECT count(*) FROM cameras;")
-        self.assertEqual(cur.fetchone()[0], 94)
+        self.assertEqual(cur.fetchone()[0], TOTAL_CAMERAS)
+
+    def test_get_camera_vehicle_counts_all_94_cameras(self):
+        """Verify get_camera_vehicle_counts accounts for all 94 cameras with accurate metrics."""
+        emb = np.zeros(256, dtype=np.float32).tobytes()
+        hist = np.zeros(128, dtype=np.float32).tobytes()
+
+        # Insert sightings for camera 79 and 161
+        self.db.insert_vehicle_sighting(79, 1, 101, "car", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T04:00:00Z")
+        self.db.insert_vehicle_sighting(79, 2, 102, "motorcycle", 0.85, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T04:00:05Z")
+        self.db.insert_vehicle_sighting(79, 1, 101, "car", 0.91, (5, 5, 15, 15), 0, 0, emb, hist, "2026-09-23T04:00:10Z")
+        self.db.insert_vehicle_sighting(161, 3, 103, "truck", 0.88, (0, 0, 20, 20), 0, 0, emb, hist, "2026-09-23T04:01:00Z")
+
+        counts = self.db.get_camera_vehicle_counts()
+        self.assertEqual(len(counts), TOTAL_CAMERAS, "Must return count records for all 94 cameras")
+
+        # Find camera 79
+        cam79 = next(c for c in counts if c["camera_id"] == 79)
+        self.assertEqual(cam79["total_sightings"], 3)
+        self.assertEqual(cam79["unique_vehicles"], 2)  # track 1 and track 2
+        self.assertEqual(cam79["classes"]["car"], 2)
+        self.assertEqual(cam79["classes"]["motorcycle"], 1)
+        self.assertEqual(cam79["classes"]["truck"], 0)
+
+        # Find camera 161
+        cam161 = next(c for c in counts if c["camera_id"] == 161)
+        self.assertEqual(cam161["total_sightings"], 1)
+        self.assertEqual(cam161["unique_vehicles"], 1)
+        self.assertEqual(cam161["classes"]["truck"], 1)
+
+        # Verify cameras without sightings have 0 counts
+        cam80 = next(c for c in counts if c["camera_id"] == 80)
+        self.assertEqual(cam80["total_sightings"], 0)
+        self.assertEqual(cam80["unique_vehicles"], 0)
+        self.assertIsNone(cam80["last_seen_iso"])
+
+        # Check traffic stats integration
+        stats = self.db.get_traffic_stats()
+        self.assertEqual(stats["total_sightings"], 4)
+        self.assertEqual(stats["cameras_with_detections"], 2)
+        self.assertEqual(stats["camera_counts"][79], 3)
+        self.assertEqual(stats["camera_counts"][161], 1)
+        self.assertEqual(stats["camera_counts"][80], 0)
 
 
 if __name__ == "__main__":

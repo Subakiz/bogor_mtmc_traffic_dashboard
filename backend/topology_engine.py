@@ -79,6 +79,9 @@ class TopologyEngine:
             data = json.load(f)
 
         self.metadata = data.get("metadata", {})
+        # Totals the file declares; validate_invariants checks the loaded graph against them.
+        self.expected_cameras = int(self.metadata.get("total_cameras", len(data.get("nodes", []))))
+        self.expected_edges = int(self.metadata.get("total_directed_edges", len(data.get("edges", []))))
         
         # Load and index camera nodes
         self.cameras: Dict[int, dict] = {}
@@ -374,6 +377,14 @@ class TopologyEngine:
                 return (False, 0.0)
             _, t_min, t_max = path_info
 
+        return self.score_transition_window(t_min, t_max, t)
+
+    @staticmethod
+    def score_transition_window(t_min: float, t_max: float, t: float) -> Tuple[bool, float]:
+        """
+        Scores elapsed time ``t`` against a physical arrival window [t_min, t_max].
+        Returns (is_valid, score in [0, 1]); Gaussian decay outside the window.
+        """
         # Physical arrival window evaluation
         if t_min <= t <= t_max:
             return (True, 1.0)
@@ -462,8 +473,8 @@ class TopologyEngine:
     def validate_invariants(self) -> Dict[str, Any]:
         """
         Performs exhaustive verification of all Milestone 1 topological invariants:
-        1. 94 camera nodes with verified WGS84 coordinates and active stream URLs.
-        2. 220 directed edges with positive road distances and travel time windows.
+        1. Every camera node (count recorded in the topology metadata) with WGS84 coordinates and a stream URL.
+        2. Every directed edge (count recorded in the metadata) with positive distances and travel time windows.
         3. Zero dead ends (every camera has outgoing transitions).
         4. Zero unreachable nodes (every camera has incoming transitions).
         5. 100% reachability from Tugu Kujang (ID 79).
@@ -514,8 +525,8 @@ class TopologyEngine:
                 invalid_coords.append(cid)
 
         is_valid = (
-            len(self.cameras) == 94
-            and len(self.edges) == 220
+            len(self.cameras) == self.expected_cameras
+            and len(self.edges) == self.expected_edges
             and len(dead_ends) == 0
             and len(unreachable) == 0
             and len(visited) == len(self.cameras)

@@ -17,6 +17,7 @@ import math
 import os
 import json
 from backend.topology_engine import TopologyEngine
+from tests import TOTAL_CAMERAS, TOTAL_EDGES
 
 
 class TestCameraGeocodingDatabase(unittest.TestCase):
@@ -28,8 +29,8 @@ class TestCameraGeocodingDatabase(unittest.TestCase):
     def test_total_camera_count_is_94(self):
         """Verify exactly 94 cameras exist in the database."""
         cameras = self.engine.get_all_cameras()
-        self.assertEqual(len(cameras), 94, f"Expected 94 cameras, got {len(cameras)}")
-        self.assertEqual(len(self.engine.cameras), 94)
+        self.assertEqual(len(cameras), TOTAL_CAMERAS, f"Expected {TOTAL_CAMERAS} cameras, got {len(cameras)}")
+        self.assertEqual(len(self.engine.cameras), TOTAL_CAMERAS)
 
     def test_camera_wgs84_coordinates_validity(self):
         """Verify all 94 cameras possess realistic Bogor municipal coordinates."""
@@ -81,13 +82,14 @@ class TestCameraGeocodingDatabase(unittest.TestCase):
             self.engine.get_camera_info(-1)
 
     def test_corridor_partitioning(self):
-        """Verify the 9 municipal corridors partition all 94 cameras."""
+        """Verify the 9 municipal corridors partition every camera."""
+        # 2026-10-11: +6 SSA_RING (203, 204, 205, 207, 208, 209), +1 SURKEN (206), +2 DRAMAGA (148, 155)
         expected_corridors = {
-            "SSA_RING": 17,
-            "SURKEN_PASAR_BOGOR": 7,
+            "SSA_RING": 23,
+            "SURKEN_PASAR_BOGOR": 8,
             "PAJAJARAN_CORRIDOR": 10,
             "SHOLEH_ISKANDAR_BORR": 15,
-            "BOGOR_BARAT_DRAMAGA": 7,
+            "BOGOR_BARAT_DRAMAGA": 9,
             "STASIUN_MERDEKA_MAWAR_SEMERU": 12,
             "BOGOR_SELATAN_BONDONGAN_PAHLAWAN": 7,
             "BOGOR_TIMUR_TAJUR_KATULAMPA": 11,
@@ -101,7 +103,7 @@ class TestCameraGeocodingDatabase(unittest.TestCase):
                 f"Corridor {corridor} expected {expected_count} cameras, got {len(cam_ids)}"
             )
             total_corridor_cams += len(cam_ids)
-        self.assertEqual(total_corridor_cams, 94, "Corridors must partition all 94 cameras")
+        self.assertEqual(total_corridor_cams, TOTAL_CAMERAS, "Corridors must partition every camera")
 
     def test_get_corridor_cameras_case_insensitive(self):
         """Verify corridor camera lookup is case-insensitive."""
@@ -110,7 +112,7 @@ class TestCameraGeocodingDatabase(unittest.TestCase):
         cams_mixed = self.engine.get_corridor_cameras("Ssa_Ring")
         self.assertEqual(cams_upper, cams_lower)
         self.assertEqual(cams_upper, cams_mixed)
-        self.assertEqual(len(cams_upper), 17)
+        self.assertEqual(len(cams_upper), 23)
 
 
 class TestTopologyDirectedGraph(unittest.TestCase):
@@ -122,7 +124,7 @@ class TestTopologyDirectedGraph(unittest.TestCase):
     def test_total_edge_count_is_220(self):
         """Verify exactly 220 directed edges exist in the topology graph."""
         edges = self.engine.get_all_edges()
-        self.assertEqual(len(edges), 220, f"Expected 220 edges, got {len(edges)}")
+        self.assertEqual(len(edges), TOTAL_EDGES, f"Expected {TOTAL_EDGES} edges, got {len(edges)}")
 
     def test_all_edges_positive_distance(self):
         """Verify all 220 edges have strictly positive road distance."""
@@ -155,14 +157,14 @@ class TestTopologyDirectedGraph(unittest.TestCase):
         """Verify 100% reachability (94/94 cameras) originating from Tugu Kujang (ID 79)."""
         audit = self.engine.validate_invariants()
         reachable_count = audit["kujang_reachable_count"]
-        self.assertEqual(reachable_count, 94, f"Only {reachable_count}/94 cameras reachable from Tugu Kujang")
+        self.assertEqual(reachable_count, TOTAL_CAMERAS, f"Only {reachable_count}/{TOTAL_CAMERAS} cameras reachable from Tugu Kujang")
 
     def test_validate_invariants_method(self):
         """Verify validate_invariants returns valid=True and 0 violations."""
         audit = self.engine.validate_invariants()
         self.assertTrue(audit["valid"])
-        self.assertEqual(audit["total_cameras"], 94)
-        self.assertEqual(audit["total_edges"], 220)
+        self.assertEqual(audit["total_cameras"], TOTAL_CAMERAS)
+        self.assertEqual(audit["total_edges"], TOTAL_EDGES)
         self.assertEqual(audit["one_way_violations"], [])
         self.assertEqual(audit["invalid_edge_count"], 0)
         self.assertEqual(audit["invalid_coord_count"], 0)

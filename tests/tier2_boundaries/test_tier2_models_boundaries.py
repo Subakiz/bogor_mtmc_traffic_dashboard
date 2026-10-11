@@ -4,6 +4,7 @@ Tier 2 Boundary and Corner Case Tests for Features FEAT-M4, FEAT-M1, FEAT-M5, FE
 5 boundary tests per feature (30 total tests).
 """
 
+from tests import TOTAL_CAMERAS
 import collections
 import unittest
 import numpy as np
@@ -110,10 +111,11 @@ class TestTier2ModelsBoundaries(unittest.TestCase):
         self.assertEqual(len(tier3), 2)
 
     def test_b_feat_m5_all_cameras_tier3_idle_load(self):
-        """B5.4: In full idle mode, 94 cameras in Tier 3 consume only ~18.8 FPS total load."""
+        """B5.4: In full idle mode, every camera in Tier 3 (0.2 FPS each) stays a light total load."""
         all_cams = set(self.topo.nodes.keys())
         total_fps = len(all_cams) * 0.2
-        self.assertAlmostEqual(total_fps, 18.8, places=1)
+        self.assertAlmostEqual(total_fps, TOTAL_CAMERAS * 0.2, places=1)
+        self.assertLess(total_fps, 25.0)
 
     def test_b_feat_m5_burst_promotion_cap(self):
         """B5.5: Simultaneous promotion of 10 candidate cameras stays within compute limits."""

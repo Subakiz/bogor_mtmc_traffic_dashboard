@@ -13,6 +13,7 @@ from PIL import Image
 
 from tests.mock_stream import MockHLSStreamServer, SyntheticFrameGenerator, SyntheticTrajectorySimulator
 from tests.reference_contracts import ReidEngineContract, TopologyContract
+from tests import TOTAL_CAMERAS
 
 
 class TestFEATM4StreamIngestion(unittest.TestCase):
@@ -183,7 +184,7 @@ class TestFEATM5SchedulingDaemon(unittest.TestCase):
             + len(self.tiers[2]["cameras"])
             + len(self.tiers[3]["cameras"])
         )
-        self.assertEqual(total_assigned, 94)
+        self.assertEqual(total_assigned, TOTAL_CAMERAS)
 
     def test_feat_m5_tier1_fps_allocation(self):
         """Test 2: Tier 1 camera is allocated 15-20 FPS polling rate."""
