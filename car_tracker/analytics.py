@@ -76,6 +76,7 @@ SLOW_FULL_BELOW = 0.15    # ...and at or below this fraction it is fully slow
 MIN_FREE_FLOW_BPS = 0.25  # sanity floor for a learned free-flow speed
 MIN_TRAFFIC_FOR_FULL_CONFIDENCE = 6   # measurable vehicles for the index to count in full (quadratic ramp)
 LIVE_SPAN_S = 20.0        # the live index is the mean of the per-frame index over this many seconds
+LIVE_MAX_AGE_S = 15.0     # a snapshot older than this is no longer "live" (the camera is not being observed)
 RECENT_SUMMARY_WINDOWS = 60   # latest windows behind get_camera_summary()'s "recent" averages
 MIN_REF_SAMPLES = 30      # speed samples a window needs before it updates the free-flow reference
 REF_PERCENTILE = 85       # free-flow speed = this percentile of a camera's observed speeds
@@ -1373,16 +1374,24 @@ class TrafficAnalyticsEngine:
 
     # ── Real-time query methods for API & Dashboard ───────────────────────────
 
-    def get_live_metrics(self, camera_id: int) -> Dict[str, Any]:
-        """Get live instantaneous metrics and rolling window preview."""
+    def get_live_metrics(self, camera_id: int, now: Optional[float] = None) -> Dict[str, Any]:
+        """Get live instantaneous metrics and rolling window preview.
+
+        ``live`` is the newest snapshot only while the camera is being observed (newer than
+        ``LIVE_MAX_AGE_S``); rolling cameras are watched for a short visit every few minutes, and
+        their last reading must not pass for the current one. ``last_measured`` is the newest
+        snapshot whatever its age, with ``live_age_s`` (None if the camera was never observed)."""
+        now = time.time() if now is None else now
         with self._lock:
-            live = self._live_snapshot.get(camera_id, {})
+            snapshot = self._live_snapshot.get(camera_id)
+            age = round(max(0.0, now - snapshot["timestamp"]), 1) if snapshot else None
+            live = snapshot if snapshot and age <= LIVE_MAX_AGE_S else {}
             win = self._window_state.get(camera_id)
 
             if win:
                 crossing_mode = self._window_basis(win) == "crossings"
                 vol = win["crossings"] if crossing_mode else len(win["seen_tracks"])
-                elapsed = max(time.time() - win["window_start"], 1.0)
+                elapsed = max(now - win["window_start"], 1.0)
                 rolling_vpm = round((vol / elapsed) * 60.0, 1)
                 class_breakdown = (dict(win["class_crossings"]) if crossing_mode
                                    else {k: len(v) for k, v in win["class_tracks"].items()})
@@ -1392,10 +1401,12 @@ class TrafficAnalyticsEngine:
                 rolling_vpm = 0.0
                 class_breakdown = {}
 
-            history = list(self._history_60s[camera_id])
+            history = list(self._history_60s.get(camera_id, ()))
 
             return {
                 "live": live,
+                "last_measured": snapshot or {},
+                "live_age_s": age,
                 "current_window": {
                     "volume_basis": "crossings" if crossing_mode else "tracks",
                     "total_volume": vol,

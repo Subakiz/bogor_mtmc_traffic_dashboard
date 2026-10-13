@@ -398,6 +398,24 @@ class TestCrossingVolume(unittest.TestCase):
         win = engine.get_live_metrics(self.CAM)["current_window"]
         self.assertEqual((win["volume_basis"], win["total_volume"], win["class_volumes"]), ("crossings", 1, {"car": 1}))
 
+    def test_live_snapshot_expires_when_the_camera_is_no_longer_observed(self):
+        # A rolling camera's last reading must not be served as live once its visit is over.
+        engine = TrafficAnalyticsEngine(db_path=str(Path(self.temp_dir.name) / "stale.db"))
+        engine.record_frame(self.CAM, "T", 1000.0, {"car": 1}, [{"track_id": 1, "class_id": 2, "class_name": "car",
+                            "box": (0, 0, 50, 50), "conf": 0.9}], (720, 1280))
+        fresh = engine.get_live_metrics(self.CAM, now=1005.0)
+        self.assertEqual(fresh["live"]["timestamp"], 1000.0)
+        self.assertEqual(fresh["live_age_s"], 5.0)
+
+        stale = engine.get_live_metrics(self.CAM, now=1000.0 + 600)
+        self.assertEqual(stale["live"], {})
+        self.assertEqual(stale["last_measured"]["timestamp"], 1000.0)
+        self.assertEqual(stale["live_age_s"], 600.0)
+
+        never = engine.get_live_metrics(4242, now=1000.0)
+        self.assertEqual((never["live"], never["last_measured"], never["live_age_s"]), ({}, {}, None))
+        self.assertNotIn(4242, engine._history_60s)   # an unknown camera leaves no state behind
+
     def test_csv_export_carries_the_volume_basis(self):
         self.feed({2: "car"})
         csv_text = self.engine.export_csv_str(camera_id=self.CAM)
