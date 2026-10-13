@@ -83,6 +83,20 @@ class ExpireEmbeddingsTest(unittest.TestCase):
         self.assertEqual(SightingMaintenance(self.db, 3600, pause_s=0).run_once(), 5)
 
 
+class MaintenanceConstructionTest(unittest.TestCase):
+    def test_server_style_positional_construction_keeps_working(self):
+        db = Database(":memory:")
+        try:
+            m = SightingMaintenance(db, 3600.0, 300.0)       # exactly how backend/server.py builds it
+            self.assertEqual((m.embedding_ttl_s, m.interval_s), (3600.0, 300.0))
+            self.assertEqual(m.retention_days, 0.0, "retention is opt-in (SIGHTING_RETENTION_DAYS)")
+            self.assertEqual(m.run_once(), 0)
+            self.assertEqual(set(m.last_run), {"blanked", "expired_targets", "pruned_sightings",
+                                               "pruned_handoffs", "pages_freed"})
+        finally:
+            db.close()
+
+
 class StatsCacheTest(unittest.TestCase):
     def setUp(self):
         from backend.server import _TTLCache

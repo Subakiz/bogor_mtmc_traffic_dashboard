@@ -9,7 +9,8 @@ Implements:
   same model without mixing their tracks (required for rolling multi-camera tracking).
 - Strict vehicle class filtering (car, motorcycle, bus, truck; COCO IDs 2, 3, 5, 7).
 - Motion vector, speed (px/s), and real-world road exit heading angle Theta in [0, 360) deg.
-- Deterministic synthetic tracker for headless test environments.
+- Deterministic synthetic tracker for headless test environments (``test_mode=True`` only;
+  without a model a production detector detects nothing rather than inventing vehicles).
 """
 
 import collections
@@ -21,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from backend.config import DEFAULT_MODEL_PATH, ensure_engine_importable
+from backend.config import DEFAULT_MODEL_PATH, WIDE_MODEL_PATH, ensure_engine_importable
 
 # COCO Vehicle classes: 2: car, 3: motorcycle, 5: bus, 7: truck
 ALLOWED_VEHICLE_CLASSES = {
@@ -34,21 +35,31 @@ ALLOWED_CLASS_NAMES = {"car", "motorcycle", "bus", "truck"}
 
 _HISTORY_TTL_S = 60.0   # drop heading history of tracks not seen for this long
 
+_LOAD_RETRY_S = 60.0     # a model that failed to load is retried after this long
+_ERROR_LOG_EVERY_S = 30.0
+
 _SHARED_DETECTOR = None
 _SHARED_DETECTOR_LOCK = threading.Lock()
+_last_load_attempt = 0.0
 
 
 def get_shared_detector(model_path: str = DEFAULT_MODEL_PATH):
-    """Returns the process-wide engine ``VehicleDetector`` (one CoreML model, per-camera trackers)."""
-    global _SHARED_DETECTOR
+    """Returns the process-wide engine ``VehicleDetector`` (one CoreML model, per-camera trackers),
+    or None while the model is missing or fails to load (retried every ``_LOAD_RETRY_S``)."""
+    global _SHARED_DETECTOR, _last_load_attempt
     with _SHARED_DETECTOR_LOCK:
-        if _SHARED_DETECTOR is None and os.path.exists(model_path):
+        now = time.monotonic()
+        if _SHARED_DETECTOR is None and (not _last_load_attempt or now - _last_load_attempt >= _LOAD_RETRY_S):
+            _last_load_attempt = now
+            if not os.path.exists(model_path):
+                print(f"[detector] Model not found: {model_path} -- no vehicles will be detected.")
+                return None
             try:
                 ensure_engine_importable()
                 from car_tracker import VehicleDetector
 
-                _SHARED_DETECTOR = VehicleDetector(model_path)
-            except Exception as exc:  # noqa: BLE001 - fall back to synthetic mode
+                _SHARED_DETECTOR = VehicleDetector(model_path, wide_model_path=WIDE_MODEL_PATH)
+            except Exception as exc:  # noqa: BLE001
                 print(f"[detector] Could not load {model_path}: {exc}")
                 _SHARED_DETECTOR = None
         return _SHARED_DETECTOR
@@ -82,6 +93,7 @@ class ANEVehicleDetector:
         self._is_native_loaded = False
         self.last_inference_ms = 0.0
         self._last_prune = 0.0
+        self._last_error_log = 0.0
 
         if not self.test_mode:
             self._load_coreml_model()
@@ -91,10 +103,20 @@ class ANEVehicleDetector:
         """Backwards-compatible handle to the underlying CoreML model (None in test mode)."""
         return self._engine.model if self._engine is not None else None
 
+    @property
+    def model_loaded(self) -> bool:
+        return self._is_native_loaded
+
     def _load_coreml_model(self):
         """Attaches to the shared engine detector singleton."""
         self._engine = get_shared_detector(self.model_path)
         self._is_native_loaded = self._engine is not None
+
+    def _log_error(self, message: str) -> None:
+        now = time.monotonic()
+        if now - self._last_error_log >= _ERROR_LOG_EVERY_S:
+            self._last_error_log = now
+            print(f"[detector] {message}")
 
     def compute_heading_and_speed(
         self,
@@ -157,13 +179,17 @@ class ANEVehicleDetector:
         self._prune_history(curr_time)
 
         # 1. Native ANE CoreML YOLO execution
-        if self._is_native_loaded and self._engine is not None and not self.test_mode:
+        if not self.test_mode:
+            if self._engine is None:
+                self._load_coreml_model()   # retried at most every _LOAD_RETRY_S
+                if self._engine is None:
+                    return []
             try:
                 raw = self._engine.track(camera_id, frame)
                 self.last_inference_ms = self._engine.last_inference_ms
             except Exception as exc:  # noqa: BLE001
-                print(f"[detector] inference failed on camera {camera_id}: {exc}")
-                raw = None
+                self._log_error(f"inference failed on camera {camera_id}: {exc}")
+                return []
 
             if raw is not None:
                 detections = []

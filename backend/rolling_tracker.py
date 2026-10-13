@@ -18,6 +18,14 @@ One inference worker drives the shared ANE detector for two kinds of work:
 HLS connects take seconds and OpenCV opens are serialised, so streams are opened and released by
 a separate pool thread; the inference worker never blocks on the network.
 
+Standby slots (off by default, see ``STANDBY_SLOTS``): of the stream slots left after the focus cameras, ``STANDBY_SLOTS`` hold the
+next-ranked candidates with their streams already open and decoding at a low rate, but not
+inferred. When an active visit ends, the best ready standby takes over at once (dwell counts from
+that moment) and a new standby is opened behind it, so a visit no longer spends the first
+0.5-2 s of its slot connecting. A standby that never delivers a frame fails like a visit would,
+focus cameras take standby slots before active visits, and follow candidates (tier 1) displace
+lower-tier standbys.
+
 Sightings: once a track has been seen in MIN_TRACK_HITS frames it gets a global vehicle id from
 Re-ID and a single ``vehicle_sightings`` row (journeys, Follow-That-Car). A stationary vehicle still
 in place on the next visit inherits its earlier id instead of becoming a new sighting.
@@ -31,6 +39,7 @@ its window at the end of a visit.
 """
 
 import logging
+import os
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -60,9 +69,10 @@ PARKED_IOU = 0.5
 PARKED_SIMILARITY = 0.90
 PARKED_TTL_S = 1800.0
 PARKED_MAX_PER_CAMERA = 64
-FIRST_FRAME_TIMEOUT_S = 12.0   # stream open but no frame yet
+FIRST_FRAME_TIMEOUT_S = 6.0    # stream open but no frame yet (playout starts at the newest segment)
 REQUEST_TIMEOUT_S = 45.0       # stream requested but never opened (queued behind other opens)
-STALL_TIMEOUT_S = 4.0          # visit ends early if its stream stops producing frames
+STALL_TIMEOUT_S = 6.0          # visit ends early if its stream stops producing frames (> a 5 s segment)
+FOCUS_EVICT_IDLE_S = 2.0       # a watched camera polled within this long keeps its focus slot
 FAILED_BACKOFF_S = 120.0       # skip a camera this long after it failed to deliver frames...
 MAX_FAILED_BACKOFF_S = 1800.0  # ...doubling with each consecutive failure up to this (±20% jitter)
 OPEN_RETRY_S = 5.0             # pause before re-opening a wanted stream whose open failed
@@ -71,6 +81,24 @@ HOST_BACKOFF_S = 60.0          # skip every camera on a host that timed out
 OBS_WINDOW_S = 60.0            # a watched camera's counts are stored as one window per minute
 MIN_WINDOW_S = 2.0             # shorter observations are too short to estimate a rate from
 OPEN_WORKERS = 6               # HLS streams opened concurrently (opens are slow, not CPU-bound)
+STOP_JOIN_S = 3.0              # stop() waits this long for the worker before leaving it to clean up
+
+
+def _env_number(name: str, default: float, cast: Callable[[Any], Any]) -> Any:
+    try:
+        return cast(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+# Standby slots (see module docstring). 0 disables them.
+# Off by default: a virtual-time simulation (real topology, 12 streams, measured open latencies)
+# showed standby cuts connecting time from ~8% to <1% of visit slot time but lowers net coverage
+# (2 standby: -11% camera-seconds/s), because each standby stream is a connection that observes
+# nothing. Worth enabling only if more connections than the inference budget can use are allowed.
+STANDBY_SLOTS = max(0, _env_number("ROLLING_STANDBY_SLOTS", 0, int))
+STANDBY_FPS = max(1.0, _env_number("ROLLING_STANDBY_FPS", 2.0, float))   # decode rate of a standby stream
+STANDBY_PROBE_S = 0.2          # how often a standby's stream is checked for frames
 
 StreamFactory = Callable[[int, str, float], Any]
 
@@ -119,6 +147,9 @@ class StreamPool:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._executor: Optional[ThreadPoolExecutor] = None
+        # Releases join the capture thread and can wait out an in-flight FFmpeg read; doing them
+        # here keeps the pool thread free to start the next opens.
+        self._releaser: Optional[ThreadPoolExecutor] = None
 
     def set_wanted(self, wanted: List[Tuple[int, str, float]]) -> None:
         with self._lock:
@@ -170,7 +201,7 @@ class StreamPool:
             batch = missing[:max(0, room)]
             self._opening.update(w[0] for w in batch)
         for cap in to_close:
-            self._release(cap)
+            self._release_async(cap)
         if not batch:
             return False
         if self._executor is None:
@@ -188,14 +219,17 @@ class StreamPool:
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Opening stream for camera {cid} failed: {exc}")
             cap = None
+        # Judge "slow" before releasing: a release can take another second or two, which made
+        # quick refusals (e.g. HTTP 404) look like a dead restreamer host.
+        slow = time.time() - t_open > SLOW_OPEN_S
         if cap is not None and hasattr(cap, "is_opened") and not cap.is_opened():
             # Release at once: a failed capture keeps reconnecting in the background otherwise.
-            self._release(cap)
+            self._release_async(cap)
             cap = None
         with self._lock:
             self._opening.discard(cid)
             if cap is None:
-                self._failures.append((cid, time.time() - t_open > SLOW_OPEN_S))
+                self._failures.append((cid, slow))
                 self._retry_at[cid] = time.time() + OPEN_RETRY_S
             elif (not self._stop.is_set() and any(w[0] == cid for w in self._wanted)
                   and cid not in self._streams):
@@ -204,7 +238,7 @@ class StreamPool:
                 self._retry_at.pop(cid, None)
                 cap = None
         if cap is not None:
-            self._release(cap)
+            self._release_async(cap)
         self._wake.set()
 
     @staticmethod
@@ -214,17 +248,34 @@ class StreamPool:
         except Exception:  # noqa: BLE001
             pass
 
+    def _release_async(self, cap: Any) -> None:
+        releaser = self._releaser
+        if releaser is None:
+            self._release(cap)
+            return
+        try:
+            releaser.submit(self._release, cap)
+        except RuntimeError:   # shut down meanwhile
+            self._release(cap)
+
     def _run(self) -> None:
         while not self._stop.is_set():
             self.pump()
             self._wake.wait(0.5)
             self._wake.clear()
 
+    def reopen(self) -> None:
+        """Re-arms a stopped pool for synchronous use (``pump()`` without ``start()``): after
+        ``stop()`` its stop flag made every open discard its stream, which a caller looping on
+        ``pump()`` never saw the end of."""
+        self._stop.clear()
+
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
         self._executor = ThreadPoolExecutor(max_workers=self._open_workers, thread_name_prefix="StreamOpen")
+        self._releaser = ThreadPoolExecutor(max_workers=4, thread_name_prefix="StreamRelease")
         self._thread = threading.Thread(target=self._run, name="RollingStreamPool", daemon=True)
         self._thread.start()
 
@@ -244,12 +295,15 @@ class StreamPool:
             self._opened_at.clear()
             self._wanted = []
         for cap in streams:
-            self._release(cap)
+            self._release_async(cap)
+        if self._releaser is not None:
+            self._releaser.shutdown(wait=True)   # releases run in parallel
+            self._releaser = None
 
 
 # ── Tracker state ─────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(eq=False)
 class _Track:
     track_id: int
     class_name: str
@@ -273,7 +327,7 @@ def _new_window() -> Dict[str, int]:
 _CLASS_COLUMN = {"car": "cars", "motorcycle": "motorcycles", "truck": "trucks", "bus": "buses"}
 
 
-@dataclass
+@dataclass(eq=False)   # identity comparison: the generated __eq__ compares numpy arrays (ValueError)
 class _Parked:
     gid: int
     class_name: str
@@ -282,9 +336,9 @@ class _Parked:
     ts: float
 
 
-@dataclass
+@dataclass(eq=False)
 class _Session:
-    """One camera under observation, either the focus camera or a rolling visit."""
+    """One camera under observation (the focus camera or a rolling visit), or a standby stream."""
     camera_id: int
     name: str
     azimuth: float
@@ -303,6 +357,13 @@ class _Session:
     counted_total: int = 0       # crossings since the session started (for the video overlay)
     counted_pos: int = 0
     counted_neg: int = 0
+    # Standby sessions: stream open and decoding, not inferred.
+    standby: bool = False
+    probe_seq: int = 0           # newest frame sequence seen by the standby probe
+    ready_ts: float = 0.0        # when the probe last saw a new frame (0: none yet)
+    last_probe: float = 0.0
+    promoted_at: float = 0.0     # when a standby became an active visit
+    active_since: float = 0.0    # when the session took its active slot (trim / ordering)
 
 
 class RollingTracker:
@@ -331,6 +392,8 @@ class RollingTracker:
         hubs: Optional[Set[int]] = None,
         counting: Optional[CountingLines] = None,
         autostart: bool = True,
+        standby_slots: int = STANDBY_SLOTS,
+        standby_fps: float = STANDBY_FPS,
     ):
         self.db = db
         self.topology = topology
@@ -338,6 +401,12 @@ class RollingTracker:
         self._detector = detector
         self._detector_factory = detector_factory
         self.identity_resolver = identity_resolver or IdentityResolver(topology=topology)
+        # Global ids continue after the highest stored one: restarting at 1 merged new vehicles
+        # into the journeys of vehicles from earlier runs.
+        try:
+            self.identity_resolver.ensure_next_id_above(int(db.get_max_global_vehicle_id() or 0))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Could not read the highest global vehicle id: {exc}")
         self.counting = counting or CountingLines()   # in-memory unless given a persisted one
         self.pool = StreamPool(stream_factory, max_open_streams)
         self._threaded_streams = threaded_streams
@@ -354,6 +423,8 @@ class RollingTracker:
         self.focus_ttl_s = focus_ttl_s
         self.focus_fps = focus_fps
         self.rolling_fps = rolling_fps
+        self.standby_slots = max(0, int(standby_slots))
+        self.standby_fps = max(1.0, float(standby_fps))
 
         # Only cameras the BSW site still lists (scrape_cctv_streams.py marks the rest "removed").
         self.cameras: Dict[int, Dict[str, Any]] = {
@@ -378,6 +449,7 @@ class RollingTracker:
         # Worker-thread state
         self._focus: Dict[int, _Session] = {}
         self._visits: Dict[int, _Session] = {}
+        self._standby: Dict[int, _Session] = {}
         self._follow: Set[int] = set()
         self._boost_until: Dict[int, float] = {}
         self._last_visit_end: Dict[int, float] = {}
@@ -392,6 +464,7 @@ class RollingTracker:
         self._seen: Dict[int, int] = {}      # vehicle_sightings rows per camera
         self._frames_processed = 0
         self._parked_dedups = 0
+        self._standby_promotions = 0
         self._handoffs = 0
         self._started_at = 0.0
 
@@ -411,51 +484,99 @@ class RollingTracker:
         return self._thread is not None and self._thread.is_alive()
 
     def start(self) -> None:
+        old = None
         with self._lock:
-            if self.running:
+            if self.running and not self._stop.is_set():
+                return
+            old = self._thread
+        if old is not None and old.is_alive():
+            # A previous worker is still closing its sessions; two workers must never run at once.
+            old.join(timeout=STOP_JOIN_S)
+            if old.is_alive():
+                logger.error("Previous rolling tracker worker has not exited yet; not starting another.")
+                return
+        with self._lock:
+            if self.running and not self._stop.is_set():
                 return
             self._stop.clear()
             self._started_at = time.time()
             if self._threaded_streams:
                 self.pool.start()
+            else:
+                self.pool.reopen()
             self._thread = threading.Thread(target=self._run, name="RollingTracker", daemon=True)
             self._thread.start()
 
     def stop(self) -> None:
+        """Stops the worker and releases every stream. The worker ends its own sessions when it
+        exits; they are only closed here if no worker is running (manual ``tick()`` use), because
+        ending them under a worker that is still inside a tick would race its state."""
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=3.0)
-            self._thread = None
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=STOP_JOIN_S)
+            if thread.is_alive():
+                logger.warning(f"Rolling tracker worker did not stop within {STOP_JOIN_S:.0f}s; "
+                               "it will close its sessions when its current frame is done.")
+            else:
+                self._thread = None
+        if thread is None or not thread.is_alive():
+            self._shutdown_sessions()
+        self.pool.stop()
+
+    def _shutdown_sessions(self) -> None:
+        """Ends every session and forgets the viewers. Called by the worker as it exits, or by
+        ``stop()`` when there is no worker."""
         now = time.time()
-        for session in list(self._visits.values()) + list(self._focus.values()):
-            self._end_session(session, now)
+        sessions = list(self._visits.values()) + list(self._focus.values())
         self._visits.clear()
         self._focus.clear()
+        self._standby.clear()
+        for session in sessions:
+            try:
+                self._end_session(session, now)
+            except Exception as exc:  # noqa: BLE001 - one bad session must not leave the rest open
+                logger.warning(f"Closing camera {session.camera_id} failed: {exc}")
         with self._lock:
             self._focus_touched.clear()
             self._focus_frames.clear()
-        self.pool.stop()
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                if self.tick(time.time()) == 0:
-                    time.sleep(0.01)
-            except Exception as exc:  # noqa: BLE001 - keep tracking through transient faults
-                logger.error(f"Rolling tracker tick failed: {exc}", exc_info=True)
-                time.sleep(0.5)
+        try:
+            while not self._stop.is_set():
+                try:
+                    if self.tick(time.time()) == 0:
+                        time.sleep(0.01)
+                except Exception as exc:  # noqa: BLE001 - keep tracking through transient faults
+                    logger.error(f"Rolling tracker tick failed: {exc}", exc_info=True)
+                    time.sleep(0.5)
+        finally:
+            if self._stop.is_set():
+                self._shutdown_sessions()
 
     # ── API for request handlers ──────────────────────────────────────────────
 
-    def set_focus(self, camera_id: int) -> None:
+    def set_focus(self, camera_id: int) -> bool:
         """Marks ``camera_id`` as being viewed; call on every viewer poll to keep it alive.
-        Beyond ``max_focus_cameras`` the least recently viewed camera stops being a focus."""
+
+        With ``max_focus_cameras`` already watched, the least recently viewed camera gives up its
+        slot only if nobody has polled it for ``FOCUS_EVICT_IDLE_S``; otherwise the request is
+        refused (returns False). Evicting on every poll made N+1 viewers evict each other every
+        few ms, restarting every session and stream so no viewer ever got a frame."""
+        cid = int(camera_id)
+        if cid not in self.cameras:
+            return False
+        now = time.time()
         with self._lock:
-            self._focus_touched[int(camera_id)] = time.time()
-            while len(self._focus_touched) > self.max_focus_cameras:
-                del self._focus_touched[min(self._focus_touched, key=self._focus_touched.get)]
+            if cid not in self._focus_touched and len(self._focus_touched) >= self.max_focus_cameras:
+                oldest = min(self._focus_touched, key=self._focus_touched.get)
+                if now - self._focus_touched[oldest] < FOCUS_EVICT_IDLE_S:
+                    return False
+                del self._focus_touched[oldest]
+            self._focus_touched[cid] = now
         if self._autostart and not self.running:
             self.start()
+        return True
 
     def get_focus_frame(self, camera_id: int) -> Optional[Dict[str, Any]]:
         """Newest processed focus frame: ``{seq, frame, detections, ane_ms, timestamp}``."""
@@ -468,9 +589,15 @@ class RollingTracker:
             self.start()
 
     def get_status(self) -> Dict[str, Any]:
+        """Telemetry for request threads. Worker-owned dicts are copied first (``dict()`` of a
+        dict is atomic under the GIL): iterating them live raised "dictionary changed size
+        during iteration" whenever the worker added a key, which dropped /ws/live clients."""
         now = time.time()
         with self._lock:
             focus_ids = sorted(self._focus_touched, key=self._focus_touched.get, reverse=True)
+        failed_until = dict(self._failed_until)
+        fail_streak = dict(self._fail_streak)
+        observed = dict(self._observed_s)
         visits = [
             {
                 "camera_id": s.camera_id,
@@ -483,15 +610,33 @@ class RollingTracker:
             }
             for s in list(self._visits.values())
         ]
-        visited = set(self._visit_counts) | set(focus_ids)
+        standby = list(self._standby.values())
+        visits += [
+            {
+                "camera_id": s.camera_id,
+                "name": s.name,
+                "tier": s.tier,
+                "state": "standby",
+                "ready": self._standby_ready(s, now),   # its stream is delivering frames
+                "elapsed_s": 0.0,
+                "dwell_s": s.dwell_s,
+                "tracks": 0,
+            }
+            for s in standby
+        ]
+        visited = set(dict(self._visit_counts)) | set(focus_ids)
         return {
             "running": self.running,
+            "model_loaded": getattr(self._detector, "model_loaded", self._detector is not None),
             "rolling_enabled": self.rolling_enabled,
             "uptime_s": round(now - self._started_at, 1) if self._started_at else 0.0,
             "focus_camera_id": focus_ids[0] if focus_ids else None,   # most recently viewed
             "focus_camera_ids": focus_ids,
             "follow_candidates": sorted(self._follow),
             "visits": visits,
+            "standby_slots": self._slot_plan()[1],
+            "standby_camera_ids": sorted(s.camera_id for s in standby),
+            "standby_promotions": self._standby_promotions,
             "open_streams": sorted(self.pool.open_ids()),
             "max_open_streams": self.max_open_streams,
             "max_streams_per_host": self.max_per_host,
@@ -500,18 +645,18 @@ class RollingTracker:
             "total_cameras": len(self.cameras),
             "cameras_covered": len(visited),
             "frames_processed": self._frames_processed,
-            "vehicles_counted": sum(self._counted.values()),
-            "vehicles_seen": sum(self._seen.values()),
+            "vehicles_counted": sum(dict(self._counted).values()),
+            "vehicles_seen": sum(dict(self._seen).values()),
             "counting_lines_learned": sum(1 for c in self.cameras if self.counting.line(c) is not None),
             "parked_dedups": self._parked_dedups,
             "handoffs": self._handoffs,
             "reid_pending_departures": self.identity_resolver.pending_count(),
-            "cameras_backing_off": sorted(c for c, t in self._failed_until.items() if t > now),
+            "cameras_backing_off": sorted(c for c, t in failed_until.items() if t > now),
             "cameras_unreachable": {
-                c: {"failures": n, "retry_in_s": round(max(0.0, self._failed_until.get(c, 0.0) - now))}
-                for c, n in sorted(self._fail_streak.items())
+                c: {"failures": n, "retry_in_s": round(max(0.0, failed_until.get(c, 0.0) - now))}
+                for c, n in sorted(fail_streak.items())
             },
-            "observed_s": {c: round(s, 1) for c, s in self._observed_s.items()},
+            "observed_s": {c: round(s, 1) for c, s in observed.items()},
         }
 
     # ── scheduling ────────────────────────────────────────────────────────────
@@ -520,22 +665,42 @@ class RollingTracker:
         """One scheduling + processing step. Returns the number of frames processed."""
         self._sync_focus(now)
         self._apply_open_failures(now)
+        self._probe_standby(now)
         self._finish_visits(now)
         if self.rolling_enabled:
             self._fill_slots(now)
+        elif self._standby:
+            self._standby.clear()
         self._update_wanted()
         if not self._threaded_streams:
             while self.pool.pump():
                 pass
 
+        # ``now`` advanced by the time spent in this tick, so frames are stamped when processed.
+        tick_start = time.monotonic()
+
+        def clock() -> float:
+            return now + (time.monotonic() - tick_start)
+
         processed = 0
         for session in list(self._focus.values()):
             if session.win_start and session.last_frame_ts - session.win_start >= OBS_WINDOW_S:
                 self._flush_window(session)
+        processed += self._process_due_focus(now)
+        # Most overdue visits first, so all slots get a fair share when inference is saturated.
+        due = sorted((s for s in self._visits.values() if now - s.last_process >= self.rolling_interval),
+                     key=lambda s: s.last_process)
+        for session in due:
+            processed += self._process(session, clock())
+            # Watched cameras are served between visit frames: one pass over every slot takes
+            # longer than a focus frame interval, which held them at ~3.5 fps instead of FOCUS_FPS.
+            processed += self._process_due_focus(clock())
+        return processed
+
+    def _process_due_focus(self, now: float) -> int:
+        processed = 0
+        for session in list(self._focus.values()):
             if now - session.last_process >= self.focus_interval:
-                processed += self._process(session, now)
-        for session in list(self._visits.values()):
-            if now - session.last_process >= self.rolling_interval:
                 processed += self._process(session, now)
         return processed
 
@@ -550,6 +715,7 @@ class RollingTracker:
             with self._lock:
                 self._focus_frames.pop(cid, None)
         for cid in wanted - set(self._focus):
+            self._standby.pop(cid, None)   # nothing to carry over; its open stream is reused
             session = self._visits.pop(cid, None)
             if session is not None:
                 # The camera was mid-visit: keep its tracks and continue as a focus camera.
@@ -563,9 +729,19 @@ class RollingTracker:
         self._trim_visits(now)
 
     def _trim_visits(self, now: float) -> None:
-        """Gives stream slots back to focus cameras by ending the most recently started visits."""
-        excess = len(self._visits) - (self.max_open_streams - len(self._focus))
-        for s in sorted(self._visits.values(), key=lambda s: s.requested_at, reverse=True)[:max(0, excess)]:
+        """Gives stream slots back to focus cameras: standby streams go first (they have observed
+        nothing), then the most recently started visits."""
+        visit_slots, standby_cap = self._slot_plan()
+        newest_first = lambda sessions: sorted(sessions, key=lambda s: s.requested_at, reverse=True)  # noqa: E731
+        surplus = len(self._standby) - standby_cap
+        for s in newest_first(self._standby.values())[:max(0, surplus)]:
+            del self._standby[s.camera_id]
+        excess = len(self._visits) + len(self._standby) - visit_slots
+        for s in newest_first(self._standby.values())[:max(0, excess)]:
+            del self._standby[s.camera_id]
+            excess -= 1
+        by_start = sorted(self._visits.values(), key=lambda s: s.active_since or s.requested_at, reverse=True)
+        for s in by_start[:max(0, excess)]:
             del self._visits[s.camera_id]
             self._end_session(s, now)
 
@@ -586,6 +762,7 @@ class RollingTracker:
                 session = self._visits.pop(c, None)
                 if session is not None:
                     self._end_session(session, now)
+                self._standby.pop(c, None)
 
     def _mark_failed(self, camera_id: int, now: float, reason: str) -> None:
         """Backs a camera off for longer after each consecutive failure, with jitter so cameras
@@ -603,43 +780,118 @@ class RollingTracker:
             return 2
         return 3
 
+    def _priority(self, camera_id: int, now: float) -> Tuple[Tuple[int, float, int], int, float]:
+        """``(sort key, tier, overdue_s)``: lower keys are visited first."""
+        tier = self._tier(camera_id, now)
+        overdue = (now - self._last_visit_end.get(camera_id, 0.0)) - self.revisit_s[tier]
+        return (tier, -overdue, camera_id), tier, overdue
+
     def _rank_candidates(self, now: float) -> List[Tuple[int, int]]:
-        busy = set(self._visits) | set(self._focus)
+        busy = set(self._visits) | set(self._focus) | set(self._standby)
         ranked = []
         for cid in self.cameras:
             if cid in busy or self._failed_until.get(cid, 0.0) > now:
                 continue
-            tier = self._tier(cid, now)
-            since = now - self._last_visit_end.get(cid, 0.0)
-            overdue = since - self.revisit_s[tier]
+            key, tier, overdue = self._priority(cid, now)
             if tier < 3 and overdue < 0:
                 continue
-            ranked.append(((tier, -overdue, cid), cid, tier))
+            ranked.append((key, cid, tier))
         ranked.sort()
         return [(cid, tier) for _, cid, tier in ranked]
 
-    def _fill_slots(self, now: float) -> None:
-        slots = self.max_open_streams - len(self._focus)
-        free = slots - len(self._visits)
-        if free <= 0:
-            return
-        # Spread connections over the restreamer hosts: no host gets more than ``max_per_host``
-        # concurrent streams, however many of its cameras rank highly (a host that is overloaded
-        # starts refusing connections and takes all of its cameras out for a while).
+    def _slot_plan(self) -> Tuple[int, int]:
+        """``(slots left after the focus cameras, how many of them are standby)``. At least two
+        stay active visits."""
+        visit_slots = max(0, self.max_open_streams - len(self._focus))
+        return visit_slots, max(0, min(self.standby_slots, visit_slots - 2))
+
+    def _host_load(self) -> Dict[str, int]:
         load: Dict[str, int] = {}
-        for cid in list(self._focus) + list(self._visits):
+        for cid in list(self._focus) + list(self._visits) + list(self._standby):
             host = self._host.get(cid, "")
             load[host] = load.get(host, 0) + 1
-        for cid, tier in self._rank_candidates(now):
-            if free <= 0:
-                break
+        return load
+
+    def _standby_ready(self, session: _Session, now: float) -> bool:
+        return session.ready_ts > 0.0 and now - session.ready_ts <= STALL_TIMEOUT_S
+
+    def _fill_slots(self, now: float) -> None:
+        visit_slots, standby_cap = self._slot_plan()
+        active_cap = visit_slots - standby_cap
+        # A freed active slot goes to the best standby (a ready one if there is one) at once.
+        while self._standby and len(self._visits) < active_cap:
+            self._promote(self._best_standby(now), now)
+
+        active_room = max(0, active_cap - len(self._visits))
+        standby_room = max(0, min(standby_cap - len(self._standby),
+                                  visit_slots - len(self._visits) - len(self._standby) - active_room))
+        if active_room or standby_room:
+            # Spread connections over the restreamer hosts: no host gets more than ``max_per_host``
+            # concurrent streams, however many of its cameras rank highly (a host that is overloaded
+            # starts refusing connections and takes all of its cameras out for a while).
+            load = self._host_load()
+            for cid, tier in self._rank_candidates(now):
+                if active_room <= 0 and standby_room <= 0:
+                    break
+                host = self._host.get(cid, "")
+                if load.get(host, 0) >= self.max_per_host:
+                    continue
+                load[host] = load.get(host, 0) + 1
+                if active_room > 0:
+                    self._visits[cid] = self._new_session(cid, "visit", tier=tier, now=now)
+                    self._visit_counts[cid] = self._visit_counts.get(cid, 0) + 1
+                    active_room -= 1
+                else:
+                    session = self._new_session(cid, "visit", tier=tier, now=now)
+                    session.standby = True
+                    self._standby[cid] = session
+                    standby_room -= 1
+        self._preempt_standby(now)
+
+    def _preempt_standby(self, now: float) -> None:
+        """A follow candidate (tier 1) that has no stream yet takes over the standby slot of a
+        lower-tier camera, so it is ready for the next free visit slot instead of queueing behind
+        cameras that rank lower."""
+        if not self._standby:
+            return
+        victims = {cid: self._tier(cid, now) for cid in self._standby}
+        if max(victims.values()) <= 1:
+            return
+        busy = set(self._visits) | set(self._focus) | set(self._standby)
+        wanted = [cid for cid in set(self._follow) | {c for c, t in self._boost_until.items() if t > now}
+                  if cid in self.cameras and cid not in busy and self._failed_until.get(cid, 0.0) <= now
+                  and self._priority(cid, now)[2] >= 0.0]
+        for cid in sorted(wanted, key=lambda c: self._priority(c, now)[0]):
+            weak = [self._standby[v] for v, tier in victims.items() if tier > 1 and v in self._standby]
+            if not weak:
+                return
+            # Evict the lowest-ranked standby; between equals, one whose stream is not delivering yet.
+            victim = max(weak, key=lambda v: (victims[v.camera_id], not self._standby_ready(v, now),
+                                              self._priority(v.camera_id, now)[0]))
+            load = self._host_load()
+            load[self._host.get(victim.camera_id, "")] -= 1
             host = self._host.get(cid, "")
             if load.get(host, 0) >= self.max_per_host:
                 continue
-            load[host] = load.get(host, 0) + 1
-            self._visits[cid] = self._new_session(cid, "visit", tier=tier, now=now)
-            self._visit_counts[cid] = self._visit_counts.get(cid, 0) + 1
-            free -= 1
+            del self._standby[victim.camera_id]
+            session = self._new_session(cid, "visit", tier=1, now=now)
+            session.standby = True
+            self._standby[cid] = session
+
+    def _best_standby(self, now: float) -> int:
+        """The standby to promote: ready ones first, then by the same priority as new candidates."""
+        return min(self._standby, key=lambda c: (not self._standby_ready(self._standby[c], now),
+                                                 self._priority(c, now)[0]))
+
+    def _promote(self, camera_id: int, now: float) -> None:
+        session = self._standby.pop(camera_id)
+        session.standby = False
+        session.tier = self._tier(camera_id, now)
+        session.dwell_s = self.dwell_s.get(session.tier, DWELL_TIER3_S)
+        session.promoted_at = session.active_since = now
+        self._visits[camera_id] = session
+        self._visit_counts[camera_id] = self._visit_counts.get(camera_id, 0) + 1
+        self._standby_promotions += 1
 
     def _new_session(self, camera_id: int, kind: str, tier: int, now: float) -> _Session:
         cam = self.cameras[camera_id]
@@ -651,6 +903,7 @@ class RollingTracker:
             tier=tier,
             dwell_s=self.dwell_s.get(tier, DWELL_TIER3_S),
             requested_at=now,
+            active_since=now,
         )
 
     def _update_wanted(self) -> None:
@@ -659,16 +912,57 @@ class RollingTracker:
             order = {c: -t for c, t in self._focus_touched.items()}
         for cid in sorted(self._focus, key=lambda c: order.get(c, 0.0)):   # most recently viewed first
             wanted.append((cid, self.cameras[cid]["stream_url"], self.focus_fps))
-        for s in sorted(self._visits.values(), key=lambda s: s.requested_at):
+        for s in sorted(self._visits.values(), key=lambda s: s.active_since):
             wanted.append((s.camera_id, self.cameras[s.camera_id]["stream_url"], self.rolling_fps))
+        for s in sorted(self._standby.values(), key=lambda s: s.requested_at):
+            wanted.append((s.camera_id, self.cameras[s.camera_id]["stream_url"], self.standby_fps))
         self.pool.set_wanted(wanted)
 
+    def _probe_standby(self, now: float) -> None:
+        """Notes which standby streams are delivering frames (without consuming them)."""
+        for cid, s in list(self._standby.items()):
+            if now - s.last_probe < STANDBY_PROBE_S:
+                continue
+            cap = self.pool.get(cid)
+            if cap is None:
+                continue
+            s.last_probe = now
+            ok, seq, frame = cap.get_new_frame(s.probe_seq, timeout=0.0)
+            if not ok or frame is None:
+                continue
+            s.probe_seq = seq
+            if not s.ready_ts and self._fail_streak.pop(cid, 0):
+                logger.warning(f"Camera {cid} reachable again.")
+            s.ready_ts = now
+
+    def _finish_standby(self, now: float) -> None:
+        for cid, s in list(self._standby.items()):
+            if s.ready_ts:
+                if now - s.ready_ts > STALL_TIMEOUT_S:
+                    # It was delivering and stopped: a flaky stream. Rank it last rather than
+                    # reopening it straight away (it was never observed, so no backoff).
+                    del self._standby[cid]
+                    self._last_visit_end[cid] = now
+                continue
+            opened = self.pool.opened_at(cid)
+            waited = (now - opened) if opened is not None else (now - s.requested_at)
+            limit = FIRST_FRAME_TIMEOUT_S if opened is not None else REQUEST_TIMEOUT_S
+            if waited > limit:
+                del self._standby[cid]
+                self._mark_failed(cid, now, "no video within the timeout")
+
     def _finish_visits(self, now: float) -> None:
+        self._finish_standby(now)
         for cid, s in list(self._visits.items()):
             done = False
             if not s.started:
                 opened = self.pool.opened_at(cid)
-                waited = (now - opened) if opened is not None else (now - s.requested_at)
+                since = opened if opened is not None else s.requested_at
+                if s.ready_ts:
+                    # A ready standby was delivering frames when it was promoted: its wait for a
+                    # first processed frame counts from the promotion, not from when it was opened.
+                    since = max(since, s.promoted_at)
+                waited = now - since
                 limit = FIRST_FRAME_TIMEOUT_S if opened is not None else REQUEST_TIMEOUT_S
                 if waited > limit:
                     self._mark_failed(cid, now, "no video within the timeout")
@@ -688,6 +982,11 @@ class RollingTracker:
         ok, seq, frame = cap.get_new_frame(session.last_seq, timeout=0.0)
         if not ok or frame is None:
             return 0
+        if session.started and session.win_start and now - session.last_frame_ts > STALL_TIMEOUT_S:
+            # The stream stalled: close the window at the last frame before the gap, so an outage
+            # isn't counted as observed time (it diluted vehicles/hour of watched cameras).
+            self._flush_window(session)
+            session.win_start = now
         session.last_seq = seq
         session.last_process = now
         session.last_frame_ts = now
@@ -726,7 +1025,10 @@ class RollingTracker:
             with self._lock:
                 line = self.counting.line(session.camera_id)
                 self._focus_frames[session.camera_id] = {
-                    "camera_id": session.camera_id, "seq": seq, "frame": frame,
+                    # frame_no increases across sessions and streams (a reopened capture restarts
+                    # its own seq at 1), so viewers can ask for "a frame newer than N".
+                    "camera_id": session.camera_id, "seq": seq, "frame_no": self._frames_processed,
+                    "frame": frame,
                     "detections": detections, "ane_ms": ane_ms, "timestamp": now,
                     "line": line.endpoints() if line else None,
                     "line_labels": line.labels() if line else None,
@@ -845,7 +1147,10 @@ class RollingTracker:
                 camera_id=cid, local_track_id=tr.track_id, global_vehicle_id=gid,
                 vehicle_class=tr.class_name, confidence=tr.confidence, bbox=tr.bbox,
                 heading_deg=tr.heading_deg, speed_px_s=tr.speed_px_s,
-                embedding=emb.astype(np.float32).tobytes(), color_hist=hist.astype(np.float32).tobytes(),
+                # Appearance stays in memory (Re-ID, parked dedup); nothing reads it back from the
+                # table, and the blobs were ~90% of its size. Blanking them later freed no disk
+                # (SQLite never reuses the half-empty pages), so they are not written at all.
+                embedding=b"", color_hist=b"",
                 timestamp_iso=iso,
             )
         except Exception as exc:  # noqa: BLE001
@@ -884,10 +1189,10 @@ class RollingTracker:
         if not entries:
             return None
         entries[:] = [p for p in entries if now - p.ts <= PARKED_TTL_S]
-        for p in entries:
+        for i, p in enumerate(entries):
             if (p.class_name == tr.class_name and _iou(p.bbox, tr.bbox) >= PARKED_IOU
                     and float(np.dot(emb, p.embedding)) >= PARKED_SIMILARITY):
-                entries.remove(p)
+                del entries[i]     # by position: list.remove() compares with == and used to raise
                 return p
         return None
 

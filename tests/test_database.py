@@ -65,6 +65,14 @@ class TestDatabaseUnit(unittest.TestCase):
         self.assertIn("idx_sightings_cam_time", indices)
         self.assertIn("idx_sightings_global_id", indices)
         self.assertIn("idx_sightings_time", indices)
+        # the covering indexes of the old COUNT(DISTINCT) scans are gone: the all-time aggregates now
+        # come from trigger-maintained tables (tests/test_db_totals.py)
+        self.assertNotIn("idx_sightings_agg", indices)
+        self.assertNotIn("idx_sightings_local_track", indices)
+        for t in ("sighting_totals", "sighting_tracks", "camera_track_totals", "global_vehicles", "sighting_counters"):
+            self.assertIn(t, tables, f"Missing totals table: {t}")
+        cur.execute("SELECT name FROM sqlite_master WHERE type='trigger';")
+        self.assertEqual({row[0] for row in cur.fetchall()}, {"trg_sightings_totals", "trg_handoffs_total"})
 
     def test_wal_journal_mode_applied(self):
         """Verify SQLite WAL pragma and synchronous NORMAL are active."""
@@ -289,6 +297,35 @@ class TestDatabaseUnit(unittest.TestCase):
         self.assertEqual(stats["camera_counts"][79], 3)
         self.assertEqual(stats["camera_counts"][161], 1)
         self.assertEqual(stats["camera_counts"][80], 0)
+
+
+class TestThreadConnections(unittest.TestCase):
+    def test_connection_of_a_finished_thread_is_closed(self):
+        # Regression: every request-pool thread's connection was kept open forever (fd leak).
+        import gc
+        import threading
+        from backend.database import Database
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(os.path.join(tmp, "t.sqlite"), auto_seed=False)
+            conns = []
+
+            def work():
+                conn = db.conn
+                conn.execute("SELECT 1").fetchone()
+                conns.append(conn)
+
+            threads = [threading.Thread(target=work) for _ in range(20)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            gc.collect()
+            self.assertEqual(len(db._all_conns), 0)
+            for conn in conns:
+                with self.assertRaises(sqlite3.ProgrammingError):   # closed
+                    conn.execute("SELECT 1")
+            db.close()
 
 
 if __name__ == "__main__":

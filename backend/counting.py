@@ -14,8 +14,11 @@ the road. Every camera here has a different view, so the line is learned automat
   ``PASSAGE_FRAC`` of the frame instead ("passage" mode), so a new camera counts from its first visit.
 
 Positions are a vehicle's ground point (bottom-centre of its box). A vehicle is counted when its
-side of the line differs from the side it was first seen on, which needs no frame-to-frame
-continuity and ignores jitter within ``HYSTERESIS`` of the line.
+current position and its reference position (where it was first seen) lie on opposite sides of the
+line *as it is now*, which needs no frame-to-frame continuity and ignores jitter within
+``HYSTERESIS`` of the line. Both sides are judged against the current line every time: the line is
+refit while tracks are still alive (every departing track teaches the model), and a side remembered
+from the older line made a queued car look as if it had crossed when the line moved past it.
 """
 
 import json
@@ -31,6 +34,7 @@ LINE_MIN_TRACKS = 12      # moving trajectories needed before a learned line rep
 MIN_MOVE = 0.08           # a trajectory shorter than this (fraction of the frame) doesn't teach the model
 PASSAGE_FRAC = 0.15       # passage mode: count after moving this far
 HYSTERESIS = 0.015        # points this close to the line have no side yet
+MIN_CROSS_MOVE = 2 * HYSTERESIS   # a counted vehicle moved at least this far (implied by the two sides)
 
 
 def ground_point(bbox: Tuple[int, int, int, int], width: int, height: int) -> Point:
@@ -129,12 +133,12 @@ class MotionModel:
 class TrackCounter:
     """Decides when one track is counted, and in which direction."""
 
-    __slots__ = ("start", "last", "first_side", "counted", "direction", "mode")
+    __slots__ = ("start", "last", "ref", "counted", "direction", "mode")
 
     def __init__(self, pt: Point):
         self.start = pt
         self.last = pt
-        self.first_side = 0
+        self.ref = pt          # where the track is measured from: first position with a clear side
         self.counted = False
         self.direction = 0
         self.mode = ""
@@ -145,10 +149,15 @@ class TrackCounter:
         line = model.line
         if line is not None:
             side = line.side(pt)
-            if self.first_side == 0:
-                self.first_side = side
-            if (can_count and not self.counted and side != 0
-                    and self.first_side != 0 and side != self.first_side):
+            ref_side = line.side(self.ref)
+            if ref_side == 0:
+                # Started on the line (or the line has just moved onto the reference point): measure
+                # from the first position that has a clear side.
+                if side != 0:
+                    self.ref = pt
+                return False
+            if (can_count and not self.counted and side != 0 and side != ref_side
+                    and math.hypot(pt[0] - self.ref[0], pt[1] - self.ref[1]) >= MIN_CROSS_MOVE):
                 self.counted, self.direction, self.mode = True, side, "line"
                 return True
             return False

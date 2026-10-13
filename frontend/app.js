@@ -18,6 +18,12 @@ let cameraDetailsList = [];
 let activeTab = "cameras";
 let cameraSearchFilter = "";
 let activeCorridor = "ALL";
+let lastSightings = [];            // newest "recent" payload; drawn when the Recent tab is visible
+let openPopupCamId = null;         // camera whose map popup is open (Leaflet keeps at most one)
+let shownPopupRows = "";           // rows markup currently inside that popup
+let candidateCameraIds = new Set();
+const cameraRows = new Map();      // camera id -> row record in the Cameras tab (see syncList)
+const sightingRows = new Map();    // sighting id -> row record in the Recent tab
 
 const VEHICLE_CLASSES = [
     { key: "car", label: "Car" },
@@ -46,64 +52,173 @@ function rateLevel(vph) {
     return "level-low";
 }
 
+function makeEl(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+}
+
+// Writes only when the value differs, so an unchanged heartbeat causes no DOM mutation at all.
+function setNodeText(node, text) {
+    if (!node) return;
+    const first = node.firstChild;
+    if (first && first.nodeType === Node.TEXT_NODE && first === node.lastChild) {
+        if (first.data !== text) first.data = text;   // edit the text node instead of replacing it
+    } else if (node.textContent !== text) {
+        node.textContent = text;
+    }
+}
+function setTextData(textNode, text) {
+    if (textNode.data !== text) textNode.data = text;
+}
+
+// Keeps `container` in step with `items` (already filtered and sorted) while reusing the rows that
+// are still wanted: rows are created for new keys, removed for gone keys, moved only when their
+// position changed, and `update` refreshes the ones that stayed. Nothing is rebuilt per refresh, so
+// keyboard focus, text selection and hover state survive. `cache` maps key -> {el, ...}.
+function syncList(container, cache, items, keyOf, create, update) {
+    const focused = document.activeElement;
+    const keep = new Set();
+    let cursor = container.firstElementChild;
+    for (const item of items) {
+        const key = keyOf(item);
+        if (keep.has(key)) continue;
+        keep.add(key);
+        let rec = cache.get(key);
+        if (!rec) {
+            rec = create(item);
+            cache.set(key, rec);
+        }
+        if (update) update(rec, item);
+        if (rec.el === cursor) cursor = cursor.nextElementSibling;
+        else container.insertBefore(rec.el, cursor);
+    }
+    // Everything from the cursor on was not claimed by an item (stale rows, a placeholder).
+    while (cursor) {
+        const next = cursor.nextElementSibling;
+        cursor.remove();
+        cursor = next;
+    }
+    for (const key of cache.keys()) if (!keep.has(key)) cache.delete(key);
+    // Moving a node in the DOM drops focus from it; hand it back.
+    if (focused && focused !== document.activeElement && container.contains(focused)) {
+        focused.focus({ preventScroll: true });
+    }
+}
+
+function setListEmpty(container, cache, message) {
+    cache.clear();
+    let empty = container.firstElementChild;
+    if (!empty || container.childElementCount !== 1 || !empty.classList.contains("empty")) {
+        container.replaceChildren();
+        empty = makeEl("div", "empty");
+        container.append(empty);
+    }
+    setNodeText(empty, message);
+}
+
 function classChips(classes) {
     return VEHICLE_CLASSES.map(c =>
         `<span class="cls cls--${c.key}"><i></i>${c.label} ${fmtRate((classes || {})[c.key])}</span>`
     ).join("");
 }
 
-function popupHtml(cam, rate) {
-    let rows;
+// The rows are separate from the rest of the popup so an open popup can refresh its numbers
+// without replacing the "View live stream" button the user may be about to click.
+function popupRowsHtml(rate) {
     if (!rate) {
-        rows = `<div class="popup__row"><span>Not observed in the last hour yet</span></div>`;
-    } else {
-        rows = `
-            <div class="popup__row"><span>Flow</span><b>${fmtRate(rate.vph, rate.low_sample)} veh/h</b></div>
-            <div class="popup__row"><span>By direction</span><b>${fmtRate(rate.vph_dir_pos)} / ${fmtRate(rate.vph_dir_neg)}</b></div>
-            <div class="popup__row"><span>Observed</span><b>${Math.round(rate.observed_s)} s · ${rate.counting_mode === "line" ? "counting line" : "learning line"}</b></div>
-            <div class="popup__row">${classChips(rate.vph_classes)}</div>`;
+        return `<div class="popup__row"><span>Not observed in the last hour yet</span></div>`;
     }
+    return `
+        <div class="popup__row"><span>Flow</span><b>${fmtRate(rate.vph, rate.low_sample)} veh/h</b></div>
+        <div class="popup__row"><span>By direction</span><b>${fmtRate(rate.vph_dir_pos)} / ${fmtRate(rate.vph_dir_neg)}</b></div>
+        <div class="popup__row"><span>Observed</span><b>${Math.round(rate.observed_s)} s · ${rate.counting_mode === "line" ? "counting line" : "learning line"}</b></div>
+        <div class="popup__row">${classChips(rate.vph_classes)}</div>`;
+}
+
+function popupHtml(cam, rate) {
     return `
         <div class="popup">
             <div class="popup__name">${esc(cam.name)}</div>
             <div class="popup__meta">ID ${esc(cam.id)} · ${esc(cam.corridor || "Central")}</div>
-            <div class="popup__rows">${rows}</div>
+            <div class="popup__rows">${popupRowsHtml(rate)}</div>
             <button class="btn btn--primary btn--sm" data-switch-camera="${Number(cam.id)}">View live stream</button>
         </div>`;
 }
 
+let frameObjectUrl = null;
+let framePollGeneration = 0;
+
 function stopFramePolling() {
     isPolling = false;
     pollingCamId = null;
+    framePollGeneration++;
 }
 
+// One request in flight per tab. Each request names the last frame shown (?after=<X-Frame-No>);
+// the server holds it until a newer frame exists (204 after ~1 s without one), so frames arrive
+// as soon as they are processed and none is downloaded twice. Polling keeps the camera in the
+// tracker's focus, so it stops while the tab is hidden (see visibilitychange below).
 function startFramePolling(camId) {
     stopFramePolling();
     isPolling = true;
     pollingCamId = camId;
+    const generation = framePollGeneration;
+    let lastFrameNo = null;
+    const active = () => isPolling && generation === framePollGeneration && streamMode === "ai" && !document.hidden;
 
-    function pollNext() {
-        if (!isPolling || streamMode !== "ai" || pollingCamId !== camId) return;
-        const img = new Image();
-        img.onload = () => {
-            if (isPolling && streamMode === "ai" && pollingCamId === camId) {
-                const aiImg = document.getElementById("aiStreamImg");
-                if (aiImg) aiImg.src = img.src;
-                setTimeout(pollNext, 70); // ~14 FPS sequential chaining (one in-flight frame per tab)
+    async function pollNext() {
+        if (!active()) return;
+        let delay = 0;
+        try {
+            const after = lastFrameNo === null ? "" : `?after=${lastFrameNo}`;
+            const res = await fetch(`/api/stream/${camId}/frame${after}`, { cache: "no-store" });
+            if (res.status === 200) {
+                const blob = await res.blob();
+                const frameNo = res.headers.get("X-Frame-No");
+                // Placeholders (connecting, viewer limit) carry no frame number: re-check gently.
+                if (frameNo === null) delay = 1000;
+                else lastFrameNo = frameNo;
+                if (active()) {
+                    const url = URL.createObjectURL(blob);
+                    const aiImg = document.getElementById("aiStreamImg");
+                    if (aiImg) aiImg.src = url;
+                    if (frameObjectUrl) URL.revokeObjectURL(frameObjectUrl);
+                    frameObjectUrl = url;
+                }
+            } else if (res.status !== 204) {
+                delay = 1000;
             }
-        };
-        img.onerror = () => {
-            if (isPolling && streamMode === "ai" && pollingCamId === camId) {
-                setTimeout(pollNext, 350); // Gentle backoff on error/buffering
-            }
-        };
-        img.src = `/api/stream/${camId}/frame?t=${Date.now()}`;
+        } catch (err) {
+            delay = 1000;   // server restarting / network blip
+        }
+        if (active()) setTimeout(pollNext, delay);
     }
 
     pollNext();
 }
 
+document.addEventListener("visibilitychange", () => {
+    // A hidden tab must not hold one of the tracker's few focus slots.
+    if (document.hidden) {
+        if (isPolling) {
+            const camId = pollingCamId;
+            stopFramePolling();
+            pollingCamId = camId;   // remembered for resuming
+        }
+    } else {
+        // Restart unconditionally: a page opened in a background tab started polling while hidden,
+        // so its loop exited at once although isPolling stayed true, and the feed never appeared.
+        if (pollingCamId !== null && streamMode === "ai") startFramePolling(pollingCamId);
+        // Heartbeats keep arriving while hidden but are not drawn; catch up now.
+        updateCameraMarkersCounts();
+        renderActiveList();
+    }
+});
+
 document.addEventListener("DOMContentLoaded", () => {
+    if (window.lucide) lucide.createIcons();   // static icons only; lucide and leaflet are deferred scripts
     initMap();
     loadCameras();
     loadTopology();
@@ -138,6 +253,7 @@ async function loadCameras() {
         const data = await res.json();
         // Cameras the BSW site no longer lists stay in the road graph but aren't shown.
         allCameras = (data.cameras || []).filter(c => c.status !== "removed");
+        drawTopology();
         document.querySelectorAll(".cam-total").forEach(el => { el.textContent = allCameras.length; });
 
         const select = document.getElementById("cameraSelect");
@@ -164,7 +280,14 @@ async function loadCameras() {
             });
 
             const marker = L.marker([cam.latitude, cam.longitude], { icon, title: cam.name }).addTo(map);
-            marker.bindPopup(popupHtml(cam, rate));
+            // Content is built when the popup opens; while it stays open only its rows are refreshed
+            // (refreshOpenPopup), never the whole popup.
+            marker.bindPopup(() => popupHtml(cam, cameraRates[cam.id]));
+            marker.on("popupopen", () => {
+                openPopupCamId = cam.id;
+                shownPopupRows = popupRowsHtml(cameraRates[cam.id]);
+            });
+            marker.on("popupclose", () => { if (openPopupCamId === cam.id) openPopupCamId = null; });
             marker.on("click", () => switchCamera(cam.id));
             cameraMarkers[cam.id] = marker;
         });
@@ -182,23 +305,30 @@ async function loadTopology() {
         const res = await fetch("/api/topology");
         topologyData = await res.json();
 
-        if (topologyData && topologyData.edges) {
-            topologyData.edges.forEach(edge => {
-                const fromCam = allCameras.find(c => c.id === edge.from_camera_id || c.id === edge.from);
-                const toCam = allCameras.find(c => c.id === edge.to_camera_id || c.id === edge.to);
-                if (fromCam && toCam && fromCam.latitude && toCam.latitude) {
-                    L.polyline([[fromCam.latitude, fromCam.longitude], [toCam.latitude, toCam.longitude]], {
-                        color: "#4c8dff",
-                        weight: 1.5,
-                        opacity: 0.35,
-                        dashArray: "4, 6"
-                    }).addTo(map);
-                }
-            });
-        }
+        drawTopology();
     } catch (err) {
         console.warn("Topology loading deferred:", err);
     }
+}
+
+// Directed road links between cameras, as one layer. Needs both the topology and the camera list,
+// which load concurrently, so it is called after each of them.
+let topologyLayer = null;
+function drawTopology() {
+    if (!map || !topologyData || !topologyData.edges || allCameras.length === 0 || topologyLayer) return;
+    const byId = new Map(allCameras.map(c => [Number(c.id), c]));
+    const segments = [];
+    topologyData.edges.forEach(edge => {
+        const a = byId.get(Number(edge.source_id));
+        const b = byId.get(Number(edge.target_id));
+        if (a && b && a.latitude && b.latitude) {
+            segments.push([[a.latitude, a.longitude], [b.latitude, b.longitude]]);
+        }
+    });
+    if (segments.length === 0) return;
+    topologyLayer = L.polyline(segments, {
+        color: "#4c8dff", weight: 1.5, opacity: 0.35, dashArray: "4, 6", interactive: false,
+    }).addTo(map);
 }
 
 // 4. Switch active camera and start its feed
@@ -208,7 +338,7 @@ function switchCamera(cameraId) {
     const cam = allCameras.find(c => c.id === cameraId);
     if (!cam) return;
 
-    document.querySelectorAll(".cam-marker").forEach(el => el.classList.remove("active-marker"));
+    document.querySelectorAll(".cam-marker").forEach(node => node.classList.remove("active-marker"));
     const activeEl = document.getElementById(`marker-${cameraId}`);
     if (activeEl) activeEl.classList.add("active-marker");
 
@@ -279,7 +409,8 @@ function switchCamera(cameraId) {
     }
 
     fetchDownstreamCandidates(cameraId);
-    renderAllCamerasCountsList();
+    if (activeTab === "cameras") renderAllCamerasCountsList();
+    updateExportScope();
 
     if (activeTab === "timeseries") {
         loadTimeSeriesMetrics(cameraId);
@@ -291,7 +422,8 @@ async function fetchDownstreamCandidates(cameraId) {
     const listContainer = document.getElementById("candidateList");
     listContainer.innerHTML = `<div class="empty">Calculating downstream candidates…</div>`;
 
-    document.querySelectorAll(".cam-marker").forEach(el => el.classList.remove("candidate-marker"));
+    document.querySelectorAll(".cam-marker").forEach(node => node.classList.remove("candidate-marker"));
+    candidateCameraIds = new Set();
 
     try {
         const res = await fetch("/api/handoff/predict", {
@@ -300,7 +432,7 @@ async function fetchDownstreamCandidates(cameraId) {
             body: JSON.stringify({
                 camera_id: cameraId,
                 exit_direction: "South",
-                vehicle_id: followTargetVehicleId || 14
+                vehicle_id: followTargetVehicleId   // null unless following a vehicle
             })
         });
         const data = await res.json();
@@ -313,6 +445,7 @@ async function fetchDownstreamCandidates(cameraId) {
         }
 
         data.candidates.forEach(cand => {
+            candidateCameraIds.add(Number(cand.target_camera_id));
             const candMarker = document.getElementById(`marker-${cand.target_camera_id}`);
             if (candMarker) candMarker.classList.add("candidate-marker");
 
@@ -384,23 +517,109 @@ function handoffTo(nextCameraId) {
 }
 
 // 7. Citywide statistics and per-camera rates
+
+// Label and colour of one camera marker. Reads the DOM rather than a cache: a marker that was
+// hidden by the corridor filter gets a fresh icon when it comes back.
+function updateMarkerLabel(cam) {
+    const rate = cameraRates[cam.id];
+    setNodeText(document.getElementById(`count-${cam.id}`), fmtRate(rate ? rate.vph : null, rate && rate.low_sample));
+
+    const markerDiv = document.getElementById(`marker-${cam.id}`);
+    if (markerDiv) {
+        const level = rateLevel(rate ? rate.vph : null);
+        if (!markerDiv.classList.contains(level)) {
+            markerDiv.classList.remove("level-zero", "level-low", "level-med", "level-high");
+            markerDiv.classList.add(level);
+        }
+    }
+}
+
+// A map popup that is open keeps its node tree; only the numbers inside it are swapped, and only
+// when they changed. (Closed popups build their content when they open.)
+function refreshOpenPopup() {
+    if (openPopupCamId === null) return;
+    const marker = cameraMarkers[openPopupCamId];
+    const popup = marker && marker.getPopup();
+    const rowsEl = popup && popup.isOpen() && popup.getElement() && popup.getElement().querySelector(".popup__rows");
+    if (!rowsEl) return;
+    const html = popupRowsHtml(cameraRates[openPopupCamId]);
+    if (html !== shownPopupRows) {
+        rowsEl.innerHTML = html;
+        shownPopupRows = html;
+    }
+}
+
 function updateCameraMarkersCounts() {
     allCameras.forEach(cam => {
-        const marker = cameraMarkers[cam.id];
-        if (!marker) return;
-        const rate = cameraRates[cam.id];
-
-        const countEl = document.getElementById(`count-${cam.id}`);
-        if (countEl) countEl.textContent = fmtRate(rate ? rate.vph : null, rate && rate.low_sample);
-
-        const markerDiv = document.getElementById(`marker-${cam.id}`);
-        if (markerDiv) {
-            markerDiv.classList.remove("level-zero", "level-low", "level-med", "level-high");
-            markerDiv.classList.add(rateLevel(rate ? rate.vph : null));
-        }
-
-        marker.setPopupContent(popupHtml(cam, rate));
+        if (cameraMarkers[cam.id]) updateMarkerLabel(cam);
     });
+    refreshOpenPopup();
+}
+
+// Cameras tab: one row per camera, updated in place (see syncList). Busiest cameras first.
+function createCameraRow(cam) {
+    const row = makeEl("div", "row row--click");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.dataset.switchCamera = String(Number(cam.camera_id));
+
+    const title = makeEl("div", "row__title");
+    const name = makeEl("span", "truncate");
+    title.append(name);
+
+    const sub = makeEl("div", "row__sub");
+    const idEl = makeEl("span");
+    const corridor = makeEl("span", "truncate");
+    corridor.style.maxWidth = "150px";
+    sub.append(idEl, corridor);
+    const chipTexts = VEHICLE_CLASSES.map(c => {
+        const chip = makeEl("span", `cls cls--${c.key}`);
+        const text = document.createTextNode("");
+        chip.append(makeEl("i"), text);
+        sub.append(chip);
+        return text;
+    });
+
+    const main = makeEl("div", "row__main");
+    main.append(title, sub);
+
+    const rate = makeEl("span", "rate");
+    const rateText = document.createTextNode("");
+    rate.append(rateText, " ", makeEl("small", null, "veh/h"));
+    const side = makeEl("div", "row__side");
+    side.append(rate);
+
+    row.append(main, side);
+    return { el: row, title, name, idEl, corridor, chipTexts, rate, rateText, tag: null };
+}
+
+function updateCameraRow(rec, cam) {
+    const rate = cameraRates[cam.camera_id];
+    const isCurrent = cam.camera_id === currentCameraId;
+
+    setNodeText(rec.name, cam.name || "");
+    setNodeText(rec.idEl, `ID ${cam.camera_id}`);
+    setNodeText(rec.corridor, cam.corridor || "–");
+    VEHICLE_CLASSES.forEach((c, i) => {
+        setTextData(rec.chipTexts[i], `${c.label} ${fmtRate(((rate && rate.vph_classes) || {})[c.key])}`);
+    });
+
+    const rateClass = `rate ${rateLevel(rate ? rate.vph : null)}`;
+    if (rec.rate.className !== rateClass) rec.rate.className = rateClass;
+    const title = rate ? `${Math.round(rate.observed_s)} s observed in the last hour` : "Not observed in the last hour";
+    if (rec.rate.title !== title) rec.rate.title = title;
+    setTextData(rec.rateText, fmtRate(rate ? rate.vph : null, rate && rate.low_sample));
+
+    rec.el.classList.toggle("row--current", isCurrent);
+    if (isCurrent) rec.el.setAttribute("aria-current", "true");
+    else rec.el.removeAttribute("aria-current");
+    if (isCurrent && !rec.tag) {
+        rec.tag = makeEl("span", "tag", "VIEWING");
+        rec.title.append(rec.tag);
+    } else if (!isCurrent && rec.tag) {
+        rec.tag.remove();
+        rec.tag = null;
+    }
 }
 
 function renderAllCamerasCountsList() {
@@ -425,35 +644,18 @@ function renderAllCamerasCountsList() {
     }
 
     if (items.length === 0) {
-        container.innerHTML = `<div class="empty">${cameraSearchFilter ? `No cameras match “${esc(cameraSearchFilter)}”.` : "No cameras loaded."}</div>`;
+        setListEmpty(container, cameraRows, cameraSearchFilter ? `No cameras match “${cameraSearchFilter}”.` : "No cameras loaded.");
         return;
     }
 
-    container.innerHTML = items.map(cam => {
-        const rate = cameraRates[cam.camera_id];
-        const isCurrent = cam.camera_id === currentCameraId;
-        const title = rate ? `${Math.round(rate.observed_s)} s observed in the last hour` : "Not observed in the last hour";
+    syncList(container, cameraRows, items, cam => cam.camera_id, createCameraRow, updateCameraRow);
+}
 
-        return `
-            <div class="row row--click ${isCurrent ? "row--current" : ""}" role="button" tabindex="0" data-switch-camera="${Number(cam.camera_id)}">
-                <div class="row__main">
-                    <div class="row__title">
-                        <span class="truncate">${esc(cam.name)}</span>
-                        ${isCurrent ? '<span class="tag">VIEWING</span>' : ""}
-                    </div>
-                    <div class="row__sub">
-                        <span>ID ${esc(cam.camera_id)}</span>
-                        <span class="truncate" style="max-width:150px">${esc(cam.corridor || "–")}</span>
-                        ${classChips((rate && rate.vph_classes) || {})}
-                    </div>
-                </div>
-                <div class="row__side">
-                    <span class="rate ${rateLevel(rate ? rate.vph : null)}" title="${esc(title)}">
-                        ${fmtRate(rate ? rate.vph : null, rate && rate.low_sample)} <small>veh/h</small>
-                    </span>
-                </div>
-            </div>`;
-    }).join("");
+// Heartbeats update the data every 2 s, but only the visible list is drawn; the other one is drawn
+// from the last data when its tab is opened (setTab).
+function renderActiveList() {
+    if (activeTab === "cameras") renderAllCamerasCountsList();
+    else if (activeTab === "sightings") renderRecentSightings(lastSightings);
 }
 
 function setupTabs() {
@@ -468,8 +670,12 @@ function setupTabs() {
     function setTab(tab) {
         activeTab = tab;
         tabs.forEach(btn => btn.setAttribute("aria-selected", String(btn.dataset.tab === tab)));
-        Object.entries(panels).forEach(([name, el]) => { if (el) el.hidden = name !== tab; });
-        if (tab === "timeseries") loadTimeSeriesMetrics(currentCameraId);
+        Object.entries(panels).forEach(([name, panel]) => { if (panel) panel.hidden = name !== tab; });
+        if (tab === "timeseries") {
+            refreshExportRange();
+            loadTimeSeriesMetrics(currentCameraId);
+        }
+        renderActiveList();
     }
 
     window.switchTab = setTab;
@@ -504,57 +710,63 @@ function applyStats(countsData, sightings) {
     cameraCountsMap = countsData.camera_counts_map || {};
     cameraRates = countsData.camera_rates || {};
     cameraDetailsList = (countsData.camera_counts || []).filter(c => c.status !== "removed");
+    lastSightings = sightings;
 
     const classes = countsData.class_breakdown || {};
-    const setNum = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = (value || 0).toLocaleString();
-    };
+    const setNum = (id, value) => setNodeText(document.getElementById(id), (value || 0).toLocaleString());
     setNum("statTotalSightings", countsData.total_vehicles_counted);
     setNum("statCars", classes.car);
     setNum("statMotos", classes.motorcycle);
     setNum("statTrucks", classes.truck);
     setNum("statBuses", classes.bus);
 
-    const headerCount = document.getElementById("headerVehicleCountText");
-    if (headerCount) headerCount.textContent = `≈${fmtRate(countsData.citywide_vph || 0)} veh/h citywide`;
+    setNodeText(document.getElementById("headerVehicleCountText"), `≈${fmtRate(countsData.citywide_vph || 0)} veh/h citywide`);
+    setNodeText(document.getElementById("camsWithTrafficCount"), String(countsData.cameras_with_rates || 0));
 
-    const activeCamsEl = document.getElementById("camsWithTrafficCount");
-    if (activeCamsEl) activeCamsEl.textContent = countsData.cameras_with_rates || 0;
-
+    // Nothing below is visible in a background tab; visibilitychange repaints it.
+    if (document.hidden) return;
     updateCameraMarkersCounts();
-    renderAllCamerasCountsList();
-    renderRecentSightings(sightings);
+    renderActiveList();
 }
+
+function createSightingRow(s) {
+    const vid = s.global_vehicle_id || s.local_track_id;
+    const vtype = s.vehicle_class || s.vehicle_type || "car";
+    let timeStr = "";
+    if (s.timestamp_iso) timeStr = new Date(s.timestamp_iso).toLocaleTimeString();
+    else if (s.timestamp) timeStr = new Date(s.timestamp * 1000).toLocaleTimeString();
+
+    const row = makeEl("div", "row row--click");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    row.dataset.journeyVehicle = String(Number(vid));
+
+    const cls = makeEl("span", `cls cls--${vtype}`);
+    cls.append(makeEl("i"), document.createTextNode(vtype));
+    const camera = makeEl("span", "truncate", s.camera_name || `Camera ${s.camera_id}`);
+    camera.style.maxWidth = "200px";
+    const sub = makeEl("div", "row__sub");
+    sub.append(cls, camera);
+
+    const main = makeEl("div", "row__main");
+    main.append(makeEl("div", "row__title", `Vehicle #${vid}`), sub);
+    row.append(main, makeEl("span", "muted num", timeStr));
+    return { el: row };
+}
+
+// Recent tab: a sighting never changes once recorded, so rows are created for new sightings,
+// dropped when they leave the newest-12 window, and otherwise left alone.
+const sightingKey = s => s.sighting_id ?? `${s.camera_id}:${s.local_track_id}:${s.timestamp_iso || s.timestamp}`;
 
 function renderRecentSightings(sightings) {
     const recentList = document.getElementById("recentSightingsList");
     if (!recentList) return;
 
     if (sightings.length === 0) {
-        recentList.innerHTML = `<div class="empty">No vehicles recorded yet.</div>`;
+        setListEmpty(recentList, sightingRows, "No vehicles recorded yet.");
         return;
     }
-
-    recentList.innerHTML = sightings.map(s => {
-        const vid = s.global_vehicle_id || s.local_track_id;
-        const vtype = s.vehicle_class || s.vehicle_type || "car";
-        let timeStr = "";
-        if (s.timestamp_iso) timeStr = new Date(s.timestamp_iso).toLocaleTimeString();
-        else if (s.timestamp) timeStr = new Date(s.timestamp * 1000).toLocaleTimeString();
-
-        return `
-            <div class="row row--click" role="button" tabindex="0" data-journey-vehicle="${Number(vid)}">
-                <div class="row__main">
-                    <div class="row__title">Vehicle #${esc(vid)}</div>
-                    <div class="row__sub">
-                        <span class="cls cls--${esc(vtype)}"><i></i>${esc(vtype)}</span>
-                        <span class="truncate" style="max-width:200px">${esc(s.camera_name || "Camera " + s.camera_id)}</span>
-                    </div>
-                </div>
-                <span class="muted num">${esc(timeStr)}</span>
-            </div>`;
-    }).join("");
+    syncList(recentList, sightingRows, sightings, sightingKey, createSightingRow, null);
 }
 
 // 8. Vehicle journey modal
@@ -574,8 +786,7 @@ async function openVehicleJourney(vehicleId) {
 
     try {
         const res = await fetch(`/api/vehicles/${vehicleId}/timeline`);
-        const data = await res.json();
-        const timeline = data.timeline || [];
+        const timeline = res.ok ? await res.json() : [];   // a list of sightings, oldest first
 
         if (timeline.length === 0) {
             container.innerHTML = `<div class="empty">No trajectory records found for vehicle #${vehicleId}.</div>`;
@@ -588,10 +799,10 @@ async function openVehicleJourney(vehicleId) {
                 <div class="timeline-item__card">
                     <div class="timeline-item__head">
                         <span>${esc(hop.camera_name || "Camera " + hop.camera_id)}</span>
-                        <span class="num">${new Date(hop.timestamp * 1000).toLocaleTimeString()}</span>
+                        <span class="num">${hop.timestamp_iso ? new Date(hop.timestamp_iso).toLocaleTimeString() : "–"}</span>
                     </div>
                     <div class="timeline-item__meta">
-                        ${esc(hop.corridor || "Central")} · Heading ${esc(hop.exit_heading || "unknown")}
+                        ${esc(hop.corridor || "Central")} · ${esc(hop.vehicle_class || "vehicle")} · Heading ${Number.isFinite(hop.heading_deg) ? Math.round(hop.heading_deg) + "°" : "unknown"}
                     </div>
                     <button class="link-btn" data-switch-camera="${Number(hop.camera_id)}" data-close-modal="1">View this camera →</button>
                 </div>
@@ -684,15 +895,125 @@ function setupEventListeners() {
         });
     });
 
-    // Dataset export
-    const exportUrl = (format) => {
-        const win = document.getElementById("exportWindowSelect")?.value || 60;
-        window.location.href = `/api/stats/export?camera_id=${currentCameraId}&format=${format}&window_seconds=${win}`;
-    };
-    document.getElementById("btnExportCsv")?.addEventListener("click", () => exportUrl("csv"));
-    document.getElementById("btnExportJson")?.addEventListener("click", () => exportUrl("json"));
-
+    setupExport();
     setupTabs();
+}
+
+// 9b. Data export (Analytics tab). The Download button and the raw-table links are plain
+// <a download> elements whose href is rebuilt from the form on every change, so they work with the
+// keyboard, can be copied, and the server's Content-Disposition does the rest.
+const exportState = { hours: 24 };   // active quick range; null once the dates were typed in
+
+const pad2 = n => String(n).padStart(2, "0");
+function toLocalInput(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function setExportRange(hours) {
+    const startInput = document.getElementById("exportStart");
+    const endInput = document.getElementById("exportEnd");
+    if (!startInput || !endInput) return;
+    exportState.hours = hours;
+    const end = new Date(Math.ceil(Date.now() / 60000) * 60000);   // next whole minute, so "now" is included
+    startInput.value = toLocalInput(new Date(end.getTime() - hours * 3600 * 1000));
+    endInput.value = toLocalInput(end);
+    document.querySelectorAll("[data-export-hours]").forEach(btn => {
+        btn.setAttribute("aria-pressed", String(Number(btn.dataset.exportHours) === hours));
+    });
+    updateExportLinks();
+}
+
+// A quick range is relative to "now", so it is recomputed whenever the tab is opened.
+function refreshExportRange() {
+    if (exportState.hours) setExportRange(exportState.hours);
+}
+
+function updateExportScope() {
+    const option = document.querySelector('#exportScope option[value="current"]');
+    if (option) {
+        const cam = allCameras.find(c => c.id === currentCameraId);
+        option.textContent = cam ? `Current camera (ID ${cam.id})` : "Current camera";
+    }
+    updateExportLinks();
+}
+
+// Times are sent as epoch seconds, so they mean what the date pickers show (the browser's time
+// zone) whatever zone the server runs in.
+function buildExportParams() {
+    const startMs = new Date(document.getElementById("exportStart").value).getTime();
+    const endMs = new Date(document.getElementById("exportEnd").value).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return { error: "Choose a start and an end time." };
+    if (endMs <= startMs) return { error: "The end time must be after the start time." };
+
+    const params = new URLSearchParams({
+        start: String(Math.floor(startMs / 1000)),
+        end: String(Math.floor(endMs / 1000)),
+    });
+    if (document.getElementById("exportScope").value === "current") params.set("camera_ids", String(currentCameraId));
+    return { params };
+}
+
+function updateExportLinks() {
+    const form = document.getElementById("exportForm");
+    if (!form) return;
+    const msg = document.getElementById("exportMsg");
+    const built = buildExportParams();
+    const links = form.querySelectorAll("[data-export]");
+
+    if (built.error) {
+        links.forEach(a => { a.setAttribute("aria-disabled", "true"); a.setAttribute("href", "#"); });
+        setNodeText(msg, built.error);
+        return;
+    }
+    setNodeText(msg, "");
+
+    const dataset = new URLSearchParams(built.params);
+    dataset.set("bucket_minutes", document.getElementById("exportBucket").value);
+    dataset.set("format", document.getElementById("exportFormat").value);
+    dataset.set("layout", document.getElementById("exportLayout").value);
+    dataset.set("fill_gaps", String(document.getElementById("exportFillGaps").checked));
+
+    links.forEach(a => {
+        a.removeAttribute("aria-disabled");
+        if (a.dataset.export === "dataset") {
+            a.href = `/api/export/dataset?${dataset}`;
+        } else {
+            const raw = new URLSearchParams(built.params);
+            raw.set("table", a.dataset.table);
+            raw.set("format", a.dataset.format);
+            a.href = `/api/export/raw?${raw}`;
+        }
+    });
+}
+
+function setupExport() {
+    const form = document.getElementById("exportForm");
+    if (!form) return;
+
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setNodeText(document.getElementById("exportTz"), tz ? `Times are in your browser time zone (${tz}).` : "");
+
+    form.addEventListener("input", (e) => {
+        if (e.target.id === "exportStart" || e.target.id === "exportEnd") {
+            exportState.hours = null;   // typed-in dates: no longer a quick range
+            document.querySelectorAll("[data-export-hours]").forEach(btn => btn.setAttribute("aria-pressed", "false"));
+        }
+        updateExportLinks();
+    });
+    form.addEventListener("click", (e) => {
+        const preset = e.target.closest("[data-export-hours]");
+        if (preset) { setExportRange(Number(preset.dataset.exportHours)); return; }
+        const link = e.target.closest("[data-export]");
+        if (link && link.getAttribute("aria-disabled") === "true") e.preventDefault();   // invalid range
+    });
+    form.addEventListener("submit", (e) => {   // Enter inside a field starts the download
+        e.preventDefault();
+        const download = document.getElementById("exportDownload");
+        if (download && download.getAttribute("aria-disabled") !== "true") download.click();
+    });
+
+    setExportRange(24);
+    updateExportScope();
 }
 
 function filterMarkersByCorridor(corridor) {
@@ -700,8 +1021,17 @@ function filterMarkersByCorridor(corridor) {
         const marker = cameraMarkers[cam.id];
         if (!marker) return;
         const show = corridor === "ALL" || (cam.corridor && cam.corridor.toLowerCase().includes(corridor.toLowerCase()));
-        if (show) marker.addTo(map);
-        else map.removeLayer(marker);
+        if (show && !map.hasLayer(marker)) {
+            marker.addTo(map);   // builds a fresh icon from the markup it was created with
+            updateMarkerLabel(cam);
+            const div = document.getElementById(`marker-${cam.id}`);
+            if (div) {
+                div.classList.toggle("active-marker", cam.id === currentCameraId);
+                div.classList.toggle("candidate-marker", candidateCameraIds.has(Number(cam.id)));
+            }
+        } else if (!show && map.hasLayer(marker)) {
+            map.removeLayer(marker);
+        }
     });
 }
 
@@ -730,14 +1060,18 @@ function initWebSocket() {
 }
 
 // 11. Per-camera analytics
-// Same thresholds as the backend's get_congestion_label (Smooth < 0.25 < Moderate < 0.55 < Heavy < 0.8 < Congested).
+// The backend's get_congestion_label levels (Smooth < 0.25 <= Moderate < 0.55 <= Heavy < 0.8 <= Congested).
+// The label itself comes from the API when it is there; these thresholds are only the fallback.
 const CONGESTION_LEVELS = [
-    { min: 0.8, label: "Congested", cls: "sev--severe" },
-    { min: 0.55, label: "Heavy", cls: "sev--heavy" },
-    { min: 0.25, label: "Moderate", cls: "sev--moderate" },
-    { min: 0.1, label: "Light", cls: "sev--light" },
-    { min: -Infinity, label: "Free flow", cls: "sev--free" },
+    { min: 0.8, label: "Congested", cls: "sev--severe", color: "var(--bad)" },
+    { min: 0.55, label: "Heavy", cls: "sev--heavy", color: "var(--bad)" },
+    { min: 0.25, label: "Moderate", cls: "sev--moderate", color: "var(--warn)" },
+    { min: -Infinity, label: "Smooth", cls: "sev--free", color: "var(--ok)" },
 ];
+function congestionLevel(index, label) {
+    return CONGESTION_LEVELS.find(l => l.label === label)
+        || CONGESTION_LEVELS.find(l => index >= l.min);
+}
 
 function fmtDuration(seconds) {
     if (!(seconds > 0)) return "none";
@@ -768,17 +1102,23 @@ async function loadTimeSeriesMetrics(cameraId) {
         const cong = live.congestion_index !== undefined ? live.congestion_index : (lastRec ? lastRec.congestion_index : 0.0);
         setText("tsCongestionIndex", Number(cong).toFixed(2));
 
-        const occ = live.occupancy_ratio !== undefined ? (live.occupancy_ratio * 100).toFixed(1) : (lastRec ? (lastRec.occupancy_ratio * 100).toFixed(1) : "0.0");
-        setText("tsOccupancyPct", `${occ}% road coverage`);
+        // Lane occupancy (share of the camera's learned road area that traffic covers) once the camera's
+        // lanes are learned; until then only the share of the whole picture is known.
+        if (live.lane_occupancy !== undefined && live.lane_occupancy !== null) {
+            setText("tsOccupancyPct", `${(live.lane_occupancy * 100).toFixed(0)}% of lanes occupied`);
+        } else {
+            const occ = live.occupancy_ratio !== undefined ? (live.occupancy_ratio * 100).toFixed(1) : (lastRec ? (lastRec.occupancy_ratio * 100).toFixed(1) : "0.0");
+            setText("tsOccupancyPct", `${occ}% of frame (learning lanes)`);
+        }
 
+        const level = congestionLevel(Number(cong), live.congestion_label);
         const barEl = document.getElementById("tsCongestionBar");
         if (barEl) {
             barEl.style.width = `${Math.min(Math.max(cong * 100, 5), 100)}%`;
-            barEl.style.background = cong >= 0.55 ? "var(--bad)" : (cong >= 0.25 ? "var(--warn)" : "var(--ok)");
+            barEl.style.background = level.color;
         }
         const badgeEl = document.getElementById("tsCongestionBadge");
         if (badgeEl) {
-            const level = CONGESTION_LEVELS.find(l => cong > l.min) || CONGESTION_LEVELS[CONGESTION_LEVELS.length - 1];
             badgeEl.textContent = level.label;
             badgeEl.className = `sev ${level.cls}`;
         }

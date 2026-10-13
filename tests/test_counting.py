@@ -97,6 +97,70 @@ class TrackCounterTest(unittest.TestCase):
         self.assertNotIn(True, [parked.update((0.5 + 0.001 * i, 0.5), fresh, True) for i in range(50)])
 
 
+def refit_until(model, start, end, px_at_least):
+    """Feeds trajectories until the fitted line's position passes ``px_at_least``."""
+    for _ in range(200):
+        if model.line.px >= px_at_least:
+            return
+        model.add(start, end)
+    raise AssertionError("line never moved")
+
+
+class RefitMidTrackTest(unittest.TestCase):
+    """Departures refit the counting line while other tracks of the same visit are still alive."""
+
+    def setUp(self):
+        self.model = MotionModel()
+        teach(self.model, [((0.1, 0.6), (0.7, 0.6))] * counting.LINE_MIN_TRACKS)   # line at x = 0.40
+        self.old_px = self.model.line.px
+        self.assertAlmostEqual(self.old_px, 0.40, places=2)
+
+    def test_queued_car_is_not_counted_when_the_line_moves_across_it(self):
+        # Regression: first_side was judged against the line as it was when the track appeared, so a
+        # standing car at x = 0.43 was "on the other side" once the line moved to ~0.47.
+        car = TrackCounter((0.43, 0.6))
+        self.assertFalse(car.update((0.43, 0.6), self.model, True))
+        self.assertGreater(self.model.line.side((0.43, 0.6)), 0, "ahead of the original line")
+        refit_until(self.model, (0.4, 0.6), (0.9, 0.6), 0.465)
+        self.assertLess(self.model.line.side((0.43, 0.6)), 0, "behind the refitted line")
+        hits = [car.update((0.43, 0.6), self.model, True) for _ in range(5)]
+        self.assertNotIn(True, hits)
+        self.assertFalse(car.counted)
+
+    def test_jitter_of_a_standing_car_is_not_counted_after_a_refit(self):
+        car = TrackCounter((0.43, 0.6))
+        car.update((0.43, 0.6), self.model, True)
+        refit_until(self.model, (0.4, 0.6), (0.9, 0.6), 0.465)
+        hits = [car.update((0.43 + d, 0.6), self.model, True) for d in (0.004, -0.004, 0.006, -0.005)]
+        self.assertNotIn(True, hits)
+
+    def test_real_crossing_is_still_counted_once_after_a_refit(self):
+        car = TrackCounter((0.2, 0.6))
+        self.assertFalse(car.update((0.2, 0.6), self.model, True))
+        self.assertFalse(car.update((0.3, 0.6), self.model, True))
+        refit_until(self.model, (0.4, 0.6), (0.9, 0.6), 0.465)
+        hits = [car.update((x, 0.6), self.model, True) for x in (0.4, 0.5, 0.6, 0.7, 0.4, 0.7)]
+        self.assertEqual(hits.count(True), 1)
+        self.assertEqual((car.direction, car.mode), (1, "line"))
+
+    def test_a_car_must_have_moved_to_be_counted(self):
+        # Start and current position must be on opposite sides of the *current* line, which is
+        # impossible without moving at least twice the hysteresis band.
+        car = TrackCounter((0.405, 0.6))
+        self.assertFalse(car.update((0.405, 0.6), self.model, True))
+        self.assertFalse(car.update((0.412, 0.6), self.model, True))
+        self.assertFalse(car.counted)
+
+    def test_track_starting_on_the_line_adopts_its_first_clear_side(self):
+        car = TrackCounter((0.40, 0.6))                       # on the line: no side yet
+        hits = [car.update((x, 0.6), self.model, True) for x in (0.40, 0.45, 0.6, 0.5)]
+        self.assertEqual(hits, [False] * 4, "drove away from the line first, never crossed it")
+        back = TrackCounter((0.40, 0.6))
+        hits = [back.update((x, 0.6), self.model, True) for x in (0.40, 0.30, 0.50)]
+        self.assertEqual(hits.count(True), 1)
+        self.assertEqual(back.direction, 1)
+
+
 class CountingLinesPersistenceTest(unittest.TestCase):
     def test_learned_lines_survive_a_restart(self):
         with tempfile.TemporaryDirectory() as tmp:

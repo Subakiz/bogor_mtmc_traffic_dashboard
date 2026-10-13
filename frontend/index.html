@@ -10,14 +10,19 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20261012_0900" />
 
-    <link rel="stylesheet" href="/static/styles.css?v=20261011_2300" />
+    <!-- Deferred scripts download in parallel with parsing and run in this order, before
+         DOMContentLoaded: leaflet (L), hls.js (Hls), lucide, then app.js, which uses all three. -->
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+    <script defer src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script defer src="/static/app.js?v=20261012_0900"></script>
 </head>
 <body>
 
@@ -62,10 +67,10 @@
                 <div class="chips" id="corridorChips" role="group" aria-label="Filter by corridor">
                     <span class="chips__label">Corridor</span>
                     <button class="chip corridor-btn" aria-pressed="true" data-corridor="ALL">All (<span class="cam-total">–</span>)</button>
-                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="SSA Ring Road">SSA Kebun Raya</button>
-                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="Jl. Raya Pajajaran">Pajajaran</button>
-                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="Jl. Sholeh Iskandar / Jl. Baru">Jl. Baru</button>
-                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="Jl. Raya Tajur">Tajur</button>
+                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="SSA_RING">SSA Kebun Raya</button>
+                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="PAJAJARAN_CORRIDOR">Pajajaran</button>
+                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="SHOLEH_ISKANDAR_BORR">Jl. Baru</button>
+                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="BOGOR_TIMUR_TAJUR_KATULAMPA">Tajur</button>
                 </div>
                 <div class="toolbar__active truncate" id="activeCamIndicator">Selected: <b>–</b></div>
             </div>
@@ -239,22 +244,73 @@
                             <canvas id="trafficMlCanvas" class="chart-canvas" aria-label="Flow and congestion history chart"></canvas>
                         </div>
 
-                        <div class="export">
-                            <div class="export__title"><i data-lucide="download" class="icon"></i>Dataset export</div>
-                            <div class="export__row">
-                                <select id="exportWindowSelect" class="select" aria-label="Aggregation window">
-                                    <option value="60">60 s windows</option>
-                                    <option value="10">10 s windows</option>
-                                    <option value="300">300 s windows</option>
-                                </select>
-                                <button id="btnExportCsv" class="btn btn--sm" type="button">CSV</button>
-                                <button id="btnExportJson" class="btn btn--sm" type="button">JSON</button>
+                        <form id="exportForm" class="export" aria-labelledby="exportTitle" novalidate>
+                            <div class="export__head">
+                                <div class="export__title" id="exportTitle"><i data-lucide="download" class="icon"></i>Export data</div>
+                                <div class="export__presets" role="group" aria-label="Quick date range">
+                                    <button type="button" class="chip chip--sm" data-export-hours="24" aria-pressed="true">24 h</button>
+                                    <button type="button" class="chip chip--sm" data-export-hours="168" aria-pressed="false">7 d</button>
+                                    <button type="button" class="chip chip--sm" data-export-hours="720" aria-pressed="false">30 d</button>
+                                </div>
                             </div>
+
+                            <div class="export__grid">
+                                <label class="fld"><span>From</span>
+                                    <input id="exportStart" class="input" type="datetime-local" required /></label>
+                                <label class="fld"><span>To</span>
+                                    <input id="exportEnd" class="input" type="datetime-local" required /></label>
+                                <label class="fld"><span>Bucket</span>
+                                    <select id="exportBucket" class="select">
+                                        <option value="1">1 minute</option>
+                                        <option value="5" selected>5 minutes</option>
+                                        <option value="15">15 minutes</option>
+                                        <option value="60">1 hour</option>
+                                    </select></label>
+                                <label class="fld"><span>Cameras</span>
+                                    <select id="exportScope" class="select">
+                                        <option value="current">Current camera</option>
+                                        <option value="all">All cameras</option>
+                                    </select></label>
+                                <label class="fld"><span>Format</span>
+                                    <select id="exportFormat" class="select">
+                                        <option value="csv">CSV</option>
+                                        <option value="jsonl">JSON Lines</option>
+                                    </select></label>
+                                <label class="fld"><span>Layout</span>
+                                    <select id="exportLayout" class="select">
+                                        <option value="long">Long: row per camera and bucket</option>
+                                        <option value="wide">Wide: column per camera</option>
+                                    </select></label>
+                            </div>
+
+                            <div class="export__actions">
+                                <label class="check" title="Fill buckets where the camera was not observed instead of leaving them out">
+                                    <input id="exportFillGaps" type="checkbox" /> Fill gaps
+                                </label>
+                                <a id="exportDownload" class="btn btn--primary btn--sm" data-export="dataset" href="#" download>
+                                    <i data-lucide="download" class="icon"></i>Download
+                                </a>
+                            </div>
+                            <p id="exportMsg" class="export__msg" role="status" aria-live="polite"></p>
+
+                            <div class="export__raw" role="group" aria-label="Raw tables">
+                                <span class="export__rawlabel">Raw tables</span>
+                                <span>Observation windows
+                                    <a data-export="raw" data-table="observation_windows" data-format="csv" href="#" download>CSV</a>
+                                    <a data-export="raw" data-table="observation_windows" data-format="jsonl" href="#" download>JSONL</a></span>
+                                <span>Sightings
+                                    <a data-export="raw" data-table="sightings" data-format="csv" href="#" download>CSV</a>
+                                    <a data-export="raw" data-table="sightings" data-format="jsonl" href="#" download>JSONL</a></span>
+                                <span>Handoffs
+                                    <a data-export="raw" data-table="handoffs" data-format="csv" href="#" download>CSV</a>
+                                    <a data-export="raw" data-table="handoffs" data-format="jsonl" href="#" download>JSONL</a></span>
+                            </div>
+
                             <div class="export__foot">
-                                <span>Volume (counting-line crossings), classes, coverage, speed, time</span>
+                                <span id="exportTz"></span>
                                 <span id="tsTotalDbRecords">0 windows</span>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
 
@@ -298,9 +354,5 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20261011_2300"></script>
-    <script>
-        if (window.lucide) lucide.createIcons();
-    </script>
 </body>
 </html>

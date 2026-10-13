@@ -17,7 +17,7 @@ import numpy as np
 
 from backend.database import Database
 from backend import counting, rolling_tracker
-from backend.rolling_tracker import FIRST_FRAME_TIMEOUT_S, RollingTracker
+from backend.rolling_tracker import FIRST_FRAME_TIMEOUT_S, FOCUS_EVICT_IDLE_S, RollingTracker
 from backend.topology_engine import TopologyEngine
 
 FrameFn = Callable[[int], Optional[Tuple[int, int, int, int]]]  # frame index -> car bbox or None
@@ -164,6 +164,7 @@ class TrackerTestBase(unittest.TestCase):
             stream_factory=factory, threaded_streams=False, autostart=False, rolling_enabled=True,
             focus_fps=10.0, rolling_fps=10.0, dwell_s={1: 0.6, 2: 0.6, 3: 0.6},
             tier1_revisit_s=0.0, tier2_revisit_s=0.0, max_open_streams=2, focus_ttl_s=30.0, hubs=set(),
+            standby_slots=0,     # the scheduling tests below assume every free slot is an active visit
         )
         params.update(kw)
         self.tracker = RollingTracker(**params)
@@ -273,14 +274,55 @@ class RollingTrackerTest(TrackerTestBase):
         self.assertEqual(self.counts().get(1), 1)
         self.assertEqual(self.counts().get(3), 1)
 
-    def test_focus_cap_evicts_least_recently_viewed_camera(self):
+    def test_focus_cap_evicts_least_recently_viewed_idle_camera(self):
         self.make({}, max_open_streams=4, max_focus_cameras=2)
-        for cid in (1, 2, 3):
-            self.tracker.set_focus(cid)
+        for cid in (1, 2):
+            self.assertTrue(self.tracker.set_focus(cid))
             time.sleep(0.01)
+        # Camera 1's viewer went quiet: its slot can be handed to a new viewer.
+        self.tracker._focus_touched[1] -= FOCUS_EVICT_IDLE_S + 1.0
+        self.assertTrue(self.tracker.set_focus(3))
         self.tracker.tick(self.t0)
         self.assertEqual(sorted(self.tracker._focus), [2, 3])
         self.assertEqual(self.tracker.get_status()["focus_camera_ids"], [3, 2])
+
+    def test_extra_viewer_is_refused_instead_of_evicting_active_ones(self):
+        # Regression: with every focus slot actively polled, one more viewer evicted the least
+        # recently polled camera on each poll, so all viewers kept restarting each other's
+        # sessions and streams and none of them ever got a frame.
+        self.make({}, max_open_streams=4, max_focus_cameras=2)
+        refused = 0
+        t = 0.0
+        while t < 2.0:
+            for cid in (1, 2, 3):
+                refused += not self.tracker.set_focus(cid)
+            self.tracker.tick(self.t0 + t)
+            t += 0.05
+        self.assertEqual(sorted(self.tracker._focus), [1, 2])
+        self.assertGreater(refused, 0)
+        self.assertIsNotNone(self.tracker.get_focus_frame(1))
+        self.assertIsNotNone(self.tracker.get_focus_frame(2))
+        self.assertNotIn(1, self.detector.resets)
+        self.assertNotIn(2, self.detector.resets)
+
+    def test_unknown_camera_does_not_take_a_focus_slot(self):
+        self.make({}, max_focus_cameras=1)
+        self.assertFalse(self.tracker.set_focus(999))
+        self.assertTrue(self.tracker.set_focus(1))
+
+    def test_global_ids_continue_after_the_highest_stored_one(self):
+        # Regression: ids restarted at 1 on every server start, so new vehicles were merged into
+        # the stored journeys of old ones.
+        self.make({})
+        self.db.conn.execute(
+            "INSERT INTO vehicle_sightings (camera_id, local_track_id, global_vehicle_id, vehicle_class, "
+            "confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2, heading_deg, speed_px_s, embedding, "
+            "color_hist, timestamp_iso) VALUES (1, 1, 41, 'car', 0.9, 0, 0, 10, 10, 0, 0, X'', X'', "
+            "'2026-10-11T00:00:00Z')")
+        self.db.conn.commit()
+        restarted = RollingTracker(db=self.db, topology=FakeTopology(), detector=FakeDetector(),
+                                   threaded_streams=False, autostart=False)
+        self.assertEqual(restarted.identity_resolver.new_global_id(), 42)
 
     def test_new_focus_takes_a_slot_from_a_visit_without_marking_it_failed(self):
         self.make({}, max_open_streams=2)
