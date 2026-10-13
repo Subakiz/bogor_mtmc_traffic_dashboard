@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <meta name="color-scheme" content="light dark">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -12,17 +15,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="/static/styles.css?v=20261012_0900" />
+    <link rel="stylesheet" href="/static/styles.css?v=20261013_apple" />
 
     <!-- Deferred scripts download in parallel with parsing and run in this order, before
          DOMContentLoaded: leaflet (L), hls.js (Hls), lucide, then app.js, which uses all three. -->
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     <script defer src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script defer src="/static/app.js?v=20261012_0900"></script>
+    <script defer src="/static/app.js?v=20261013_apple"></script>
 </head>
 <body>
 
@@ -80,10 +83,10 @@
 
                 <div class="map-legend" aria-label="Marker legend">
                     <span>Flow (veh/h)</span>
-                    <span><i style="background:#4a5768"></i>No data</span>
-                    <span><i style="background:#34c38f"></i>&lt; 600</span>
-                    <span><i style="background:#e8a93a"></i>600–1500</span>
-                    <span><i style="background:#ef5b6b"></i>&gt; 1500</span>
+                    <span><i style="background:var(--m-zero)"></i>No data</span>
+                    <span><i style="background:var(--m-low)"></i>&lt; 600</span>
+                    <span><i style="background:var(--m-med)"></i>600–1500</span>
+                    <span><i style="background:var(--m-high)"></i>&gt; 1500</span>
                 </div>
 
                 <div id="followBanner" class="follow-banner hidden" role="status">
@@ -237,8 +240,8 @@
                             <div class="chart-head">
                                 <span><b>Flow and congestion</b> <span id="tsHistoryPoints" class="muted">last 60 min</span></span>
                                 <div class="legend">
-                                    <span><i style="background:#4c8dff"></i>Flow (veh/h)</span>
-                                    <span><i style="background:#e8a93a"></i>Congestion</span>
+                                    <span><i style="background:var(--chart-flow)"></i>Flow (veh/h)</span>
+                                    <span><i style="background:var(--chart-congestion)"></i>Congestion</span>
                                 </div>
                             </div>
                             <canvas id="trafficMlCanvas" class="chart-canvas" aria-label="Flow and congestion history chart"></canvas>

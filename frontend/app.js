@@ -118,6 +118,12 @@ function setListEmpty(container, cache, message) {
     setNodeText(empty, message);
 }
 
+// Colors live in styles.css as theme tokens (light and dark); canvas and Leaflet drawing read them here.
+function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+}
+
 function classChips(classes) {
     return VEHICLE_CLASSES.map(c =>
         `<span class="cls cls--${c.key}"><i></i>${c.label} ${fmtRate((classes || {})[c.key])}</span>`
@@ -327,7 +333,7 @@ function drawTopology() {
     });
     if (segments.length === 0) return;
     topologyLayer = L.polyline(segments, {
-        color: "#4c8dff", weight: 1.5, opacity: 0.35, dashArray: "4, 6", interactive: false,
+        color: cssVar("--accent", "#0071e3"), weight: 1.5, opacity: 0.4, dashArray: "4, 6", interactive: false,
     }).addTo(map);
 }
 
@@ -1192,15 +1198,18 @@ function renderTimeSeriesChart(series, minutes) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
-    const FLOW = "#4c8dff", CONGESTION = "#e8a93a", MUTED = "#778293", GRID = "#232c38";
-    ctx.font = "10px Inter, system-ui, sans-serif";
+    const FLOW = cssVar("--chart-flow", "#0071e3"), CONGESTION = cssVar("--chart-congestion", "#ff9500");
+    const MUTED = cssVar("--chart-text", "#8e8e93"), GRID = cssVar("--chart-grid", "rgba(60, 60, 67, 0.1)");
+    const FLOW_FILL = cssVar("--chart-flow-fill", "rgba(0, 113, 227, 0.16)");
+    const FONT = cssVar("--font", "system-ui, sans-serif");
+    ctx.font = `500 10.5px ${FONT}`;
 
     const hasData = series.some(p => p.vph !== null && p.vph !== undefined || p.congestion !== null && p.congestion !== undefined);
     if (!hasData) {
         ctx.fillStyle = MUTED;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "12px Inter, system-ui, sans-serif";
+        ctx.font = `12.5px ${FONT}`;
         ctx.fillText(`No observations in the last ${minutes} min yet`, w / 2, h / 2);
         return;
     }
@@ -1250,8 +1259,8 @@ function renderTimeSeriesChart(series, minutes) {
             if (seg.length > 1) {
                 if (fillArea) {
                     const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-                    grad.addColorStop(0, "rgba(76, 141, 255, 0.25)");
-                    grad.addColorStop(1, "rgba(76, 141, 255, 0)");
+                    grad.addColorStop(0, FLOW_FILL);
+                    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
                     ctx.beginPath();
                     ctx.moveTo(xAt(centre(seg[0].p)), pad.top + chartH);
                     seg.forEach(o => ctx.lineTo(xAt(centre(o.p)), yOf(o.v)));
