@@ -240,6 +240,12 @@ function initMap() {
         .setView([-6.5971, 106.8060], 13);
     map.attributionControl.setPrefix(false);
 
+    // Leaflet measures its box once at start-up and again only on window resize. When the layout settles
+    // later (stylesheets, fonts, the phone layout), re-measure so tiles and markers fill the whole map.
+    const mapEl = document.getElementById("map");
+    if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize()).observe(mapEl);
+    window.addEventListener("load", () => map.invalidateSize());
+
     // OpenStreetMap tiles; the dark look comes from a CSS filter on the tile pane (see styles.css).
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
