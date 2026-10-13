@@ -17,7 +17,7 @@ Examples
     # two cameras, 5-minute buckets, regular sequences (gaps emitted), JSON lines, plus raw tables
     .venv/bin/python3.11 scripts/export_dataset.py --start 2026-10-11T06:00 --end 2026-10-11T22:00 \\
         --bucket 5 --cameras 167,131 --fill-gaps --format jsonl \\
-        --raw observation_windows,sightings,handoffs --out /tmp/export
+        --raw observation_windows,sightings --out /tmp/export
 
     # bucket x camera matrix of congestion for spatiotemporal models
     .venv/bin/python3.11 scripts/export_dataset.py --start 2026-10-11 --end 2026-10-12 \\
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="buckets with less observed time are flagged low_sample (default 60)")
     p.add_argument("--raw", default="", metavar="TABLES",
                    help="raw tables for the same range, comma-separated or 'all': observation_windows, "
-                        "sightings (never blobs), handoffs, cameras, analytics")
+                        "sightings (never blobs), cameras, analytics")
     p.add_argument("--raw-format", choices=("csv", "jsonl"), help="format of the raw files (default: --format, else csv)")
     p.add_argument("--out", default=dataset.default_export_dir(), metavar="DIR",
                    help="output directory (default: data/exports)")

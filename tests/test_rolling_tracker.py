@@ -4,7 +4,7 @@ Rolling multi-camera tracking: vehicles are counted on every camera, not only th
 
 The tracker is driven deterministically through ``tick(now)`` with fake HLS streams and a fake
 detector that finds a red "vehicle" patch in each frame, so scheduling, counting, parked-vehicle
-deduplication, focus handling and Re-ID handoffs are tested without CoreML or the network.
+deduplication and focus handling are tested without CoreML or the network.
 """
 
 import threading
@@ -221,11 +221,11 @@ class RollingTrackerTest(TrackerTestBase):
         for cid in (1, 2, 3):
             self.assertGreaterEqual(self.counts()[cid], 2)
 
-    def test_focus_camera_tracked_and_follow_candidates_visited_first(self):
+    def test_focus_camera_tracked_and_downstream_cameras_visited_first(self):
         self.make({}, max_open_streams=2, tier1_revisit_s=0.0)
         self.tracker.set_focus(1)
         self.tracker.tick(self.t0)
-        self.assertEqual(self.tracker.get_status()["follow_candidates"], [2])
+        self.assertEqual(self.tracker.get_status()["downstream_of_focus"], [2])
         # One slot is reserved for the focus camera, the other goes to its downstream neighbour.
         self.assertEqual(sorted(self.tracker._visits), [2])
         self.run_for(3.0, start=0.05)
@@ -309,20 +309,6 @@ class RollingTrackerTest(TrackerTestBase):
         self.make({}, max_focus_cameras=1)
         self.assertFalse(self.tracker.set_focus(999))
         self.assertTrue(self.tracker.set_focus(1))
-
-    def test_global_ids_continue_after_the_highest_stored_one(self):
-        # Regression: ids restarted at 1 on every server start, so new vehicles were merged into
-        # the stored journeys of old ones.
-        self.make({})
-        self.db.conn.execute(
-            "INSERT INTO vehicle_sightings (camera_id, local_track_id, global_vehicle_id, vehicle_class, "
-            "confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2, heading_deg, speed_px_s, embedding, "
-            "color_hist, timestamp_iso) VALUES (1, 1, 41, 'car', 0.9, 0, 0, 10, 10, 0, 0, X'', X'', "
-            "'2026-10-11T00:00:00Z')")
-        self.db.conn.commit()
-        restarted = RollingTracker(db=self.db, topology=FakeTopology(), detector=FakeDetector(),
-                                   threaded_streams=False, autostart=False)
-        self.assertEqual(restarted.identity_resolver.new_global_id(), 42)
 
     def test_new_focus_takes_a_slot_from_a_visit_without_marking_it_failed(self):
         self.make({}, max_open_streams=2)
@@ -464,28 +450,6 @@ class RollingTrackerTest(TrackerTestBase):
         self.run_for(4.0)
         self.assertNotIn(2, self.tracker.cameras)
         self.assertEqual(set(self.counts()), {1, 3})
-
-    def test_followed_vehicle_handoff_updates_target_and_boosts_next_cameras(self):
-        self.make({1: moving_car, 2: moving_car, 3: None}, max_open_streams=1)
-        # Visit camera 1 until the car is counted, then mark it as the followed target.
-        t = 0.0
-        while not self.counts().get(1):
-            self.tracker.tick(self.t0 + t)
-            t += 0.05
-        row = self.db.conn.execute("SELECT * FROM vehicle_sightings WHERE camera_id = 1").fetchone()
-        gid = row["global_vehicle_id"]
-        self.db.update_active_target(global_vehicle_id=gid, current_camera_id=1,
-                                     last_sighting_id=row["sighting_id"], status="tracking")
-
-        # Camera 1's visit ends (departure registered), camera 2 is visited next.
-        self.run_for(2.0, start=t)
-        row2 = self.db.conn.execute("SELECT * FROM vehicle_sightings WHERE camera_id = 2").fetchone()
-        self.assertIsNotNone(row2)
-        self.assertEqual(row2["global_vehicle_id"], gid, "same vehicle keeps its global id across cameras")
-        self.assertEqual(self.db.get_traffic_stats()["total_handoffs"], 1)
-        target = [a for a in self.db.list_active_targets() if a["global_vehicle_id"] == gid][0]
-        self.assertEqual(target["current_camera_id"], 2)
-        self.assertGreater(self.tracker._boost_until.get(3, 0.0), self.t0 + t)
 
 
 if __name__ == "__main__":

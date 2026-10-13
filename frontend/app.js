@@ -6,9 +6,6 @@ let allCameras = [];
 let topologyData = null;
 let currentCameraId = 167; // Default to Simpang Pahlawan 2 -F
 let hlsInstance = null;
-let followModeActive = false;
-let followTargetVehicleId = null;
-let journeyVehicleId = null;
 let streamMode = "ai"; // "ai" (annotated with YOLO + tracker IDs) or "raw"
 let isPolling = false;
 let pollingCamId = null;
@@ -21,7 +18,6 @@ let activeCorridor = "ALL";
 let lastSightings = [];            // newest "recent" payload; drawn when the Recent tab is visible
 let openPopupCamId = null;         // camera whose map popup is open (Leaflet keeps at most one)
 let shownPopupRows = "";           // rows markup currently inside that popup
-let candidateCameraIds = new Set();
 const cameraRows = new Map();      // camera id -> row record in the Cameras tab (see syncList)
 const sightingRows = new Map();    // sighting id -> row record in the Recent tab
 
@@ -414,7 +410,6 @@ function switchCamera(cameraId) {
         }
     }
 
-    fetchDownstreamCandidates(cameraId);
     if (activeTab === "cameras") renderAllCamerasCountsList();
     updateExportScope();
 
@@ -423,106 +418,7 @@ function switchCamera(cameraId) {
     }
 }
 
-// 5. Predictive handoff candidates
-async function fetchDownstreamCandidates(cameraId) {
-    const listContainer = document.getElementById("candidateList");
-    listContainer.innerHTML = `<div class="empty">Calculating downstream candidates…</div>`;
-
-    document.querySelectorAll(".cam-marker").forEach(node => node.classList.remove("candidate-marker"));
-    candidateCameraIds = new Set();
-
-    try {
-        const res = await fetch("/api/handoff/predict", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                camera_id: cameraId,
-                exit_direction: "South",
-                vehicle_id: followTargetVehicleId   // null unless following a vehicle
-            })
-        });
-        const data = await res.json();
-
-        listContainer.innerHTML = "";
-
-        if (!data.candidates || data.candidates.length === 0) {
-            listContainer.innerHTML = `<div class="empty">No downstream camera is configured for this heading.</div>`;
-            return;
-        }
-
-        data.candidates.forEach(cand => {
-            candidateCameraIds.add(Number(cand.target_camera_id));
-            const candMarker = document.getElementById(`marker-${cand.target_camera_id}`);
-            if (candMarker) candMarker.classList.add("candidate-marker");
-
-            const card = document.createElement("div");
-            card.className = "row";
-            card.innerHTML = `
-                <div class="row__main">
-                    <div class="row__title truncate">${esc(cand.target_camera_name)}</div>
-                    <div class="row__sub">
-                        <span>ID ${esc(cand.target_camera_id)}</span>
-                        <span>Transit ~${esc(cand.travel_time_seconds)} s</span>
-                        <span>Window ${esc(cand.arrival_window.t_min_seconds)}–${esc(cand.arrival_window.t_max_seconds)} s</span>
-                    </div>
-                </div>
-                <button class="btn btn--sm" data-handoff-camera="${Number(cand.target_camera_id)}">Switch feed</button>
-            `;
-            listContainer.appendChild(card);
-        });
-    } catch (err) {
-        listContainer.innerHTML = `<div class="empty empty--error">Failed to calculate candidates.</div>`;
-    }
-}
-
-// 6. Camera handoff ("Follow that car")
-function setFollowBanner(title, text) {
-    document.getElementById("followTargetId").textContent = title;
-    document.getElementById("followRouteText").textContent = text;
-}
-
-function followBannerIdleText() {
-    return followTargetVehicleId
-        ? "Waiting for the next handoff."
-        : "Open a vehicle from the Recent tab and choose Follow vehicle.";
-}
-
-function setFollowMode(active) {
-    followModeActive = active;
-    const btn = document.getElementById("followModeToggle");
-    btn.setAttribute("aria-pressed", String(active));
-    document.getElementById("followModeText").textContent = active ? "On" : "Off";
-    document.getElementById("followBanner").classList.toggle("hidden", !active);
-    if (active) {
-        setFollowBanner(
-            followTargetVehicleId ? `Following vehicle #${followTargetVehicleId}` : "No target selected",
-            followBannerIdleText()
-        );
-    }
-}
-
-function handoffTo(nextCameraId) {
-    const from = currentCameraId;
-    document.getElementById("followBanner").classList.remove("hidden");
-    setFollowBanner(
-        followTargetVehicleId ? `Following vehicle #${followTargetVehicleId}` : "Camera handoff",
-        `Switching from camera ${from} to camera ${nextCameraId}…`
-    );
-    setTimeout(() => {
-        switchCamera(nextCameraId);
-        setFollowBanner(
-            followTargetVehicleId ? `Following vehicle #${followTargetVehicleId}` : "Camera handoff",
-            `Now viewing camera ${nextCameraId}.`
-        );
-        if (!followModeActive) {
-            setTimeout(() => {
-                if (!followModeActive) document.getElementById("followBanner").classList.add("hidden");
-            }, 4000);
-        }
-    }, 800);
-}
-
-// 7. Citywide statistics and per-camera rates
+// 5. Citywide statistics and per-camera rates
 
 // Label and colour of one camera marker. Reads the DOM rather than a cache: a marker that was
 // hidden by the corridor filter gets a fresh icon when it comes back.
@@ -669,7 +565,6 @@ function setupTabs() {
     const panels = {
         cameras: document.getElementById("tabContentCameras"),
         timeseries: document.getElementById("tabContentTimeSeries"),
-        handoff: document.getElementById("tabContentHandoff"),
         sightings: document.getElementById("tabContentSightings"),
     };
 
@@ -736,26 +631,20 @@ function applyStats(countsData, sightings) {
 }
 
 function createSightingRow(s) {
-    const vid = s.global_vehicle_id || s.local_track_id;
     const vtype = s.vehicle_class || s.vehicle_type || "car";
     let timeStr = "";
     if (s.timestamp_iso) timeStr = new Date(s.timestamp_iso).toLocaleTimeString();
     else if (s.timestamp) timeStr = new Date(s.timestamp * 1000).toLocaleTimeString();
 
-    const row = makeEl("div", "row row--click");
-    row.setAttribute("role", "button");
-    row.tabIndex = 0;
-    row.dataset.journeyVehicle = String(Number(vid));
+    const row = makeEl("div", "row");
 
     const cls = makeEl("span", `cls cls--${vtype}`);
     cls.append(makeEl("i"), document.createTextNode(vtype));
-    const camera = makeEl("span", "truncate", s.camera_name || `Camera ${s.camera_id}`);
-    camera.style.maxWidth = "200px";
     const sub = makeEl("div", "row__sub");
-    sub.append(cls, camera);
+    sub.append(cls, makeEl("span", null, `ID ${s.camera_id}`));
 
     const main = makeEl("div", "row__main");
-    main.append(makeEl("div", "row__title", `Vehicle #${vid}`), sub);
+    main.append(makeEl("div", "row__title truncate", s.camera_name || `Camera ${s.camera_id}`), sub);
     row.append(main, makeEl("span", "muted num", timeStr));
     return { el: row };
 }
@@ -775,50 +664,7 @@ function renderRecentSightings(sightings) {
     syncList(recentList, sightingRows, sightings, sightingKey, createSightingRow, null);
 }
 
-// 8. Vehicle journey modal
-function closeJourneyModal() {
-    document.getElementById("journeyModal").classList.add("hidden");
-}
-
-async function openVehicleJourney(vehicleId) {
-    if (!Number.isFinite(vehicleId) || vehicleId <= 0) return;
-    journeyVehicleId = vehicleId;
-    const modal = document.getElementById("journeyModal");
-    const container = document.getElementById("modalTimelineContent");
-    document.getElementById("modalVehicleTitle").textContent = `Vehicle #${vehicleId} journey`;
-
-    container.innerHTML = `<div class="empty">Loading journey history…</div>`;
-    modal.classList.remove("hidden");
-
-    try {
-        const res = await fetch(`/api/vehicles/${vehicleId}/timeline`);
-        const timeline = res.ok ? await res.json() : [];   // a list of sightings, oldest first
-
-        if (timeline.length === 0) {
-            container.innerHTML = `<div class="empty">No trajectory records found for vehicle #${vehicleId}.</div>`;
-            return;
-        }
-
-        container.innerHTML = timeline.map((hop, idx) => `
-            <div class="timeline-item">
-                <div class="timeline-item__idx">${idx + 1}</div>
-                <div class="timeline-item__card">
-                    <div class="timeline-item__head">
-                        <span>${esc(hop.camera_name || "Camera " + hop.camera_id)}</span>
-                        <span class="num">${hop.timestamp_iso ? new Date(hop.timestamp_iso).toLocaleTimeString() : "–"}</span>
-                    </div>
-                    <div class="timeline-item__meta">
-                        ${esc(hop.corridor || "Central")} · ${esc(hop.vehicle_class || "vehicle")} · Heading ${Number.isFinite(hop.heading_deg) ? Math.round(hop.heading_deg) + "°" : "unknown"}
-                    </div>
-                    <button class="link-btn" data-switch-camera="${Number(hop.camera_id)}" data-close-modal="1">View this camera →</button>
-                </div>
-            </div>`).join("");
-    } catch (err) {
-        container.innerHTML = `<div class="empty empty--error">Failed to load journey timeline.</div>`;
-    }
-}
-
-// 9. Event listeners
+// 6. Event listeners
 function setupEventListeners() {
     document.getElementById("cameraSelect").addEventListener("change", (e) => {
         if (e.target.value) switchCamera(parseInt(e.target.value));
@@ -829,19 +675,9 @@ function setupEventListeners() {
         const camBtn = e.target.closest("[data-switch-camera]");
         if (camBtn) {
             switchCamera(camBtn.dataset.switchCamera);
-            if (camBtn.dataset.closeModal) closeJourneyModal();
-            return;
         }
-        const handoffBtn = e.target.closest("[data-handoff-camera]");
-        if (handoffBtn) {
-            handoffTo(Number(handoffBtn.dataset.handoffCamera));
-            return;
-        }
-        const journeyRow = e.target.closest("[data-journey-vehicle]");
-        if (journeyRow) openVehicleJourney(Number(journeyRow.dataset.journeyVehicle));
     });
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeJourneyModal();
         if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches('[role="button"][tabindex]')) {
             e.preventDefault();
             e.target.click();
@@ -859,38 +695,6 @@ function setupEventListeners() {
     };
     btnAi.addEventListener("click", () => setMode("ai"));
     btnRaw.addEventListener("click", () => setMode("raw"));
-
-    // Follow mode
-    document.getElementById("followModeToggle").addEventListener("click", () => setFollowMode(!followModeActive));
-    document.getElementById("cancelFollowBtn").addEventListener("click", () => {
-        followTargetVehicleId = null;
-        setFollowMode(false);
-    });
-
-    // Vehicle lookup → journey
-    const runSearch = () => {
-        const num = parseInt(document.getElementById("vehicleSearchInput").value.replace(/\D/g, ""), 10);
-        if (num) openVehicleJourney(num);
-    };
-    document.getElementById("searchBtn").addEventListener("click", runSearch);
-    document.getElementById("vehicleSearchForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-        runSearch();
-    });
-
-    // Journey modal
-    document.getElementById("closeModalBtn").addEventListener("click", closeJourneyModal);
-    document.getElementById("journeyModal").addEventListener("click", (e) => {
-        if (e.target.id === "journeyModal") closeJourneyModal();
-    });
-    document.getElementById("followVehicleBtn").addEventListener("click", () => {
-        if (!journeyVehicleId) return;
-        followTargetVehicleId = journeyVehicleId;
-        setFollowMode(true);
-        fetchDownstreamCandidates(currentCameraId);
-        closeJourneyModal();
-        window.switchTab("handoff");
-    });
 
     // Corridor filter
     document.querySelectorAll(".corridor-btn").forEach(btn => {
@@ -1033,7 +837,6 @@ function filterMarkersByCorridor(corridor) {
             const div = document.getElementById(`marker-${cam.id}`);
             if (div) {
                 div.classList.toggle("active-marker", cam.id === currentCameraId);
-                div.classList.toggle("candidate-marker", candidateCameraIds.has(Number(cam.id)));
             }
         } else if (!show && map.hasLayer(marker)) {
             map.removeLayer(marker);
@@ -1041,7 +844,7 @@ function filterMarkersByCorridor(corridor) {
     });
 }
 
-// 10. WebSocket heartbeat drives stats refresh
+// 7. WebSocket heartbeat drives stats refresh
 let liveWebSocket = null;
 function initWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -1065,7 +868,7 @@ function initWebSocket() {
     }
 }
 
-// 11. Per-camera analytics
+// 8. Per-camera analytics
 // The backend's get_congestion_label levels (Smooth < 0.25 <= Moderate < 0.55 <= Heavy < 0.8 <= Congested).
 // The label itself comes from the API when it is there; these thresholds are only the fallback.
 const CONGESTION_LEVELS = [

@@ -135,9 +135,6 @@ class TestIndexingDaemonUnit(unittest.TestCase):
         self.assertEqual(len(recent), 2)
         classes = {r["vehicle_class"] for r in recent}
         self.assertEqual(classes, {"car", "motorcycle"})
-        for r in recent:
-            self.assertEqual(len(r["embedding"]), 1024)
-            self.assertEqual(len(r["color_hist"]), 512)
 
 
 if __name__ == "__main__":

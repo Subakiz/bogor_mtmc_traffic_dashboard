@@ -1,21 +1,21 @@
 """
 backend/database.py
-BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard.
+BSW Kota Bogor Multi-Camera Traffic Intelligence Dashboard.
 SQLite WAL Persistence Layer (F-ARCH-01).
 
 Implements:
 - High-performance SQLite database in WAL (Write-Ahead Logging) mode.
 - Thread-safe connection pooling and pragma optimizations.
-- Schema DDL for cameras, topology_edges, vehicle_sightings, handoff_events, and active_targets.
+- Schema DDL for cameras, topology_edges, vehicle_sightings and observation_windows.
 - Automatic seeding of every BSW CCTV camera and topology edge from data/bogor_camera_topology.json.
-- Core MTMC querying API: vehicle sightings insertion, chronological journey lookup,
-  recent sighting retrieval, multi-filter search, active target tracking, and traffic statistics.
+- Core querying API: vehicle sightings insertion, recent sighting retrieval, multi-filter search,
+  counting-line observation windows and rates, and traffic statistics.
 - All-time dashboard aggregates are O(cameras), not O(sightings): AFTER INSERT triggers on
   ``vehicle_sightings`` maintain ``sighting_totals`` / ``camera_track_totals`` / ``sighting_tracks`` /
-  ``global_vehicles`` / ``sighting_counters`` (see ``TOTALS_DDL``). The counters count *inserts*, so
+  ``sighting_counters`` (see ``TOTALS_DDL``). The counters count *inserts*, so
   deleting old sightings (retention) never lowers an all-time total.
 - Storage upkeep: ``compact()`` (one-off VACUUM into incremental auto-vacuum), ``incremental_vacuum()``,
-  opt-in retention (``prune_sightings`` / ``prune_handoff_events``) and active-target expiry.
+  and opt-in retention (``prune_sightings``).
 """
 
 import json
@@ -31,9 +31,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 try:  # tunables; the module stays importable on its own
-    from backend.config import ACTIVE_TARGET_TTL_S, DB_JOURNAL_SIZE_LIMIT_BYTES
+    from backend.config import DB_JOURNAL_SIZE_LIMIT_BYTES
 except ImportError:  # pragma: no cover
-    ACTIVE_TARGET_TTL_S, DB_JOURNAL_SIZE_LIMIT_BYTES = 1800.0, 32 * 1024 * 1024
+    DB_JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
 
 logger = logging.getLogger("database")
 
@@ -76,7 +76,6 @@ CREATE TABLE IF NOT EXISTS vehicle_sightings (
     sighting_id INTEGER PRIMARY KEY AUTOINCREMENT,
     camera_id INTEGER NOT NULL,
     local_track_id INTEGER NOT NULL,
-    global_vehicle_id INTEGER,
     vehicle_class TEXT NOT NULL,
     confidence REAL NOT NULL,
     bbox_x1 INTEGER NOT NULL,
@@ -85,39 +84,12 @@ CREATE TABLE IF NOT EXISTS vehicle_sightings (
     bbox_y2 INTEGER NOT NULL,
     heading_deg REAL NOT NULL,
     speed_px_s REAL NOT NULL,
-    embedding BLOB NOT NULL,
-    color_hist BLOB NOT NULL,
     timestamp_iso TEXT NOT NULL,
-    crop_thumbnail BLOB,
     FOREIGN KEY (camera_id) REFERENCES cameras(id)
 );
 
-CREATE TABLE IF NOT EXISTS handoff_events (
-    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    global_vehicle_id INTEGER NOT NULL,
-    from_camera_id INTEGER NOT NULL,
-    to_camera_id INTEGER NOT NULL,
-    confidence REAL NOT NULL,
-    timestamp_iso TEXT NOT NULL,
-    FOREIGN KEY (from_camera_id) REFERENCES cameras(id),
-    FOREIGN KEY (to_camera_id) REFERENCES cameras(id)
-);
-
-CREATE TABLE IF NOT EXISTS active_targets (
-    global_vehicle_id INTEGER PRIMARY KEY,
-    current_camera_id INTEGER NOT NULL,
-    last_sighting_id INTEGER NOT NULL,
-    locked_at_iso TEXT NOT NULL,
-    status TEXT DEFAULT 'tracking',
-    updated_ts REAL,   -- wall-clock epoch seconds of the last update; drives ACTIVE_TARGET_TTL_S expiry
-    FOREIGN KEY (current_camera_id) REFERENCES cameras(id),
-    FOREIGN KEY (last_sighting_id) REFERENCES vehicle_sightings(sighting_id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_sightings_cam_time ON vehicle_sightings(camera_id, timestamp_iso);
-CREATE INDEX IF NOT EXISTS idx_sightings_global_id ON vehicle_sightings(global_vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_sightings_time ON vehicle_sightings(timestamp_iso);
-CREATE INDEX IF NOT EXISTS idx_active_targets_cam ON active_targets(current_camera_id);
 
 -- (idx_sightings_agg / idx_sightings_local_track used to live here as covering indexes for the
 -- all-time dashboard aggregates; those now come from the trigger-maintained totals tables and the
@@ -160,15 +132,11 @@ CREATE INDEX IF NOT EXISTS idx_obs_time ON observation_windows(end_ts);
 # These tables are updated by AFTER INSERT triggers instead, so reading them is O(cameras).
 #
 # SEMANTICS: they count *inserts*. Deleting sightings (retention, ``prune_sightings``) does not
-# lower them -- "all-time" means all time, not "what is still stored". They are also not touched by
-# UPDATEs (``expire_embeddings``) because no counted column ever changes.
+# lower them -- "all-time" means all time, not "what is still stored".
 #   sighting_totals(camera_id, vehicle_class)  rows + last timestamp per camera and class
 #   sighting_tracks(local_track_id, camera_id) set of distinct tracks seen (exact COUNT(DISTINCT))
 #   camera_track_totals(camera_id)             distinct local_track_id per camera
-#   global_vehicles(global_vehicle_id)         first/last *inserted* sighting's time+camera, sighting count
-#   sighting_counters(key)                     'tracks' (distinct local_track_id over all cameras),
-#                                              'global_vehicles' (rows in global_vehicles),
-#                                              'handoffs' (handoff_events inserted)
+#   sighting_counters(key)                     'tracks' (distinct local_track_id over all cameras)
 TOTALS_MARKER = "totals_v1"
 COMPACT_MARKER = "compacted_v1"
 COMPACT_BUSY_TIMEOUT_MS = 10_000
@@ -191,15 +159,6 @@ CREATE TABLE IF NOT EXISTS sighting_tracks (
 CREATE TABLE IF NOT EXISTS camera_track_totals (
     camera_id INTEGER PRIMARY KEY,
     tracks INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS global_vehicles (
-    global_vehicle_id INTEGER PRIMARY KEY,
-    first_seen_iso TEXT NOT NULL,
-    first_camera_id INTEGER NOT NULL,
-    last_seen_iso TEXT NOT NULL,
-    last_camera_id INTEGER NOT NULL,
-    sightings INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS sighting_counters (
@@ -228,32 +187,14 @@ BEGIN
     ON CONFLICT(camera_id) DO UPDATE SET tracks = tracks + 1;
     INSERT OR IGNORE INTO sighting_tracks (local_track_id, camera_id)
     VALUES (NEW.local_track_id, NEW.camera_id);
-
-    UPDATE sighting_counters SET value = value + 1
-    WHERE key = 'global_vehicles' AND NEW.global_vehicle_id IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM global_vehicles WHERE global_vehicle_id = NEW.global_vehicle_id);
-    INSERT INTO global_vehicles (global_vehicle_id, first_seen_iso, first_camera_id,
-                                 last_seen_iso, last_camera_id, sightings)
-    SELECT NEW.global_vehicle_id, NEW.timestamp_iso, NEW.camera_id, NEW.timestamp_iso, NEW.camera_id, 1
-    WHERE NEW.global_vehicle_id IS NOT NULL
-    ON CONFLICT(global_vehicle_id) DO UPDATE SET
-        sightings = sightings + 1,
-        last_seen_iso = excluded.last_seen_iso,
-        last_camera_id = excluded.last_camera_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_handoffs_total AFTER INSERT ON handoff_events
-BEGIN
-    UPDATE sighting_counters SET value = value + 1 WHERE key = 'handoffs';
 END;
 """
 
-# Rebuilds every totals table from the rows currently in vehicle_sightings / handoff_events.
+# Rebuilds every totals table from the rows currently in vehicle_sightings.
 TOTALS_BACKFILL_SQL = (
     "DELETE FROM sighting_totals",
     "DELETE FROM sighting_tracks",
     "DELETE FROM camera_track_totals",
-    "DELETE FROM global_vehicles",
     "DELETE FROM sighting_counters",
     """INSERT INTO sighting_totals (camera_id, vehicle_class, n, last_seen_iso)
        SELECT camera_id, vehicle_class, COUNT(*), MAX(timestamp_iso)
@@ -265,21 +206,8 @@ TOTALS_BACKFILL_SQL = (
             ORDER BY local_track_id, camera_id)""",
     """INSERT INTO camera_track_totals (camera_id, tracks)
        SELECT camera_id, COUNT(*) FROM sighting_tracks GROUP BY camera_id""",
-    # first/last = first/last *inserted* sighting of the vehicle (sighting_id order, which is time
-    # order for the live tracker); MIN/MAX(sighting_id) per vehicle is answered from the covering
-    # idx_sightings_global_id, then two primary-key lookups -- ~10x faster than MIN/MAX(timestamp_iso)
-    """INSERT INTO global_vehicles (global_vehicle_id, first_seen_iso, first_camera_id,
-                                    last_seen_iso, last_camera_id, sightings)
-       SELECT g.gid, sf.timestamp_iso, sf.camera_id, sl.timestamp_iso, sl.camera_id, g.n
-       FROM (SELECT global_vehicle_id AS gid, MIN(sighting_id) AS fid, MAX(sighting_id) AS lid, COUNT(*) AS n
-             FROM vehicle_sightings WHERE global_vehicle_id IS NOT NULL GROUP BY global_vehicle_id) AS g
-       JOIN vehicle_sightings AS sf ON sf.sighting_id = g.fid
-       JOIN vehicle_sightings AS sl ON sl.sighting_id = g.lid
-       ORDER BY g.gid""",
     """INSERT INTO sighting_counters (key, value) VALUES
-           ('tracks', (SELECT COUNT(DISTINCT local_track_id) FROM sighting_tracks)),
-           ('global_vehicles', (SELECT COUNT(*) FROM global_vehicles)),
-           ('handoffs', (SELECT COUNT(*) FROM handoff_events))""",
+           ('tracks', (SELECT COUNT(DISTINCT local_track_id) FROM sighting_tracks))""",
 )
 
 
@@ -330,20 +258,56 @@ def _rebuild_totals(cur: sqlite3.Cursor) -> None:
         cur.execute(statement)
 
 
+# Left behind in databases created while the dashboard had cross-camera re-identification.
+_REID_TABLES = ("active_targets", "handoff_events", "global_vehicles")   # active_targets first: it references sightings
+_REID_SIGHTING_COLUMNS = ("global_vehicle_id", "embedding", "color_hist", "crop_thumbnail")
+
+
+def _drop_reid_schema(conn: sqlite3.Connection) -> bool:
+    """Drops the re-identification tables, counters and sighting columns from an existing database.
+    ``embedding`` / ``color_hist`` were NOT NULL, so sighting inserts fail until they are gone.
+    The totals trigger read ``global_vehicle_id`` (SQLite refuses to drop a column a trigger uses),
+    so it is dropped first and, if the totals migration already ran, recreated without it.
+    Dropping a column rewrites the table once (needs SQLite >= 3.35). Returns True if it changed anything."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    stale_columns = [c for c in _REID_SIGHTING_COLUMNS if c in _table_columns(conn, "vehicle_sightings")]
+    if not (tables & set(_REID_TABLES) or stale_columns):
+        return False
+    t0 = time.perf_counter()
+    with _transaction(conn) as cur:
+        cur.execute("BEGIN IMMEDIATE")
+        totals_done = cur.execute("SELECT 1 FROM maintenance_state WHERE key = ?", (TOTALS_MARKER,)).fetchone()
+        cur.execute("DROP TRIGGER IF EXISTS trg_sightings_totals")
+        cur.execute("DROP TRIGGER IF EXISTS trg_handoffs_total")
+        for table in _REID_TABLES:
+            cur.execute(f"DROP TABLE IF EXISTS {table}")
+        cur.execute("DROP INDEX IF EXISTS idx_sightings_global_id")
+        cur.execute("DROP INDEX IF EXISTS idx_active_targets_cam")
+        for column in stale_columns:
+            cur.execute(f"ALTER TABLE vehicle_sightings DROP COLUMN {column}")
+        if "sighting_counters" in tables:
+            cur.execute("DELETE FROM sighting_counters WHERE key IN ('global_vehicles', 'handoffs')")
+        cur.execute("DELETE FROM maintenance_state WHERE key = 'embeddings_expired_upto'")
+        if totals_done:
+            for part in _split_statements(TOTALS_TRIGGERS_DDL):
+                cur.execute(part)
+    logger.info(f"Removed re-identification tables/columns in {time.perf_counter() - t0:.1f}s "
+                f"(dropped columns: {stale_columns or 'none'})")
+    return True
+
+
 def migrate_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
     """
     Idempotent schema migration, run on every start (a no-op once applied):
 
-    * ``active_targets.updated_ts`` is added to databases created before the column existed.
+    * Re-identification leftovers (tables, counters, sighting columns) are dropped
+      (``_drop_reid_schema``).
     * The totals tables + AFTER INSERT triggers are created and backfilled *once*, in the same
       ``BEGIN IMMEDIATE`` transaction (so no insert can slip between the backfill and the triggers),
       then the two covering indexes they replace are dropped. Marker: ``maintenance_state.totals_v1``.
     """
-    report: Dict[str, Any] = {"totals_backfilled": False, "backfill_s": 0.0, "dropped_indexes": []}
-
-    if "updated_ts" not in _table_columns(conn, "active_targets"):
-        with _transaction(conn) as cur:
-            cur.execute("ALTER TABLE active_targets ADD COLUMN updated_ts REAL")
+    report: Dict[str, Any] = {"totals_backfilled": False, "backfill_s": 0.0, "dropped_indexes": [],
+                              "reid_schema_dropped": _drop_reid_schema(conn)}
 
     def totals_done() -> bool:
         return conn.execute("SELECT 1 FROM maintenance_state WHERE key = ?", (TOTALS_MARKER,)).fetchone() is not None
@@ -489,11 +453,8 @@ class Database:
     Thread-safe SQLite Database manager with connection pooling and caching.
     """
 
-    def __init__(self, db_path: Optional[str] = None, auto_seed: bool = True,
-                 active_target_ttl_s: Optional[float] = None):
+    def __init__(self, db_path: Optional[str] = None, auto_seed: bool = True):
         self.db_path = db_path or DEFAULT_DB_PATH
-        # A 'tracking' active target not updated for this long is no longer active (0 = never expires).
-        self.active_target_ttl_s = float(ACTIVE_TARGET_TTL_S if active_target_ttl_s is None else active_target_ttl_s)
         self._thread_local = threading.local()
         self._lock = threading.Lock()
         self._all_conns = weakref.WeakSet()   # _ThreadConnection of every live thread
@@ -570,8 +531,8 @@ class Database:
 
     def compact(self, force: bool = False) -> Dict[str, Any]:
         """
-        One-off storage conversion + defragmentation. Blanked appearance blobs left the sightings
-        pages ~90% empty and SQLite never reuses half-empty pages; ``VACUUM`` rewrites the file
+        One-off storage conversion + defragmentation. Dropped columns (the old appearance blobs) and
+        deleted rows leave pages half-empty and SQLite never reuses those; ``VACUUM`` rewrites the file
         compactly and, after ``PRAGMA auto_vacuum = INCREMENTAL``, converts it so later deletes
         (retention) can hand pages back through ``incremental_vacuum``.
 
@@ -671,16 +632,12 @@ class Database:
         self,
         camera_id: int,
         local_track_id: int,
-        global_vehicle_id: Optional[int],
         vehicle_class: str,
         confidence: float,
         bbox: Tuple[int, int, int, int],
         heading_deg: float,
         speed_px_s: float,
-        embedding: bytes,
-        color_hist: bytes,
         timestamp_iso: str,
-        crop_thumbnail: Optional[bytes] = None,
         conn: Optional[sqlite3.Connection] = None,
     ) -> int:
         """
@@ -692,15 +649,14 @@ class Database:
             cur.execute(
                 """
                 INSERT INTO vehicle_sightings (
-                    camera_id, local_track_id, global_vehicle_id, vehicle_class,
+                    camera_id, local_track_id, vehicle_class,
                     confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2,
-                    heading_deg, speed_px_s, embedding, color_hist, timestamp_iso, crop_thumbnail
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    heading_deg, speed_px_s, timestamp_iso
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     camera_id,
                     local_track_id,
-                    global_vehicle_id,
                     vehicle_class,
                     float(confidence),
                     int(bbox[0]),
@@ -709,64 +665,10 @@ class Database:
                     int(bbox[3]),
                     float(heading_deg),
                     float(speed_px_s),
-                    embedding,
-                    color_hist,
-                    timestamp_iso,
-                    crop_thumbnail,
-                ),
-            )
-        return cur.lastrowid
-
-    def record_handoff_event(
-        self,
-        global_vehicle_id: int,
-        from_camera_id: int,
-        to_camera_id: int,
-        confidence: float,
-        timestamp_iso: str,
-        conn: Optional[sqlite3.Connection] = None,
-    ) -> int:
-        """
-        Records a multi-camera predictive handoff event.
-        Returns event_id.
-        """
-        target_conn = conn or self.conn
-        with _transaction(target_conn) as cur:
-            cur.execute(
-                """
-                INSERT INTO handoff_events (
-                    global_vehicle_id, from_camera_id, to_camera_id, confidence, timestamp_iso
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    int(global_vehicle_id),
-                    int(from_camera_id),
-                    int(to_camera_id),
-                    float(confidence),
                     timestamp_iso,
                 ),
             )
         return cur.lastrowid
-
-    def get_vehicle_journey(
-        self, global_vehicle_id: int, conn: Optional[sqlite3.Connection] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Retrieves all chronological sightings for global_vehicle_id joined with camera metadata.
-        """
-        target_conn = conn or self.conn
-        cur = target_conn.cursor()
-        cur.execute(
-            """
-            SELECT s.*, c.name as camera_name, c.latitude, c.longitude, c.corridor, c.stream_url
-            FROM vehicle_sightings s
-            JOIN cameras c ON s.camera_id = c.id
-            WHERE s.global_vehicle_id = ?
-            ORDER BY s.timestamp_iso ASC
-            """,
-            (global_vehicle_id,),
-        )
-        return [dict(row) for row in cur.fetchall()]
 
     def get_recent_sightings(
         self,
@@ -820,7 +722,6 @@ class Database:
         self,
         vehicle_class: Optional[str] = None,
         camera_id: Optional[int] = None,
-        global_vehicle_id: Optional[int] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         limit: int = 50,
@@ -839,9 +740,6 @@ class Database:
         if camera_id is not None:
             query.append("AND s.camera_id = ?")
             params.append(camera_id)
-        if global_vehicle_id is not None:
-            query.append("AND s.global_vehicle_id = ?")
-            params.append(global_vehicle_id)
         if start_time:
             query.append("AND s.timestamp_iso >= ?")
             params.append(start_time)
@@ -855,16 +753,6 @@ class Database:
         cur = target_conn.cursor()
         cur.execute(" ".join(query), params)
         return [dict(r) for r in cur.fetchall()]
-
-    def get_max_global_vehicle_id(self, conn: Optional[sqlite3.Connection] = None) -> int:
-        """Highest global_vehicle_id ever assigned (0 if none); used to seed the id allocator."""
-        target_conn = conn or self.conn
-        # global_vehicles is the all-time record (retention may have deleted the newest vehicle's
-        # sightings' older siblings, never the id allocator's high-water mark); both are index-only.
-        row = target_conn.execute(
-            "SELECT MAX((SELECT COALESCE(MAX(global_vehicle_id), 0) FROM global_vehicles),"
-            "           (SELECT COALESCE(MAX(global_vehicle_id), 0) FROM vehicle_sightings))").fetchone()
-        return int(row[0])
 
     def get_latest_sightings(
         self, limit: int = 50, conn: Optional[sqlite3.Connection] = None
@@ -890,8 +778,7 @@ class Database:
         Free-text sighting search for the dashboard, newest first, in the row shape of
         ``get_latest_sightings`` (``s.*`` + ``camera_name`` + ``corridor``).
 
-        * numeric query ``"1234"`` / ``"#1234"``: sightings of ``global_vehicle_id`` 1234 *or* of
-          camera 1234 (exact);
+        * numeric query ``"1234"`` / ``"#1234"``: sightings of camera 1234 (exact);
         * text equal (case-insensitively) to a vehicle class that exists (car, motorcycle, bus,
           truck, ...): sightings of that class;
         * any text: sightings of every camera whose name or corridor contains it (case-insensitive
@@ -901,7 +788,7 @@ class Database:
 
         Matches from the different rules are merged (de-duplicated, ordered by
         ``timestamp_iso DESC, sighting_id DESC``). Each rule reads only the newest ``limit`` index
-        entries of its camera / vehicle / class, so cost is independent of table size for all
+        entries of its camera / class, so cost is independent of table size for all
         common cases (a class so rare that it has no sighting among the newest rows is the one
         exception and degrades to a scan of ``idx_sightings_time``).
         """
@@ -922,10 +809,8 @@ class Database:
 
         if numeric.isascii() and numeric.isdigit():
             n = int(numeric)
-            if n > 2 ** 63 - 1:             # cannot be a vehicle or camera id (and would overflow SQLite's INTEGER)
+            if n > 2 ** 63 - 1:             # cannot be a camera id (and would overflow SQLite's INTEGER)
                 return []
-            collect("SELECT timestamp_iso, sighting_id FROM vehicle_sightings WHERE global_vehicle_id = ? "
-                    "ORDER BY timestamp_iso DESC, sighting_id DESC LIMIT ?", (n, limit))
             collect("SELECT timestamp_iso, sighting_id FROM vehicle_sightings WHERE camera_id = ? "
                     "ORDER BY timestamp_iso DESC, sighting_id DESC LIMIT ?", (n, limit))
         else:
@@ -964,28 +849,19 @@ class Database:
         transaction with ``pause_s`` between batches (the tracker keeps writing in between).
         Returns the number of sightings removed.
 
-        * Foreign keys: ``active_targets.last_sighting_id`` references a sighting. Targets that are
-          no longer 'tracking' (expired) and point at a to-be-pruned sighting are deleted first;
-          a sighting still referenced by a live target is skipped, never deleted.
-        * All-time totals (``sighting_totals``, ``global_vehicles``, ...) are unchanged: they count
+        * All-time totals (``sighting_totals``, ``sighting_counters``, ...) are unchanged: they count
           inserts. ``observation_windows`` (volume history) is not touched.
         * Free pages go back to the file via ``incremental_vacuum`` (see ``SightingMaintenance``).
         """
         target_conn = conn or self.conn
         cutoff = datetime.fromtimestamp(time.time() - older_than_s, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         batch = max(1, int(batch))
-        with _transaction(target_conn) as cur:
-            cur.execute(
-                "DELETE FROM active_targets WHERE status <> 'tracking' AND EXISTS "
-                "(SELECT 1 FROM vehicle_sightings s WHERE s.sighting_id = active_targets.last_sighting_id "
-                " AND s.timestamp_iso < ?)", (cutoff,))
         removed = 0
         while not (should_stop is not None and should_stop()):
             with _transaction(target_conn) as cur:
                 cur.execute(
                     "DELETE FROM vehicle_sightings WHERE sighting_id IN ("
                     " SELECT sighting_id FROM vehicle_sightings WHERE timestamp_iso < ?"
-                    "  AND sighting_id NOT IN (SELECT last_sighting_id FROM active_targets)"
                     "  ORDER BY timestamp_iso LIMIT ?)", (cutoff, batch))
                 n = max(0, cur.rowcount)
             removed += n
@@ -994,186 +870,6 @@ class Database:
             if pause_s > 0:
                 time.sleep(pause_s)
         return removed
-
-    def prune_handoff_events(self, older_than_s: float, conn: Optional[sqlite3.Connection] = None,
-                             batch: int = 2000, pause_s: float = 0.0,
-                             should_stop: Optional[Any] = None) -> int:
-        """Deletes handoff events older than ``older_than_s`` seconds in small batches (same shape as
-        ``prune_sightings``). The all-time ``total_handoffs`` counter is not reduced. Returns rows removed."""
-        target_conn = conn or self.conn
-        cutoff = datetime.fromtimestamp(time.time() - older_than_s, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        batch = max(1, int(batch))
-        removed = 0
-        while not (should_stop is not None and should_stop()):
-            with _transaction(target_conn) as cur:
-                # event ids rise with time, so the scan stops after `batch` old rows
-                cur.execute(
-                    "DELETE FROM handoff_events WHERE event_id IN ("
-                    " SELECT event_id FROM handoff_events WHERE timestamp_iso < ? LIMIT ?)", (cutoff, batch))
-                n = max(0, cur.rowcount)
-            removed += n
-            if n < batch:
-                break
-            if pause_s > 0:
-                time.sleep(pause_s)
-        return removed
-
-    def expire_embeddings(self, older_than_s: float, batch: int = 2000, pause_s: float = 0.0,
-                          should_stop: Optional[Any] = None,
-                          conn: Optional[sqlite3.Connection] = None) -> int:
-        """
-        Blanks the appearance blobs (``embedding``, ``color_hist``; ~1.5 KB per row, 99% of the
-        table) of sightings older than ``older_than_s``. Re-identification matches against
-        in-memory state only, so the stored blobs are never read back; the rows (class, camera,
-        time, journey) stay. Rows are processed in id order in small transactions, resuming from a
-        persisted watermark, so the tracker's writes are never blocked for long and old rows are
-        never rescanned. Returns the number of rows blanked.
-        """
-        target_conn = conn or self.conn
-        cutoff = datetime.fromtimestamp(time.time() - older_than_s, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        row = target_conn.execute(
-            "SELECT value FROM maintenance_state WHERE key = 'embeddings_expired_upto'").fetchone()
-        low = int(row[0]) if row else 0
-        # Stop at the first row that is still young: ids normally rise with time, but never assume
-        # it (an old-timestamped row inserted late must not drag younger rows into the range).
-        first_young = target_conn.execute(
-            "SELECT min(sighting_id) FROM vehicle_sightings WHERE sighting_id > ? AND timestamp_iso >= ?",
-            (low, cutoff)).fetchone()[0]
-        if first_young is not None:
-            upper = first_young - 1
-        else:
-            upper = target_conn.execute("SELECT max(sighting_id) FROM vehicle_sightings").fetchone()[0] or 0
-        if upper <= low:
-            return 0
-
-        blanked = 0
-        while low < upper and not (should_stop is not None and should_stop()):
-            high = min(low + max(1, int(batch)), upper)
-            with _transaction(target_conn) as cur:
-                cur.execute(
-                    "UPDATE vehicle_sightings SET embedding = X'', color_hist = X'' "
-                    "WHERE sighting_id > ? AND sighting_id <= ? AND timestamp_iso < ? "
-                    "AND (length(embedding) > 0 OR length(color_hist) > 0)",
-                    (low, high, cutoff),
-                )
-                blanked += max(0, cur.rowcount)
-                cur.execute(
-                    "INSERT INTO maintenance_state (key, value) VALUES ('embeddings_expired_upto', ?) "
-                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (high,),
-                )
-            low = high
-            if pause_s > 0:
-                time.sleep(pause_s)
-        return blanked
-
-    # Epoch seconds of an active target's last update; rows written before updated_ts existed fall
-    # back to their lock time.
-    _TARGET_UPDATED_SQL = "COALESCE(a.updated_ts, CAST(strftime('%s', a.locked_at_iso) AS REAL), 0)"
-
-    def _fresh_target_clause(self, now: Optional[float] = None) -> Tuple[str, List[Any]]:
-        """SQL + params selecting active targets (alias ``a``) that are 'tracking' and not stale."""
-        if self.active_target_ttl_s <= 0:
-            return "a.status = 'tracking'", []
-        cutoff = (now if now is not None else time.time()) - self.active_target_ttl_s
-        return f"a.status = 'tracking' AND {self._TARGET_UPDATED_SQL} >= ?", [cutoff]
-
-    def update_active_target(
-        self,
-        global_vehicle_id: int,
-        current_camera_id: int,
-        last_sighting_id: int,
-        status: str = "tracking",
-        locked_at_iso: Optional[str] = None,
-        conn: Optional[sqlite3.Connection] = None,
-    ):
-        """
-        Inserts or updates the active target state in active_targets table. Every call refreshes
-        the target's ``updated_ts`` (the clock ``ACTIVE_TARGET_TTL_S`` runs against); a target that
-        had stopped tracking and is locked again also gets the new ``locked_at_iso``.
-        """
-        target_conn = conn or self.conn
-        locked_time = locked_at_iso or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        with _transaction(target_conn) as cur:
-            cur.execute(
-                """
-                INSERT INTO active_targets (
-                    global_vehicle_id, current_camera_id, last_sighting_id, locked_at_iso, status, updated_ts
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(global_vehicle_id) DO UPDATE SET
-                    current_camera_id=excluded.current_camera_id,
-                    last_sighting_id=excluded.last_sighting_id,
-                    locked_at_iso=CASE WHEN active_targets.status <> 'tracking'
-                                       THEN excluded.locked_at_iso ELSE active_targets.locked_at_iso END,
-                    status=excluded.status,
-                    updated_ts=excluded.updated_ts
-                """,
-                (global_vehicle_id, current_camera_id, last_sighting_id, locked_time, status, time.time()),
-            )
-
-    def get_active_target(
-        self, global_vehicle_id: int, conn: Optional[sqlite3.Connection] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Returns the stored state of a tracked target, whatever its status ('tracking' or
-        'expired'); use ``is_active_target`` to ask whether it is still being followed."""
-        target_conn = conn or self.conn
-        cur = target_conn.cursor()
-        cur.execute(
-            """
-            SELECT a.*, c.name as camera_name, c.stream_url, s.bbox_x1, s.bbox_y1, s.bbox_x2, s.bbox_y2, s.heading_deg
-            FROM active_targets a
-            JOIN cameras c ON a.current_camera_id = c.id
-            JOIN vehicle_sightings s ON a.last_sighting_id = s.sighting_id
-            WHERE a.global_vehicle_id = ?
-            """,
-            (global_vehicle_id,),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
-
-    def is_active_target(self, global_vehicle_id: int, conn: Optional[sqlite3.Connection] = None) -> bool:
-        """True if the vehicle is currently being followed: status 'tracking' *and* updated within
-        ``active_target_ttl_s`` (a stale 'tracking' row that maintenance has not yet marked
-        'expired' does not count)."""
-        clause, params = self._fresh_target_clause()
-        cur = (conn or self.conn).cursor()
-        cur.execute(
-            f"SELECT 1 FROM active_targets a WHERE a.global_vehicle_id = ? AND {clause} LIMIT 1",
-            [global_vehicle_id, *params],
-        )
-        return cur.fetchone() is not None
-
-    def list_active_targets(self, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-        """Returns all currently followed targets (status 'tracking' and not stale)."""
-        target_conn = conn or self.conn
-        clause, params = self._fresh_target_clause()
-        cur = target_conn.cursor()
-        cur.execute(
-            f"""
-            SELECT a.*, c.name as camera_name, c.stream_url
-            FROM active_targets a
-            JOIN cameras c ON a.current_camera_id = c.id
-            WHERE {clause}
-            ORDER BY a.locked_at_iso DESC
-            """,
-            params,
-        )
-        return [dict(r) for r in cur.fetchall()]
-
-    def expire_active_targets(self, ttl_s: Optional[float] = None, now: Optional[float] = None,
-                              conn: Optional[sqlite3.Connection] = None) -> int:
-        """Marks 'tracking' targets not updated for ``ttl_s`` seconds (default ``active_target_ttl_s``)
-        as 'expired'. The rows stay (``get_active_target`` still answers) but stop boosting cameras.
-        0 disables expiry. Returns the number of targets expired."""
-        ttl = self.active_target_ttl_s if ttl_s is None else float(ttl_s)
-        if ttl <= 0:
-            return 0
-        cutoff = (now if now is not None else time.time()) - ttl
-        with _transaction(conn or self.conn) as cur:
-            cur.execute(
-                f"UPDATE active_targets AS a SET status = 'expired' "
-                f"WHERE a.status = 'tracking' AND {self._TARGET_UPDATED_SQL} < ?", (cutoff,))
-            return max(0, cur.rowcount)
 
     def get_camera_vehicle_counts(
         self, window_s: Optional[float] = None, conn: Optional[sqlite3.Connection] = None
@@ -1398,8 +1094,8 @@ class Database:
 
         Every all-time figure is read from the trigger-maintained totals tables, O(cameras) rather
         than a scan of ``vehicle_sightings``. They count inserts, so ``total_sightings`` and friends
-        include sightings that retention has deleted. ``total_unique_vehicles`` is still the number
-        of distinct ``local_track_id`` (falling back to distinct ``global_vehicle_id``).
+        include sightings that retention has deleted. ``total_unique_vehicles`` is the number of
+        distinct ``local_track_id``.
         """
         target_conn = conn or self.conn
         cur = target_conn.cursor()
@@ -1410,13 +1106,7 @@ class Database:
         cur.execute("SELECT COALESCE(SUM(n), 0) FROM sighting_totals")
         total_sightings = cur.fetchone()[0]
         counters = {row["key"]: row["value"] for row in cur.execute("SELECT key, value FROM sighting_counters")}
-        unique_global_vehicles = counters.get("global_vehicles", 0)
         unique_local_vehicles = counters.get("tracks", 0)
-        total_handoffs = counters.get("handoffs", 0)
-
-        clause, params = self._fresh_target_clause()
-        cur.execute(f"SELECT count(*) FROM active_targets a WHERE {clause}", params)
-        active_tracking_count = cur.fetchone()[0]
 
         # Sightings breakdown by class
         cur.execute("SELECT vehicle_class, SUM(n) AS count FROM sighting_totals GROUP BY vehicle_class")
@@ -1432,10 +1122,7 @@ class Database:
             "active_cameras": active_cameras,
             "total_sightings": total_sightings,
             "total_vehicles_counted": total_sightings,
-            "unique_global_vehicles": unique_global_vehicles,
-            "total_unique_vehicles": unique_local_vehicles or unique_global_vehicles,
-            "active_targets_count": active_tracking_count,
-            "total_handoffs": total_handoffs,
+            "total_unique_vehicles": unique_local_vehicles,
             "class_breakdown": class_breakdown,
             "cameras_with_detections": cameras_with_detections,
             "camera_counts": camera_counts_map,
@@ -1444,8 +1131,7 @@ class Database:
 
     def rebuild_totals(self) -> Dict[str, Any]:
         """
-        Recomputes every trigger-maintained totals table from the sightings / handoff events that
-        are stored *right now*, in one transaction. Repair tool for counters that drifted (e.g. rows
+        Recomputes every trigger-maintained totals table from the sightings that are stored *right now*, in one transaction. Repair tool for counters that drifted (e.g. rows
         loaded with the triggers dropped). WARNING: after retention has deleted rows this resets the
         all-time totals to what is still stored; do not run it on a pruned database.
         """
@@ -1475,52 +1161,25 @@ def init_db(db_path: Optional[str] = None, auto_seed: bool = True) -> Database:
 def insert_vehicle_sighting(
     camera_id: int,
     local_track_id: int,
-    global_vehicle_id: Optional[int],
     vehicle_class: str,
     confidence: float,
     bbox: Tuple[int, int, int, int],
     heading_deg: float,
     speed_px_s: float,
-    embedding: bytes,
-    color_hist: bytes,
     timestamp_iso: str,
-    crop_thumbnail: Optional[bytes] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> int:
     return init_db().insert_vehicle_sighting(
         camera_id,
         local_track_id,
-        global_vehicle_id,
         vehicle_class,
         confidence,
         bbox,
         heading_deg,
         speed_px_s,
-        embedding,
-        color_hist,
         timestamp_iso,
-        crop_thumbnail,
         conn=conn,
     )
-
-
-def record_handoff_event(
-    global_vehicle_id: int,
-    from_camera_id: int,
-    to_camera_id: int,
-    confidence: float,
-    timestamp_iso: str,
-    conn: Optional[sqlite3.Connection] = None,
-) -> int:
-    return init_db().record_handoff_event(
-        global_vehicle_id, from_camera_id, to_camera_id, confidence, timestamp_iso, conn=conn
-    )
-
-
-def get_vehicle_journey(
-    global_vehicle_id: int, conn: Optional[sqlite3.Connection] = None
-) -> List[Dict[str, Any]]:
-    return init_db().get_vehicle_journey(global_vehicle_id, conn=conn)
 
 
 def get_recent_sightings(
@@ -1535,38 +1194,14 @@ def get_recent_sightings(
 def search_vehicles(
     vehicle_class: Optional[str] = None,
     camera_id: Optional[int] = None,
-    global_vehicle_id: Optional[int] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     limit: int = 50,
     conn: Optional[sqlite3.Connection] = None,
 ) -> List[Dict[str, Any]]:
     return init_db().search_vehicles(
-        vehicle_class, camera_id, global_vehicle_id, start_time, end_time, limit, conn=conn
+        vehicle_class, camera_id, start_time, end_time, limit, conn=conn
     )
-
-
-def update_active_target(
-    global_vehicle_id: int,
-    current_camera_id: int,
-    last_sighting_id: int,
-    status: str = "tracking",
-    locked_at_iso: Optional[str] = None,
-    conn: Optional[sqlite3.Connection] = None,
-):
-    return init_db().update_active_target(
-        global_vehicle_id, current_camera_id, last_sighting_id, status, locked_at_iso, conn=conn
-    )
-
-
-def get_active_target(
-    global_vehicle_id: int, conn: Optional[sqlite3.Connection] = None
-) -> Optional[Dict[str, Any]]:
-    return init_db().get_active_target(global_vehicle_id, conn=conn)
-
-
-def list_active_targets(conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-    return init_db().list_active_targets(conn=conn)
 
 
 def get_traffic_stats(conn: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:

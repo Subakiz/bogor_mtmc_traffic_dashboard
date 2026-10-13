@@ -7,7 +7,7 @@
 [![Leaflet](https://img.shields.io/badge/Frontend-Leaflet%20%2B%20plain%20JS-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
 [![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)](tests/)
 
-An enterprise-grade, end-to-end intelligent transportation surveillance platform that scrapes all **94 municipal CCTV cameras** from the Kota Bogor government (`bsw.kotabogor.go.id/cctv`), executes real-time vehicle detection and multi-object tracking accelerated locally on the **Apple Neural Engine (ANE)**, and establishes persistent spatiotemporal vehicle tracking across city camera junctions (**"Follow That Car"** MTMC engine).
+An enterprise-grade, end-to-end intelligent transportation surveillance platform that scrapes all **94 municipal CCTV cameras** from the Kota Bogor government (`bsw.kotabogor.go.id/cctv`), executes real-time vehicle detection and multi-object tracking accelerated locally on the **Apple Neural Engine (ANE)**, and turns them into citywide traffic volume and congestion analytics.
 
 ---
 
@@ -41,18 +41,13 @@ An enterprise-grade, end-to-end intelligent transportation surveillance platform
 - **Strict One-Way Directional Enforcer**: Prevents impossible upstream reverse matches along Bogor's famous **Sistem Satu Arah (SSA Kebun Raya)** and **Jl. Suryakencana**.
 - **Dynamic Arrival Windows $[t_{min}, t_{max}]$**: Computes spatiotemporal transit feasibility windows based on road distances, speed limits, and traffic congestion factors.
 
-### 3. Spatiotemporal Handoff Engine ("Follow That Car")
-- When a vehicle exits camera $A$ at bearing $\theta$, the engine calculates candidate downstream cameras, validates directional exit cones, and primes downstream tracking.
-- Interactive **"Follow Mode"** in the dashboard automatically predicts, highlights, and switches camera feeds as the target moves across the city.
-
-### 4. Resilient Streaming Architecture (Engineered for Safari & WebKit)
+### 3. Resilient Streaming Architecture (Engineered for Safari & WebKit)
 - **Decoupled Threaded Capture**: Ingests remote HLS `.m3u8` feeds using a background reader (`ThreadedStreamCapture`) with packet ring-buffering and a 5-second FFmpeg network timeout (`timeout;5000000`), completely shielding the server from remote restreamer stalls.
 - **Long-Polled Frame Streaming**: The frontend requests `/api/stream/{id}/frame?after=<X-Frame-No>` one at a time (no MJPEG, which stalls in Safari/WebKit); the server holds each request until a newer frame exists, so there is strictly 1 in-flight request per tab and no frame is sent twice.
 - **Standby Placeholder HUD**: Automatically renders a modern standby graphic (`[CCTV OFFLINE / CONNECTING STREAM...]`) with `200 OK` for buffering feeds, preventing broken image icons or 503 error storms.
 
-### 5. Persistent SQLite WAL Vehicle Registry
-- Logs intra-camera sightings, track histories, speed estimates, and exit angles.
-- Reconstructs complete multi-hop chronological vehicle journeys across Kota Bogor.
+### 4. Persistent SQLite WAL Vehicle Registry
+- Logs intra-camera sightings, speed estimates, and exit angles, plus counting-line observation windows.
 
 ---
 
@@ -65,17 +60,17 @@ bogor_mtmc_traffic_dashboard/
 │   ├── detector.py            # CoreML YOLOv8 + ByteTrack ANE inference wrapper
 │   ├── stream_capture.py      # Threaded low-latency HLS stream reader & packet flusher
 │   ├── topology_engine.py     # 94-camera road graph, arrival windows, SSA one-way logic
-│   ├── database.py            # SQLite WAL vehicle registry & journey query service
+│   ├── database.py            # SQLite WAL vehicle registry, counting windows & totals
 │   └── indexing_daemon.py     # Background multi-camera ingestion & tracking daemon
 ├── frontend/
 │   ├── index.html             # Dark-mode dashboard (Leaflet + HUD)
 │   ├── styles.css             # Dashboard styles
-│   └── app.js                 # Map controller, frame long-poll, handoff UI, data export
+│   └── app.js                 # Map controller, frame long-poll, analytics, data export
 ├── data/
 │   ├── bogor_camera_topology.json  # 94 geocoded nodes, corridors, and directed edges
 │   ├── cctv_streams.json      # Master stream URLs, embed URLs, and metadata
 │   ├── cctv_streams.csv       # Tabular camera directory
-│   └── traffic_db.sqlite      # SQLite WAL database for vehicle sightings & journeys
+│   └── traffic_db.sqlite      # SQLite WAL database for vehicle sightings & counts
 ├── scrape_cctv_streams.py     # Scraper for all BSW CCTV stream endpoints (syncs topology + DB)
 ├── scripts/                   # start_daemon.sh / stop_daemon.sh, export_dataset.py (dataset export CLI)
 ├── assets/                    # Screenshots, trajectory visualizers, and diagrams
@@ -140,12 +135,10 @@ Open your browser and navigate to:
 | `/api/cameras/{id}` | `GET` | Retrieves detailed metadata and junction info for a specific camera |
 | `/api/topology` | `GET` | Returns camera nodes, directed road graph edges, and corridor groupings |
 | `/api/stream/{id}/frame`| `GET` | Latest annotated JPEG frame; pass `?after=<X-Frame-No>` to long-poll for a newer one (204 if none within ~1 s) |
-| `/api/handoff/predict` | `POST` | Predicts downstream candidate cameras and arrival windows based on exit heading |
-| `/api/vehicles/{id}/timeline`| `GET`| Reconstructs multi-camera journey timeline and sighting history for a vehicle |
 | `/api/recent` | `GET` | Fetches recent verified vehicle sightings across Kota Bogor |
 | `/api/stats` | `GET` | Returns citywide traffic stats (unique vehicle counts, classification breakdown) |
 | `/api/export/dataset` | `GET` | Downloads a bucketed per-camera dataset: `start`, `end`, `bucket_minutes` (1/5/15/60), `camera_ids`, `format` (csv/jsonl/parquet), `layout` (long/wide), `fill_gaps` |
-| `/api/export/raw` | `GET` | Downloads a raw table: `table` (observation_windows/sightings/handoffs), `start`, `end`, `camera_ids`, `format` (csv/jsonl) |
+| `/api/export/raw` | `GET` | Downloads a raw table: `table` (observation_windows/sightings/cameras/analytics), `start`, `end`, `camera_ids`, `format` (csv/jsonl) |
 | `/ws/live` | `WebSocket` | Heartbeat every 2 s carrying the citywide counts and the latest sightings |
 
 ---
@@ -162,7 +155,6 @@ The repository includes a tiered test suite plus unit tests, run with pytest:
 - **Tier 1 (Core Features)**: Camera geocoding, ANE model inference, ByteTrack ID assignment, SQLite WAL persistence, FastAPI endpoints.
 - **Tier 2 (Boundary Conditions)**: Zero-detection frames, missing stream URLs, edge road topologies, arrival window bounds $[t_{min}, t_{max}]$.
 - **Tier 3 (Pairwise Combinations)**: Multi-camera transitions across various vehicle classes and weather/lighting conditions.
-- **Tier 4 (Citywide Scenarios)**: Simulated journeys across SSA Ring Road, Pajajaran corridor, and Batutulis junction.
 - **Tier 5 (Adversarial Stress)**: Graph traversal resilience, spatiotemporal jitter, network stream dropouts, and rapid camera switching.
 
 ---

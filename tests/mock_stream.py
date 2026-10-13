@@ -234,9 +234,7 @@ class SyntheticFrameGenerator:
 
 class SyntheticTrajectorySimulator:
     """
-    Simulates vehicle journeys across Kota Bogor camera junctions,
-    producing realistic spatiotemporal coordinates, bounding box transitions,
-    and ground-truth sighting events.
+    Kota Bogor camera network (nodes and edges) for synthetic scenarios.
     """
 
     def __init__(self, topology_data: Optional[Dict[str, Any]] = None, seed: int = 42):
@@ -272,110 +270,6 @@ class SyntheticTrajectorySimulator:
                 {"source_id": 92, "target_id": 79, "distance_m": 950.0, "typical_speed_kmh": 35.0, "t_min_s": 85.0, "t_max_s": 190.0},
             ],
         }
-
-    def simulate_vehicle_corridor_journey(
-        self,
-        global_vehicle_id: int,
-        route_camera_ids: List[int],
-        start_time_s: float = 0.0,
-        vehicle_class: str = "car",
-        primary_color: Tuple[int, int, int] = (210, 40, 40),
-        speed_factor: float = 1.0,
-    ) -> List[Dict[str, Any]]:
-        """
-        Simulates a continuous vehicle journey traversing a sequence of cameras.
-        Returns a list of timestamped camera sighting events.
-        """
-        sightings: List[Dict[str, Any]] = []
-        current_time = start_time_s
-
-        # Generate deterministic synthetic embedding (256-dim unit vector)
-        emb_rng = np.random.RandomState(global_vehicle_id * 1000 + 7)
-        base_emb = emb_rng.randn(256).astype(np.float32)
-        base_emb /= np.linalg.norm(base_emb)
-
-        # Generate deterministic 128-bin color histogram matching primary_color
-        color_hist = np.zeros(128, dtype=np.float32)
-        r, g, b = primary_color
-        # Map primary RGB dominant color to hue index
-        max_c = max(r, g, b)
-        if max_c == r:
-            hue_bin = 10  # Red
-        elif max_c == g:
-            hue_bin = 45  # Green
-        elif max_c == b:
-            hue_bin = 80  # Blue
-        else:
-            hue_bin = 20
-        color_hist[hue_bin : hue_bin + 10] = 1.0 / 10.0
-
-        for i, cam_id in enumerate(route_camera_ids):
-            cam = self.nodes.get(cam_id, {"id": cam_id, "name": f"CCTV-{cam_id}"})
-
-            # Calculate travel time from previous camera
-            if i > 0:
-                prev_cam_id = route_camera_ids[i - 1]
-                # Look for connecting edge
-                matched_edges = [
-                    e
-                    for e in self.edges
-                    if e.get("source_id") == prev_cam_id and e.get("target_id") == cam_id
-                ]
-                if matched_edges:
-                    edge = matched_edges[0]
-                    t_min = edge.get("t_min_s", 30.0)
-                    t_max = edge.get("t_max_s", 90.0)
-                    typical_t = (t_min + t_max) / 2.0
-                    travel_time = (typical_t / max(0.2, speed_factor)) + self.rng.uniform(-3.0, 3.0)
-                else:
-                    travel_time = 45.0 / max(0.2, speed_factor)
-                current_time += max(5.0, travel_time)
-
-            # Generate intra-camera track: 5 frames over 3 seconds
-            dwell_duration = 3.0
-            num_frames = 5
-            for f_idx in range(num_frames):
-                frame_time = current_time + (f_idx * (dwell_duration / num_frames))
-                progress = f_idx / max(1, num_frames - 1)
-
-                # Simulated bounding box progression across frame (e.g. entering left x=50, exiting right x=550)
-                x1 = int(50 + progress * 500)
-                y1 = int(200 + progress * 20)
-                x2 = x1 + 80
-                y2 = y1 + 50
-                bbox = (x1, y1, x2, y2)
-
-                # Heading
-                heading = 90.0 if i < len(route_camera_ids) - 1 else 180.0
-
-                # Slight visual noise per sighting (<0.02)
-                noise = emb_rng.randn(256).astype(np.float32) * 0.015
-                emb = base_emb + noise
-                emb /= np.linalg.norm(emb)
-
-                sighting = {
-                    "global_vehicle_id": global_vehicle_id,
-                    "local_track_id": 100 + i,
-                    "camera_id": cam_id,
-                    "camera_name": cam.get("name", f"CCTV-{cam_id}"),
-                    "timestamp": frame_time,
-                    "timestamp_iso": time.strftime(
-                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(1700000000 + frame_time)
-                    ),
-                    "vehicle_class": vehicle_class,
-                    "confidence": 0.88 + self.rng.uniform(-0.05, 0.05),
-                    "bbox": bbox,
-                    "heading_deg": heading,
-                    "speed_px_s": 120.0 * speed_factor,
-                    "embedding": emb.tobytes(),
-                    "color_hist": color_hist.tobytes(),
-                    "embedding_vector": emb,
-                    "color_hist_vector": color_hist,
-                    "is_exit_frame": (f_idx == num_frames - 1),
-                }
-                sightings.append(sighting)
-
-        return sightings
 
 
 class MockHLSStreamServer:

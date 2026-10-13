@@ -10,7 +10,7 @@ import time
 import types
 import unittest
 from unittest import mock
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from backend import rolling_tracker
 from backend.rolling_tracker import FIRST_FRAME_TIMEOUT_S, STALL_TIMEOUT_S
@@ -72,6 +72,19 @@ class StandbyTestBase(TrackerTestBase):
         self.opens = []
         tracker.pool._factory = factory
         return tracker
+
+    def force_tier1(self, cameras: Set[int]) -> Set[int]:
+        """Makes ``cameras`` (a live set the test may change) count as downstream of a focus camera
+        without opening a focus stream, so they rank tier 1."""
+        tracker = self.tracker
+        sync = tracker._sync_focus
+
+        def sync_and_force(now):
+            sync(now)
+            tracker._downstream_of_focus |= cameras
+
+        tracker._sync_focus = sync_and_force
+        return cameras
 
     def step(self, t: float):
         self.vnow = self.t0 + t
@@ -336,8 +349,8 @@ class StandbyTrimAndPriorityTest(StandbyTestBase):
         self.run_until(1.0)
         t = self.tracker
         self.assertEqual((sorted(t._visits), sorted(t._standby)), ([1, 2, 3, 4], [5, 6]))
-        # A vehicle that was followed just reached camera 8: its next camera (9) becomes tier 1.
-        t._boost_until[8] = self.vnow + 30.0
+        # Camera 8 becomes downstream of a focus camera, i.e. tier 1.
+        self.force_tier1({8})
         self.step(1.0)
         self.assertEqual(t._tier(8, self.vnow), 1)
         self.assertIn(8, t._standby, "tier-1 camera 8 displaced a tier-3 standby on the very next tick")
@@ -365,7 +378,7 @@ class StandbyTrimAndPriorityTest(StandbyTestBase):
         if not full_hosts:
             self.skipTest("layout did not produce a full host without standby streams")
         cand = next(c for c, h in t._host.items() if h == full_hosts[0] and c not in t._visits and c not in t._standby)
-        t._boost_until[cand] = self.vnow + 30.0
+        self.force_tier1({cand})
         self.step(1.0)
         self.assertNotIn(cand, t._standby, "host is at its cap: the swap would exceed it")
         self.assertEqual(dict(t._standby), before)
@@ -379,6 +392,7 @@ class StandbyInvariantsTest(StandbyTestBase):
         self.make_standby(n_cameras=14, hosts=3, max_open_streams=7, max_per_host=3, max_focus_cameras=3,
                           delays=delays, standby_slots=2, dwell_s={1: 1.5, 2: 1.5, 3: 1.5}, focus_ttl_s=1.0,
                           tier1_revisit_s=2.0)
+        tier1 = self.force_tier1(set())
         t = 0.0
         for step in range(2500):
             if rng.random() < 0.02:
@@ -387,8 +401,9 @@ class StandbyInvariantsTest(StandbyTestBase):
                 self.tracker.set_rolling_enabled(not self.tracker.rolling_enabled)
             if rng.random() < 0.01:
                 self.tracker.rolling_enabled = True
-            if rng.random() < 0.01:                       # a followed vehicle reaches a camera
-                self.tracker._boost_until[rng.randint(1, 14)] = self.t0 + t + rng.uniform(1, 10)
+            if rng.random() < 0.01:                       # downstream-of-focus set changes
+                tier1.clear()
+                tier1.add(rng.randint(1, 14))
             self.step(t)
             t += 0.05
             tr = self.tracker

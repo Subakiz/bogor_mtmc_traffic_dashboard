@@ -21,13 +21,9 @@ CREATE TABLE cameras (id INTEGER PRIMARY KEY, name TEXT NOT NULL, corridor TEXT 
     latitude REAL NOT NULL, longitude REAL NOT NULL, camera_type TEXT DEFAULT 'FIXED', stream_url TEXT,
     status TEXT DEFAULT 'online');
 CREATE TABLE vehicle_sightings (sighting_id INTEGER PRIMARY KEY AUTOINCREMENT, camera_id INTEGER NOT NULL,
-    local_track_id INTEGER NOT NULL, global_vehicle_id INTEGER, vehicle_class TEXT NOT NULL,
+    local_track_id INTEGER NOT NULL, vehicle_class TEXT NOT NULL,
     confidence REAL NOT NULL, bbox_x1 INTEGER NOT NULL, bbox_y1 INTEGER NOT NULL, bbox_x2 INTEGER NOT NULL,
-    bbox_y2 INTEGER NOT NULL, heading_deg REAL NOT NULL, speed_px_s REAL NOT NULL, embedding BLOB NOT NULL,
-    color_hist BLOB NOT NULL, timestamp_iso TEXT NOT NULL, crop_thumbnail BLOB);
-CREATE TABLE handoff_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, global_vehicle_id INTEGER NOT NULL,
-    from_camera_id INTEGER NOT NULL, to_camera_id INTEGER NOT NULL, confidence REAL NOT NULL,
-    timestamp_iso TEXT NOT NULL);
+    bbox_y2 INTEGER NOT NULL, heading_deg REAL NOT NULL, speed_px_s REAL NOT NULL, timestamp_iso TEXT NOT NULL);
 CREATE TABLE observation_windows (window_id INTEGER PRIMARY KEY AUTOINCREMENT, camera_id INTEGER NOT NULL,
     start_ts REAL NOT NULL, end_ts REAL NOT NULL, start_iso TEXT NOT NULL, observed_s REAL NOT NULL,
     vehicles INTEGER NOT NULL DEFAULT 0, dir_pos INTEGER NOT NULL DEFAULT 0, dir_neg INTEGER NOT NULL DEFAULT 0,
@@ -37,7 +33,7 @@ CREATE TABLE observation_windows (window_id INTEGER PRIMARY KEY AUTOINCREMENT, c
 CREATE INDEX idx_obs_cam_time ON observation_windows(camera_id, end_ts);
 """
 
-BLOB_MARKER = b"SECRET-APPEARANCE-BLOB"
+BLOB_MARKER = b"SECRET-BLOB"
 
 
 def wib(text: str) -> float:
@@ -50,7 +46,7 @@ def iso_utc(ts: float) -> str:
 
 
 def make_main_db(path: str, cameras: Iterable[tuple] = (), windows: Iterable[Dict[str, Any]] = (),
-                 sightings: Iterable[Dict[str, Any]] = (), handoffs: Iterable[Dict[str, Any]] = ()) -> str:
+                 sightings: Iterable[Dict[str, Any]] = ()) -> str:
     """cameras: (id, name, corridor, lat, lon); windows: dicts with camera_id, start, end (epoch) and counts."""
     conn = sqlite3.connect(path)
     conn.executescript(MAIN_DDL)
@@ -69,14 +65,10 @@ def make_main_db(path: str, cameras: Iterable[tuple] = (), windows: Iterable[Dic
              w.get("kind", "visit")))
     for s in sightings:
         conn.execute(
-            "INSERT INTO vehicle_sightings (camera_id, local_track_id, global_vehicle_id, vehicle_class, confidence, "
-            "bbox_x1, bbox_y1, bbox_x2, bbox_y2, heading_deg, speed_px_s, embedding, color_hist, timestamp_iso, "
-            "crop_thumbnail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (s["camera_id"], s.get("track", 1), s.get("gid"), s.get("cls", "car"), 0.9, 1, 2, 30, 40, 90.0, 12.5,
-             BLOB_MARKER, BLOB_MARKER, s["iso"], BLOB_MARKER))
-    for h in handoffs:
-        conn.execute("INSERT INTO handoff_events (global_vehicle_id, from_camera_id, to_camera_id, confidence, "
-                     "timestamp_iso) VALUES (?,?,?,?,?)", (h["gid"], h["from"], h["to"], 0.8, h["iso"]))
+            "INSERT INTO vehicle_sightings (camera_id, local_track_id, vehicle_class, confidence, "
+            "bbox_x1, bbox_y1, bbox_x2, bbox_y2, heading_deg, speed_px_s, timestamp_iso) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (s["camera_id"], s.get("track", 1), s.get("cls", "car"), 0.9, 1, 2, 30, 40, 90.0, 12.5, s["iso"]))
     conn.commit()
     conn.close()
     return path
@@ -115,8 +107,8 @@ class DatasetTestCase(unittest.TestCase):
         self.analytics = str(self.dir / "traffic_timeseries.db")
         self.addCleanup(self._tmp.cleanup)
 
-    def build(self, cameras=(), windows=(), analytics=(), sightings=(), handoffs=()):
-        make_main_db(self.main, cameras, windows, sightings, handoffs)
+    def build(self, cameras=(), windows=(), analytics=(), sightings=()):
+        make_main_db(self.main, cameras, windows, sightings)
         make_analytics_db(self.analytics, analytics)
 
     def dataset(self, start, end, **kw):
@@ -137,7 +129,7 @@ class TestSchemaContract(unittest.TestCase):
         conn = sqlite3.connect(":memory:")
         conn.executescript(database.SCHEMA_DDL)
         real = {t: {r[1] for r in conn.execute(f"PRAGMA table_info({t})")} for t in
-                ("cameras", "observation_windows", "vehicle_sightings", "handoff_events")}
+                ("cameras", "observation_windows", "vehicle_sightings")}
         fixture = sqlite3.connect(":memory:")
         fixture.executescript(MAIN_DDL)
         for table, cols in real.items():

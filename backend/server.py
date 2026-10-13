@@ -3,8 +3,8 @@
 FastAPI Server for BSW Kota Bogor MTMC Traffic Intelligence Dashboard
 Integrates:
 - All 94 CCTV cameras with real-time stream links
-- Road network topology & predictive camera handoff engine
-- SQLite WAL vehicle registry & journey search
+- Road network topology (downstream scheduling, junction clusters)
+- SQLite WAL vehicle sighting registry & counting-line volume
 - Background ANE indexing daemon control
 - Interactive Leaflet map & HLS video player frontend
 """
@@ -33,7 +33,6 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, Response
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
-from pydantic import BaseModel
 import cv2
 import numpy as np
 
@@ -43,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.config import (
     PROJECT_ROOT, DATA_DIR, FRONTEND_DIR, ENGINE_ROOT, ANALYTICS_DB_PATH, DEFAULT_MODEL_PATH,
     COUNTING_LINES_PATH, FREE_FLOW_PATH, TRAFFIC_LANES_PATH,
-    EMBEDDING_TTL_S, MAINTENANCE_INTERVAL_S, STATS_CACHE_TTL_S, ensure_engine_importable,
+    MAINTENANCE_INTERVAL_S, STATS_CACHE_TTL_S, ensure_engine_importable,
 )
 from backend.database import Database, DEFAULT_DB_PATH
 from backend.topology_engine import get_default_engine
@@ -88,7 +87,7 @@ FRONTEND_DIR.mkdir(exist_ok=True)
 # Shared engines
 db = Database(str(DEFAULT_DB_PATH))
 topology = get_default_engine()
-maintenance = SightingMaintenance(db, EMBEDDING_TTL_S, MAINTENANCE_INTERVAL_S)
+maintenance = SightingMaintenance(db, MAINTENANCE_INTERVAL_S)
 
 
 class _TTLCache:
@@ -157,12 +156,6 @@ def _camera_or_404(camera_id: int) -> Dict[str, Any]:
     if cam is None:
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
     return cam
-
-class HandoffRequest(BaseModel):
-    camera_id: int
-    exit_direction: str
-    vehicle_id: Optional[int] = None   # the followed vehicle, if any
-    vehicle_type: Optional[str] = "car"
 
 @app.on_event("startup")
 def startup_event():
@@ -283,26 +276,17 @@ def get_topology():
         "total_edges": len(topology.edges)
     }
 
-def _cached_stats() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    return _stats_cache.get("stats", lambda: (db.get_traffic_stats(), db.list_active_targets()))
+def _cached_stats() -> Dict[str, Any]:
+    return _stats_cache.get("stats", db.get_traffic_stats)
 
 
 @app.get("/api/stats")
 def get_stats():
     """Returns live citywide traffic metrics and unique vehicle counts across all 94 cameras."""
-    stats, active_targets = _cached_stats()
     return {
-        "stats": stats,
-        "active_tracked_targets": active_targets,
+        "stats": _cached_stats(),
         "timestamp": time.time()
     }
-
-def _sanitize_sighting(s: Dict[str, Any]) -> Dict[str, Any]:
-    item = dict(s)
-    for k in ["embedding", "color_hist", "crop_thumbnail"]:
-        if k in item and isinstance(item[k], bytes):
-            del item[k]
-    return item
 
 def _latest_sightings_cached(limit: int) -> List[Dict[str, Any]]:
     return _stats_cache.get(("latest", limit), lambda: db.get_latest_sightings(limit=limit))
@@ -312,116 +296,12 @@ def _latest_sightings_cached(limit: int) -> List[Dict[str, Any]]:
 def recent_sightings(limit: int = 50, camera_id: Optional[int] = None):
     """Returns recent vehicle sightings across all cameras or a specific camera."""
     if camera_id is None:
-        raw_sightings = _latest_sightings_cached(limit)
+        sightings = _latest_sightings_cached(limit)
     else:
-        raw_sightings = db.get_recent_sightings(camera_id=camera_id, limit=limit)
-    sightings = [_sanitize_sighting(s) for s in raw_sightings]
+        sightings = db.get_recent_sightings(camera_id=camera_id, limit=limit)
     return {
         "count": len(sightings),
         "sightings": sightings
-    }
-
-@app.get("/api/vehicles/{vehicle_id}/timeline")
-def vehicle_timeline(vehicle_id: int):
-    """Returns complete chronological journey across cameras for a specific vehicle ID."""
-    journey = db.get_vehicle_journey(vehicle_id)
-    if not journey:
-        raise HTTPException(status_code=404, detail=f"Vehicle #{vehicle_id} not found in database")
-    return [_sanitize_sighting(s) for s in journey]
-
-@app.get("/api/vehicles/search")
-def search_vehicle_ids(query: str = ""):
-    """Searches vehicles by ID or attributes."""
-    results = db.search_sightings(query)   # indexed: ids, vehicle class, camera name / corridor
-    clean_results = [_sanitize_sighting(r) for r in results]
-    return {"query": query, "results": clean_results}
-
-def _is_removed(camera_id: int) -> bool:
-    return (_camera_or_none(camera_id) or {}).get("status", "online") == "removed"
-
-
-def _live_downstream_candidates(camera_id: int, exit_direction: str, max_hops: int = 3) -> List[Dict[str, Any]]:
-    """
-    Downstream candidates, routing *through* cameras the BSW site no longer lists: they stay in
-    the road graph for connectivity, but a vehicle can only be picked up again on a live camera,
-    so a removed candidate is replaced by the live cameras beyond it (distances and arrival
-    windows accumulated along the way).
-    """
-    results: Dict[int, Dict[str, Any]] = {}
-    frontier = [(c, 0) for c in topology.get_downstream_candidates(camera_id, exit_direction)]
-    while frontier:
-        cand, hops = frontier.pop(0)
-        target = cand["target_camera_id"]
-        if target == camera_id or target in results:
-            continue
-        if not _is_removed(target):
-            results[target] = cand
-            continue
-        if hops >= max_hops:
-            continue
-        for nxt in topology.get_downstream_candidates(target, "*"):
-            merged = dict(nxt)
-            merged["distance_m"] = cand.get("distance_m", 0) + nxt.get("distance_m", 0)
-            merged["t_min_s"] = cand.get("t_min_s", 0) + nxt.get("t_min_s", 0)
-            merged["t_max_s"] = cand.get("t_max_s", 0) + nxt.get("t_max_s", 0)
-            merged["exit_direction"] = cand.get("exit_direction", nxt.get("exit_direction"))
-            merged["road_name"] = cand.get("road_name") or nxt.get("road_name", "")
-            frontier.append((merged, hops + 1))
-    return list(results.values())
-
-
-@app.post("/api/handoff/predict")
-def predict_handoff(req: HandoffRequest):
-    """
-    Predicts downstream candidate cameras when a vehicle exits a junction heading a specific direction.
-    Calculates expected arrival window [t_min, t_max].
-    """
-    candidates = _live_downstream_candidates(req.camera_id, req.exit_direction)
-    results = []
-
-    for cand in candidates:
-        target_cam_id = cand["target_camera_id"]
-        target_cam = _camera_or_none(target_cam_id)
-        results.append({
-            "target_camera_id": target_cam_id,
-            "target_camera_name": cand.get("target_name") or (target_cam["name"] if target_cam else f"Camera #{target_cam_id}"),
-            "stream_url": target_cam.get("stream_url") if target_cam else None,
-            "coordinates": [target_cam.get("latitude"), target_cam.get("longitude")] if target_cam else None,
-            "travel_time_seconds": int((cand.get("t_min_s", 60) + cand.get("t_max_s", 120)) / 2),
-            "arrival_window": {
-                "t_min_seconds": int(cand.get("t_min_s", 40)),
-                "t_max_seconds": int(cand.get("t_max_s", 120))
-            },
-            "road_name": cand.get("road_name", ""),
-            "distance_m": cand.get("distance_m", 0)
-        })
-
-    # A followed vehicle (one that has actually been sighted: active_targets has a FOREIGN KEY on
-    # last_sighting_id) becomes an active target, so the tracker visits its candidate cameras
-    # first. The prediction itself is not a handoff and is not stored as one -- handoff_events
-    # only holds re-identifications the tracker observed.
-    journey = db.get_vehicle_journey(req.vehicle_id) if req.vehicle_id and candidates else []
-    if journey:
-        from datetime import datetime, timezone
-        now_iso = datetime.now(timezone.utc).isoformat()
-        latest = journey[-1]
-        try:
-            db.update_active_target(
-                global_vehicle_id=req.vehicle_id,
-                current_camera_id=latest["camera_id"],
-                last_sighting_id=latest["sighting_id"],
-                status="tracking",
-                locked_at_iso=now_iso
-            )
-        except Exception as e:
-            print(f"Warning: could not record handoff intent for vehicle {req.vehicle_id}: {e}")
-
-    return {
-        "vehicle_id": req.vehicle_id,
-        "from_camera": req.camera_id,
-        "exit_direction": req.exit_direction,
-        "candidate_count": len(results),
-        "candidates": results
     }
 
 @app.get("/api/daemon/status")
@@ -458,7 +338,7 @@ def _heartbeat_payload() -> Dict[str, Any]:
         "type": "heartbeat",
         "timestamp": time.time(),
         "counts": get_camera_counts(),
-        "recent": [_sanitize_sighting(r) for r in _latest_sightings_cached(12)],
+        "recent": _latest_sightings_cached(12),
     }
 
 
@@ -815,8 +695,7 @@ def export_dataset(start: Optional[str] = None, end: Optional[str] = None, bucke
 @app.get("/api/export/raw")
 def export_raw_table(table: str, start: Optional[str] = None, end: Optional[str] = None,
                      camera_ids: Optional[str] = None, format: str = "csv"):
-    """Raw rows for the range: observation_windows, sightings (no appearance blobs), handoffs,
-    cameras or analytics windows, with a WIB ``*_local`` column next to each UTC time."""
+    """Raw rows for the range: observation_windows, sightings, cameras or analytics windows, with a WIB ``*_local`` column next to each UTC time."""
     from backend import dataset
     if format not in _EXPORT_MEDIA:
         raise HTTPException(status_code=400, detail="format must be csv or jsonl")

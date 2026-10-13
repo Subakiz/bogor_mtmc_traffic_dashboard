@@ -8,8 +8,8 @@ friendly) and into raw table exports, always together with a data dictionary and
 Sources (opened strictly read-only, ``mode=ro``; nothing is ever written to them)
     * main DB (``data/traffic_db.sqlite``): ``observation_windows`` = counting-line crossings per
       observation window with the OBSERVED seconds, classes, directions, kind (focus/visit) and
-      counting mode; ``cameras`` (name, corridor, position); ``vehicle_sightings`` and
-      ``handoff_events`` for raw exports.
+      counting mode; ``cameras`` (name, corridor, position); ``vehicle_sightings`` for raw
+      exports.
     * analytics DB (``data/traffic_timeseries.db``): ``camera_traffic_timeseries`` = per-window
       congestion index, speeds, occupancy, queue share.
 
@@ -299,7 +299,6 @@ _RAW_DOCS: Dict[str, Dict[str, Dict[str, Any]]] = {
         "sighting_id": _col("Row id.", "int", None, False),
         "camera_id": _col("Camera id.", "int", None, False),
         "local_track_id": _col("Tracker id, unique only within a camera visit.", "int", None, False),
-        "global_vehicle_id": _col("Cross-camera identity assigned by re-identification (null if none).", "int", None, True),
         "vehicle_class": _col("car, motorcycle, bus or truck.", "string", None, False),
         "confidence": _col("Detector confidence 0-1.", "float", None, False),
         "bbox_x1": _col("Bounding box left (px).", "int", "px", False),
@@ -310,15 +309,6 @@ _RAW_DOCS: Dict[str, Dict[str, Dict[str, Any]]] = {
         "speed_px_s": _col("Pixel speed.", "float", "px/s", False),
         "timestamp_iso": _col("Sighting time, ISO-8601 UTC.", "string", None, False),
         "timestamp_local": _col("Sighting time in local (WIB) ISO-8601 with offset.", "string", None, True),
-    },
-    "handoff_events": {
-        "event_id": _col("Row id.", "int", None, False),
-        "global_vehicle_id": _col("Cross-camera identity that was handed off.", "int", None, False),
-        "from_camera_id": _col("Camera the vehicle left.", "int", None, False),
-        "to_camera_id": _col("Camera it was matched at.", "int", None, False),
-        "confidence": _col("Match confidence 0-1.", "float", None, False),
-        "timestamp_iso": _col("Handoff time, ISO-8601 UTC.", "string", None, False),
-        "timestamp_local": _col("Handoff time in local (WIB) ISO-8601 with offset.", "string", None, True),
     },
     "cameras": {
         "id": _col("Camera id.", "int", None, False),
@@ -370,7 +360,7 @@ def data_dictionary(name: str = "dataset", camera_ids: Optional[Sequence[int]] =
 
     ``name``: ``"dataset"`` (long layout, the default), ``"dataset_wide"`` (describes the ``cam_<id>``
     columns for ``camera_ids`` holding ``value``) or a raw table (``observation_windows``,
-    ``vehicle_sightings``, ``handoff_events``, ``cameras``, ``analytics_windows``; the dictionary of an
+    ``vehicle_sightings``, ``cameras``, ``analytics_windows``; the dictionary of an
     actual export, which also covers columns this version does not know, is ``RawStream.dictionary()``).
     """
     if name == "dataset":
@@ -1084,19 +1074,16 @@ def build_sequences(rows: Iterable[Dict[str, Any]], seq_len: int = 12, horizon: 
 # ── Raw exports ─────────────────────────────────────────────────────────────────
 
 _RAW_ALIASES = {"windows": "observation_windows", "obs": "observation_windows", "sightings": "vehicle_sightings",
-                "handoffs": "handoff_events", "camera": "cameras", "metadata": "cameras",
+                "camera": "cameras", "metadata": "cameras",
                 "analytics": "analytics_windows", "camera_traffic_timeseries": "analytics_windows"}
 RAW_TABLES = tuple(_RAW_DOCS)
-_BLOB_NOTE = "BLOB columns (appearance embeddings, color histograms, crop thumbnails) are never exported."
+_BLOB_NOTE = "BLOB columns are never exported."
 
 _RAW_SPECS: Dict[str, Dict[str, Any]] = {
     "observation_windows": {"db": "main", "table": "observation_windows", "cam": ["camera_id"],
                             "order": "end_ts, window_id", "local_ts": [("start_ts", "start_local"), ("end_ts", "end_local")]},
     "vehicle_sightings": {"db": "main", "table": "vehicle_sightings", "cam": ["camera_id"], "iso": "timestamp_iso",
                           "order": "timestamp_iso, sighting_id", "local_iso": [("timestamp_iso", "timestamp_local")]},
-    "handoff_events": {"db": "main", "table": "handoff_events", "cam": ["from_camera_id", "to_camera_id"],
-                       "iso": "timestamp_iso", "order": "timestamp_iso, event_id",
-                       "local_iso": [("timestamp_iso", "timestamp_local")]},
     "cameras": {"db": "main", "table": "cameras", "cam": ["id"], "order": "id", "drop": ("stream_url",)},
     "analytics_windows": {"db": "analytics", "table": "camera_traffic_timeseries", "cam": ["camera_id"],
                           "order": "timestamp, id", "local_ts": [("timestamp", "timestamp_local_iso")]},
@@ -1232,9 +1219,9 @@ def iter_raw(table: str, start: Optional[TimeLike] = None, end: Optional[TimeLik
              analytics_db: Optional[str] = None) -> RawStream:
     """
     Rows of a raw table for ``[start, end)`` (observation / analytics windows: those overlapping it;
-    sightings and handoffs: by timestamp, at second resolution), optionally only for ``camera_ids``
-    (handoffs: either end). Tables: ``observation_windows``, ``vehicle_sightings``, ``handoff_events``,
-    ``cameras``, ``analytics_windows`` (aliases ``windows``, ``sightings``, ``handoffs``, ``analytics``).
+    sightings: by timestamp, at second resolution), optionally only for ``camera_ids``.
+    Tables: ``observation_windows``, ``vehicle_sightings``, ``cameras``, ``analytics_windows``
+    (aliases ``windows``, ``sightings``, ``analytics``).
     BLOB columns are never included and a ``*_local`` (WIB) column is added next to each UTC time.
     """
     return RawStream(table, start, end, camera_ids, main_db, analytics_db)
@@ -1279,8 +1266,7 @@ def _source_info(main_path: str, analytics_path: str) -> Dict[str, Any]:
     info: Dict[str, Any] = {}
     for key, path, probes in (
         ("main_db", main_path, (("observation_windows", "MIN(end_ts)", "MAX(end_ts)", "epoch"),
-                                ("vehicle_sightings", "MIN(timestamp_iso)", "MAX(timestamp_iso)", "iso"),
-                                ("handoff_events", "MIN(timestamp_iso)", "MAX(timestamp_iso)", "iso"))),
+                                ("vehicle_sightings", "MIN(timestamp_iso)", "MAX(timestamp_iso)", "iso"))),
         ("analytics_db", analytics_path, (("camera_traffic_timeseries", "MIN(timestamp)", "MAX(timestamp)", "epoch"),)),
     ):
         entry: Dict[str, Any] = {"path": str(Path(path).expanduser().resolve()), "exists": os.path.exists(path)}

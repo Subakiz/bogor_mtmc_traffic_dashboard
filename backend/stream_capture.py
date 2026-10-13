@@ -1,6 +1,6 @@
 """
 backend/stream_capture.py
-BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard.
+BSW Kota Bogor Multi-Camera Traffic Intelligence Dashboard.
 Threaded Low-Latency HLS Stream Ingestion (FEAT-M4).
 
 Implements:

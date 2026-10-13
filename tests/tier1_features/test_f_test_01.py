@@ -1,7 +1,7 @@
 """
 tests/tier1_features/test_f_test_01.py
 Tier 1 Tests for Feature F-TEST-01 (Deterministic Simulation & E2E Test Suite).
->=5 test cases (5 total tests).
+Synthetic frames, mock HLS streams and the mock camera network.
 """
 
 import json
@@ -13,7 +13,6 @@ from tests.mock_stream import (
     MockCameraNetwork,
     MockHLSStreamServer,
     SyntheticFrameGenerator,
-    SyntheticTrajectorySimulator,
 )
 
 
@@ -34,20 +33,6 @@ class TestFTEST01DeterministicSimulation(unittest.TestCase):
 
         np.testing.assert_array_equal(arr1, arr2)
         self.assertEqual(b1, b2)
-
-    def test_f_test_01_synthetic_trajectory_journey_determinism(self):
-        """Test 2: Trajectory simulator deterministically reproduces vehicle journey."""
-        sim1 = SyntheticTrajectorySimulator(seed=42)
-        sim2 = SyntheticTrajectorySimulator(seed=42)
-
-        j1 = sim1.simulate_vehicle_corridor_journey(global_vehicle_id=50, route_camera_ids=[79, 87])
-        j2 = sim2.simulate_vehicle_corridor_journey(global_vehicle_id=50, route_camera_ids=[79, 87])
-
-        self.assertEqual(len(j1), len(j2))
-        for s1, s2 in zip(j1, j2):
-            self.assertEqual(s1["camera_id"], s2["camera_id"])
-            self.assertEqual(s1["bbox"], s2["bbox"])
-            np.testing.assert_allclose(s1["embedding_vector"], s2["embedding_vector"], atol=1e-5)
 
     def test_f_test_01_mock_hls_stream_offline_execution(self):
         """Test 3: Mock HLS server generates valid streaming playlists without external network."""

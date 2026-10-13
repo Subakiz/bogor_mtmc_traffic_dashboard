@@ -1,7 +1,7 @@
 """
 tests/test_tracker_robustness.py
-Latent faults in the rolling tracker: numpy-bearing dataclasses compared with ``==`` (ValueError),
-and ``stop()`` closing sessions underneath a worker that was still inside a tick.
+Latent faults in the rolling tracker: parked entries removed by ``==`` instead of position, and
+``stop()`` closing sessions underneath a worker that was still inside a tick.
 """
 
 import threading
@@ -9,16 +9,10 @@ import time
 import unittest
 from unittest import mock
 
-import numpy as np
 
 from backend import rolling_tracker
 from backend.rolling_tracker import _Parked, _Track
 from tests.test_rolling_tracker import FakeDetector, TrackerTestBase
-
-
-def unit(*values):
-    v = np.array(values, dtype=np.float32)
-    return v / np.linalg.norm(v)
 
 
 class ParkedMatchingTest(TrackerTestBase):
@@ -27,37 +21,36 @@ class ParkedMatchingTest(TrackerTestBase):
     def track(self):
         return _Track(1, "car", 0.0, 0.0, self.BOX, 0.9, 0.0, 0.0)
 
-    def test_two_parked_entries_sharing_gid_class_and_box_do_not_raise(self):
-        # Regression: _Parked was a dataclass with eq=True, so list.remove() compared entries with ==,
-        # which compared their numpy embeddings and raised ValueError once an earlier entry matched
-        # on every other field.
+    def test_only_the_matching_parked_entry_is_consumed(self):
+        # Regression: _Parked was a dataclass with eq=True, so list.remove() compared entries with ==;
+        # entries are removed by position now.
         self.make({})
-        near = unit(1.0, 0.1, 0.0)
-        far = unit(0.0, 0.2, 1.0)
-        earlier = _Parked(7, "car", self.BOX, far, ts=1.0)
-        wanted = _Parked(7, "car", self.BOX, near, ts=1.0)
-        self.tracker._parked[1] = [earlier, wanted]
-        match = self.tracker._match_parked(1, self.track(), near, now=2.0)
+        elsewhere = _Parked("car", (10, 10, 60, 50), ts=1.0)
+        wanted = _Parked("car", self.BOX, ts=1.0)
+        self.tracker._parked[1] = [elsewhere, wanted]
+        match = self.tracker._match_parked(1, self.track(), now=2.0)
         self.assertIs(match, wanted)
-        self.assertEqual(self.tracker._parked[1], [earlier], "only the matched entry is consumed")
-        self.assertIs(self.tracker._parked[1][0], earlier)
+        self.assertEqual(len(self.tracker._parked[1]), 1, "only the matched entry is consumed")
+        self.assertIs(self.tracker._parked[1][0], elsewhere)
 
     def test_identical_entries_are_consumed_one_at_a_time(self):
         self.make({})
-        emb = unit(1.0, 0.0, 0.0)
-        a, b = (_Parked(3, "car", self.BOX, emb.copy(), ts=1.0) for _ in range(2))
+        a, b = (_Parked("car", self.BOX, ts=1.0) for _ in range(2))
         self.tracker._parked[1] = [a, b]
-        self.assertIs(self.tracker._match_parked(1, self.track(), emb, 2.0), a)
-        self.assertIs(self.tracker._match_parked(1, self.track(), emb, 2.0), b)
-        self.assertIsNone(self.tracker._match_parked(1, self.track(), emb, 2.0))
+        self.assertIs(self.tracker._match_parked(1, self.track(), 2.0), a)
+        self.assertIs(self.tracker._match_parked(1, self.track(), 2.0), b)
+        self.assertIsNone(self.tracker._match_parked(1, self.track(), 2.0))
+
+    def test_a_parked_entry_of_another_class_is_not_matched(self):
+        self.make({})
+        self.tracker._parked[1] = [_Parked("truck", self.BOX, ts=1.0)]
+        self.assertIsNone(self.tracker._match_parked(1, self.track(), 2.0))
 
     def test_session_and_track_records_compare_by_identity(self):
         self.make({})
         a = self.track()
         b = self.track()
-        a.embedding = np.zeros(4)
-        b.embedding = np.zeros(4)
-        self.assertNotEqual(a, b)                       # would raise with a generated __eq__
+        self.assertNotEqual(a, b)
         self.assertEqual(a, a)
 
 
