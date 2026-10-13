@@ -1073,6 +1073,13 @@ function congestionLevel(index, label) {
         || CONGESTION_LEVELS.find(l => index >= l.min);
 }
 
+function fmtAgo(seconds) {
+    if (!(seconds >= 0)) return "earlier";
+    if (seconds < 90) return `${Math.round(seconds)} s ago`;
+    if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`;
+    return `${(seconds / 3600).toFixed(seconds < 36000 ? 1 : 0)} h ago`;
+}
+
 function fmtDuration(seconds) {
     if (!(seconds > 0)) return "none";
     return seconds < 90 ? `${Math.round(seconds)} s` : `${(seconds / 60).toFixed(seconds < 600 ? 1 : 0)} min`;
@@ -1098,29 +1105,38 @@ async function loadTimeSeriesMetrics(cameraId) {
         setText("tsFlowPerMin", rate ? (rate.vph / 60 < 10 ? (rate.vph / 60).toFixed(1) : Math.round(rate.vph / 60)) : "–");
         setText("tsObserved", rate ? fmtDuration(rate.observed_s) : "none");
 
-        // Congestion Index
-        const cong = live.congestion_index !== undefined ? live.congestion_index : (lastRec ? lastRec.congestion_index : 0.0);
-        setText("tsCongestionIndex", Number(cong).toFixed(2));
+        // Congestion: the live reading while the camera is being observed. Rolling cameras are only
+        // watched for a short visit every few minutes; between visits the last reading is shown with
+        // its age instead of passing for the current one.
+        const isLive = live.timestamp !== undefined;
+        const measured = isLive ? live : (data.last_measured || {});
+        const hasReading = measured.congestion_index !== undefined;
+        const cong = hasReading ? Number(measured.congestion_index) : 0;
+        const ago = !isLive && hasReading ? ` · ${fmtAgo(data.live_age_s)}` : "";
+        setText("tsCongestionIndex", hasReading ? cong.toFixed(2) : "–");
 
         // Lane occupancy (share of the camera's learned road area that traffic covers) once the camera's
         // lanes are learned; until then only the share of the whole picture is known.
-        if (live.lane_occupancy !== undefined && live.lane_occupancy !== null) {
-            setText("tsOccupancyPct", `${(live.lane_occupancy * 100).toFixed(0)}% of lanes occupied`);
+        if (!hasReading) {
+            setText("tsOccupancyPct", "not observed yet");
+        } else if (measured.lane_occupancy !== undefined && measured.lane_occupancy !== null) {
+            setText("tsOccupancyPct", `${(measured.lane_occupancy * 100).toFixed(0)}% of lanes occupied${ago}`);
         } else {
-            const occ = live.occupancy_ratio !== undefined ? (live.occupancy_ratio * 100).toFixed(1) : (lastRec ? (lastRec.occupancy_ratio * 100).toFixed(1) : "0.0");
-            setText("tsOccupancyPct", `${occ}% of frame (learning lanes)`);
+            setText("tsOccupancyPct", `${((measured.occupancy_ratio || 0) * 100).toFixed(1)}% of frame (learning lanes)${ago}`);
         }
 
-        const level = congestionLevel(Number(cong), live.congestion_label);
+        const level = congestionLevel(cong, measured.congestion_label);
         const barEl = document.getElementById("tsCongestionBar");
         if (barEl) {
-            barEl.style.width = `${Math.min(Math.max(cong * 100, 5), 100)}%`;
+            barEl.style.width = hasReading ? `${Math.min(Math.max(cong * 100, 5), 100)}%` : "0%";
             barEl.style.background = level.color;
+            barEl.style.opacity = isLive ? "" : "0.45";
         }
         const badgeEl = document.getElementById("tsCongestionBadge");
         if (badgeEl) {
-            badgeEl.textContent = level.label;
-            badgeEl.className = `sev ${level.cls}`;
+            badgeEl.textContent = hasReading ? level.label + ago : "No data";
+            badgeEl.className = `sev ${hasReading ? level.cls : ""}`;
+            badgeEl.title = isLive ? "Live" : (hasReading ? "Last measured on this camera's latest visit" : "");
         }
 
         // Classes: counting-line rate per class
@@ -1131,8 +1147,8 @@ async function loadTimeSeriesMetrics(cameraId) {
         setText("tsBusCount", rate ? fmtRate(classes.bus) : "–");
 
         // Kinematics
-        const speed = live.avg_speed_px_s !== undefined ? live.avg_speed_px_s : (lastRec ? lastRec.avg_speed_px_s : 0.0);
-        setText("tsSpeedProxy", Number(speed).toFixed(1));
+        const speed = measured.avg_speed_px_s !== undefined ? measured.avg_speed_px_s : (lastRec ? lastRec.avg_speed_px_s : null);
+        setText("tsSpeedProxy", speed === null ? "–" : Number(speed).toFixed(1));
 
         const dx = live.flow_dx !== undefined ? live.flow_dx : (lastRec ? lastRec.avg_flow_dx : 0.0);
         const dy = live.flow_dy !== undefined ? live.flow_dy : (lastRec ? lastRec.avg_flow_dy : 0.0);
