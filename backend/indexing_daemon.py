@@ -1,18 +1,18 @@
 """
 backend/indexing_daemon.py
-BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard.
+BSW Kota Bogor Multi-Camera Traffic Intelligence Dashboard.
 3-Tier Adaptive Scheduling Daemon (FEAT-M5).
 
 Implements:
 - 3-Tier Adaptive Scheduling:
-  - Tier 1: Target vehicle camera + candidate handoff cameras (15-20 FPS)
+  - Tier 1: Manually promoted cameras (15-20 FPS)
   - Tier 2: Arterial junction hubs (2 FPS)
   - Tier 3: Peripheral cameras (0.2 FPS round-robin sampling)
-- Dynamic camera elevation on handoff exit events and demotion upon window expiration.
+- Camera promotion to Tier 1, optionally with an expiry after which it is demoted again.
 - Total scheduled load bounds within Apple Neural Engine compute budget (<= 75 FPS).
 - Thread-safe start, stop, step_camera, and status query methods.
 - Full pipeline: Frame Ingestion -> ANE YOLO Detection -> Heading/Speed Estimation ->
-  Feature Extraction (256-dim embedding, 128-bin color histogram) -> SQLite WAL Persistence.
+  SQLite WAL Persistence.
 """
 
 import json
@@ -20,27 +20,19 @@ import logging
 import os
 import threading
 import time
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
-from backend.config import DWELL_TIER1_S
 from backend.database import Database, init_db
 from backend.detector import ANEVehicleDetector
-from backend.reid import IdentityResolver, extract_appearance
 from backend.stream_capture import MockVideoCapture, ThreadedStreamCapture
 
 logger = logging.getLogger("indexing_daemon")
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DEFAULT_TOPOLOGY_PATH = os.path.join(PROJECT_ROOT, "data", "bogor_camera_topology.json")
-
-# How long a track may vanish from a camera's detections before Re-ID treats it as having
-# departed (and becomes eligible for cross-camera matching). Short enough that Tier 1/2's
-# frequent polling still catches genuine departures quickly.
-_TRACK_DEPARTURE_GRACE_S = 3.0
 
 # Core Arterial Junction Hub Camera IDs in Kota Bogor
 DEFAULT_ARTERIAL_HUBS = {
@@ -72,7 +64,6 @@ class IndexingDaemon:
         topology_path: Optional[str] = None,
         topology: Optional[Any] = None,
         detector: Optional[ANEVehicleDetector] = None,
-        identity_resolver: Optional[IdentityResolver] = None,
         test_mode: bool = False,
     ):
         self.topology_path = topology_path or DEFAULT_TOPOLOGY_PATH
@@ -80,21 +71,13 @@ class IndexingDaemon:
         self.test_mode = test_mode
         self.db = db or init_db(db_path)
         self.detector = detector or ANEVehicleDetector(test_mode=test_mode)
-        # Cross-camera "Follow That Car" global vehicle identity (FEAT-M2/M7): matches a
-        # newly-seen track against vehicles that recently departed a topologically
-        # reachable camera, gated by appearance similarity and the road-network travel window.
-        self.identity_resolver = identity_resolver or IdentityResolver(topology=self.topology_obj)
 
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
 
-        # Per-camera live track bookkeeping for Re-ID: camera_id -> track_id -> state.
-        # Drives global-id assignment on first sighting and departure registration when a
-        # track stops being detected (see step_camera / _resolve_departures).
-        self._camera_active_tracks: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
-        # Auto-demotion deadlines for handoff-triggered Tier 1 promotions (manual promotions
-        # via promote_to_tier1(..., ttl_s=None) never expire on their own).
+        # Auto-demotion deadlines for Tier 1 promotions made with a ttl (promotions via
+        # promote_to_tier1(..., ttl_s=None) never expire on their own).
         self._tier1_expiry: Dict[int, float] = {}
 
         self.all_camera_ids: Set[int] = set()
@@ -181,7 +164,7 @@ class IndexingDaemon:
     def _initialize_tiers(self):
         """Partitions cameras into Tier 1 (empty), Tier 2 (Hubs), and Tier 3 (Peripheral)."""
         with self._lock:
-            # Tier 1 starts empty (elevated on target follow)
+            # Tier 1 starts empty (filled by promote_to_tier1)
             self.tiers[1]["cameras"] = set()
             # Tier 2 gets arterial hubs
             self.tiers[2]["cameras"] = set(self.tier2_hub_defaults & self.all_camera_ids)
@@ -208,7 +191,7 @@ class IndexingDaemon:
         """
         Elevates camera to Tier 1 (15-20 FPS) for real-time tracking.
         ``ttl_s``, when given, auto-demotes the camera after that many idle seconds
-        (used for handoff-triggered promotions); omit it for a manual/sticky lock.
+        (a temporary promotion); omit it for a manual/sticky lock.
         """
         with self._lock:
             if camera_id not in self.all_camera_ids:
@@ -236,7 +219,7 @@ class IndexingDaemon:
             logger.info(f"Demoted camera {camera_id} from Tier 1.")
 
     def _expire_tier1_promotions(self, now: float) -> None:
-        """Demotes handoff-promoted Tier 1 cameras whose dwell window has elapsed."""
+        """Demotes Tier 1 cameras whose promotion ttl has elapsed."""
         with self._lock:
             expired = [cid for cid, deadline in self._tier1_expiry.items() if now >= deadline]
         for cid in expired:
@@ -269,8 +252,7 @@ class IndexingDaemon:
         Executes one processing step for a single camera:
         1. Ingest frame
         2. Run ANE YOLO detection and heading/speed calculation
-        3. Extract mock/deep appearance embedding (1024 bytes) and HSV histogram (512 bytes)
-        4. Persist sighting to SQLite WAL database
+        3. Persist sighting to SQLite WAL database
         """
         curr_time = timestamp or time.time()
         cam_info = self.camera_metadata.get(camera_id, {})
@@ -306,111 +288,26 @@ class IndexingDaemon:
             return []
 
         iso_time = datetime.fromtimestamp(curr_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        seen_track_ids: Set[int] = set()
         persisted_sightings = []
 
         for det in detections:
-            tid = det["track_id"]
-            seen_track_ids.add(tid)
-
-            # Multi-Modal Appearance Signature: 256-dim embedding (1024 bytes, L2-normalised)
-            # + 128-bin HSV colour histogram (512 bytes), from the real vehicle crop when a
-            # frame is available; falls back to a deterministic synthetic signature for
-            # degenerate crops (e.g. a track right at the frame edge).
-            appearance = extract_appearance(frame, det["bbox"]) if frame is not None else None
-            if appearance is not None:
-                emb_vec, hist_vec = appearance
-            else:
-                rng = np.random.RandomState(abs(hash((tid, det["class_name"]))) % (2**31))
-                emb_vec = rng.randn(256).astype(np.float32)
-                emb_vec /= max(1e-8, float(np.linalg.norm(emb_vec)))
-                hist_vec = np.zeros(128, dtype=np.float32)
-                hist_vec[0:16] = 1.0 / 16.0
-
-            with self._lock:
-                track_state = self._camera_active_tracks[camera_id].get(tid)
-                if track_state is None:
-                    # First sighting of this track on this camera: resolve its global vehicle
-                    # id against recent departures from reachable cameras (Follow That Car).
-                    gid, confidence, matched_from = self.identity_resolver.resolve(
-                        camera_id, det["class_name"], emb_vec, curr_time
-                    )
-                else:
-                    gid, confidence, matched_from = track_state["gid"], 1.0, None
-
-            det["global_vehicle_id"] = gid
-
-            # Persist to SQLite WAL database
             sid = self.db.insert_vehicle_sighting(
                 camera_id=camera_id,
-                local_track_id=tid,
-                global_vehicle_id=gid,
+                local_track_id=det["track_id"],
                 vehicle_class=det["class_name"],
                 confidence=det["confidence"],
                 bbox=det["bbox"],
                 heading_deg=det["heading_deg"],
                 speed_px_s=det["speed_px_s"],
-                embedding=emb_vec.tobytes(),
-                color_hist=hist_vec.tobytes(),
                 timestamp_iso=iso_time,
-                crop_thumbnail=None,
             )
             det["sighting_id"] = sid
-
-            with self._lock:
-                self._camera_active_tracks[camera_id][tid] = {
-                    "gid": gid,
-                    "class_name": det["class_name"],
-                    "embedding": emb_vec,
-                    "last_seen": curr_time,
-                }
-
-            if matched_from is not None:
-                # Confirmed cross-camera handoff: record it, lock the active target onto this
-                # camera, and keep this camera at Tier 1 FPS for the dwell window so the
-                # rest of the vehicle's pass through the junction is captured at full rate.
-                try:
-                    self.db.record_handoff_event(
-                        global_vehicle_id=gid,
-                        from_camera_id=matched_from,
-                        to_camera_id=camera_id,
-                        confidence=confidence,
-                        timestamp_iso=iso_time,
-                    )
-                    self.db.update_active_target(
-                        global_vehicle_id=gid,
-                        current_camera_id=camera_id,
-                        last_sighting_id=sid,
-                        status="tracking",
-                        locked_at_iso=iso_time,
-                    )
-                except Exception as e:
-                    logger.debug(f"Handoff bookkeeping failed for gid {gid}: {e}")
-                self.promote_to_tier1(camera_id, reason="handoff_confirmed", ttl_s=DWELL_TIER1_S)
-
             persisted_sightings.append(det)
-
-        self._resolve_departures(camera_id, seen_track_ids, curr_time)
 
         with self._lock:
             self._sightings_indexed += len(persisted_sightings)
 
         return persisted_sightings
-
-    def _resolve_departures(self, camera_id: int, seen_track_ids: Set[int], now: float) -> None:
-        """Registers tracks absent from this step as departures so Re-ID can match them to a
-        reappearance on a downstream camera."""
-        with self._lock:
-            active = self._camera_active_tracks[camera_id]
-            stale_ids = [
-                tid for tid, st in active.items()
-                if tid not in seen_track_ids and (now - st["last_seen"]) > _TRACK_DEPARTURE_GRACE_S
-            ]
-            departed = [active.pop(tid) for tid in stale_ids]
-        for st in departed:
-            self.identity_resolver.register_departure(
-                st["gid"], camera_id, st["class_name"], st["embedding"], st["last_seen"]
-            )
 
     def run_cycle(self):
         """
@@ -524,7 +421,6 @@ class IndexingDaemon:
                 except Exception:
                     pass
             self.stream_captures.clear()
-            self._camera_active_tracks.clear()
             self._tier1_expiry.clear()
 
     def get_status(self) -> Dict[str, Any]:
@@ -558,7 +454,6 @@ class IndexingDaemon:
                 ),
                 "cycles_completed": self._cycles_completed,
                 "sightings_indexed": self._sightings_indexed,
-                "reid_pending_departures": self.identity_resolver.pending_count(),
                 "last_cycle_time": self._last_cycle_time,
             }
 

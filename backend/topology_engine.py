@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard
+BSW Kota Bogor Multi-Camera Traffic Intelligence Dashboard
 Milestone 1: Camera Geospatial & Road Network Topology Engine
 
 Implements:

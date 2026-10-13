@@ -7,10 +7,9 @@ Tier 2 Boundary and Corner Case Tests for Features FEAT-M4, FEAT-M1, FEAT-M5, FE
 from tests import TOTAL_CAMERAS
 import collections
 import unittest
-import numpy as np
 
-from tests.mock_stream import MockHLSStreamServer, SyntheticFrameGenerator, SyntheticTrajectorySimulator
-from tests.reference_contracts import ReidEngineContract, TopologyContract
+from tests.mock_stream import MockHLSStreamServer, SyntheticFrameGenerator
+from tests.reference_contracts import TopologyContract
 
 
 class TestTier2ModelsBoundaries(unittest.TestCase):
@@ -126,103 +125,6 @@ class TestTier2ModelsBoundaries(unittest.TestCase):
         load = len(tier1) * 15.0 + len(tier2) * 2.0 + len(tier3) * 0.2
         # 10*15 + 12*2 + 72*0.2 = 150 + 24 + 14.4 = 188.4
         self.assertEqual(len(tier1) + len(tier2) + len(tier3), 94)
-
-    # --- FEAT-M2 Boundaries ---
-    def test_b_feat_m2_single_pixel_vehicle_crop(self):
-        """B2.1: 1x1 pixel crop resized to 224x224 produces valid unit-normalized embedding."""
-        crop, _ = self.frame_gen.generate_vehicle_crop((0, 0, 1, 1), target_size=(224, 224))
-        self.assertEqual(crop.shape, (224, 224, 3))
-
-    def test_b_feat_m2_flat_black_crop_handling(self):
-        """B2.2: All-black crop handles embedding extraction without NaN crash."""
-        black_crop = np.zeros((224, 224, 3), dtype=np.uint8)
-        self.assertEqual(black_crop.sum(), 0)
-
-    def test_b_feat_m2_flat_white_crop_handling(self):
-        """B2.3: All-white crop handles embedding extraction without NaN crash."""
-        white_crop = np.ones((224, 224, 3), dtype=np.uint8) * 255
-        self.assertEqual(white_crop.mean(), 255.0)
-
-    def test_b_feat_m2_custom_resolution_crop(self):
-        """B2.4: Arbitrary crop size (112x112) is supported."""
-        crop, _ = self.frame_gen.generate_vehicle_crop((10, 10, 80, 60), target_size=(112, 112))
-        self.assertEqual(crop.shape, (112, 112, 3))
-
-    def test_b_feat_m2_embedding_normalization_precision(self):
-        """B2.5: Normalizing random vector maintains norm precision within 1e-6."""
-        v = np.random.randn(256).astype(np.float32)
-        norm_v = v / np.linalg.norm(v)
-        self.assertAlmostEqual(float(np.linalg.norm(norm_v)), 1.0, places=6)
-
-    # --- FEAT-M3 Boundaries ---
-    def test_b_feat_m3_zero_color_histogram_safety(self):
-        """B3.1: All-zero color histogram evaluates to 0.0 color similarity without crash."""
-        h_zero = np.zeros(128, dtype=np.float32)
-        h_norm = np.ones(128, dtype=np.float32) / 128.0
-
-        # Dot product with zero is 0.0
-        color_sim = float(np.dot(h_zero, h_norm))
-        self.assertEqual(color_sim, 0.0)
-
-    def test_b_feat_m3_truncated_binary_blob_detection(self):
-        """B3.2: Truncated binary BLOB (<1024 bytes) is identified as corrupted."""
-        truncated_blob = b"\x00" * 500
-        self.assertNotEqual(len(truncated_blob), 1024)
-
-    def test_b_feat_m3_extreme_weight_appearance_only(self):
-        """B3.3: Extreme weighting (100% deep, 0% color) isolates deep feature similarity."""
-        s_deep = 0.85
-        s_color = 0.10
-        fused = 1.0 * s_deep + 0.0 * s_color
-        self.assertAlmostEqual(fused, 0.85)
-
-    def test_b_feat_m3_extreme_weight_color_only(self):
-        """B3.4: Extreme weighting (0% deep, 100% color) isolates color similarity."""
-        s_deep = 0.85
-        s_color = 0.10
-        fused = 0.0 * s_deep + 1.0 * s_color
-        self.assertAlmostEqual(fused, 0.10)
-
-    def test_b_feat_m3_uniform_gray_histogram_stability(self):
-        """B3.5: Uniform color distribution sums to 1.0 with no NaN values."""
-        uniform_h = np.ones(128, dtype=np.float32) / 128.0
-        self.assertAlmostEqual(float(np.sum(uniform_h)), 1.0, places=5)
-        self.assertFalse(np.any(np.isnan(uniform_h)))
-
-    # --- FEAT-M7 Boundaries ---
-    def test_b_feat_m7_empty_candidate_list_returns_none(self):
-        """B7.1: match_candidate_vehicle with empty candidate list returns None."""
-        sig = {"vehicle_class": "car", "embedding": b"0"*1024, "color_hist": b"0"*512}
-        match = ReidEngineContract.match_candidate_vehicle(sig, [], current_time=100.0)
-        self.assertIsNone(match)
-
-    def test_b_feat_m7_all_mismatched_classes_returns_none(self):
-        """B7.2: All candidates having mismatched class (e.g. truck vs car) returns None."""
-        sig = {"vehicle_class": "car", "embedding": b"0"*1024, "color_hist": b"0"*512}
-        cands = [
-            {"vehicle_class": "bus", "embedding": b"0"*1024, "color_hist": b"0"*512},
-            {"vehicle_class": "truck", "embedding": b"0"*1024, "color_hist": b"0"*512},
-        ]
-        match = ReidEngineContract.match_candidate_vehicle(sig, cands, current_time=100.0)
-        self.assertIsNone(match)
-
-    def test_b_feat_m7_exact_threshold_boundary_acceptance(self):
-        """B7.3: S_appear >= 0.65 and S_fused >= 0.72 exact boundary comparison."""
-        self.assertTrue(0.6500 >= 0.65)
-        self.assertTrue(0.7200 >= 0.72)
-        self.assertFalse(0.6499 >= 0.65)
-        self.assertFalse(0.7199 >= 0.72)
-
-    def test_b_feat_m7_arrival_far_in_future_rejected(self):
-        """B7.4: Candidate sighting with arrival time 50,000s in future is rejected."""
-        is_valid, score = self.topo.is_valid_transition(79, 87, 50000.0)
-        self.assertFalse(is_valid)
-
-    def test_b_feat_m7_score_fusion_weights_sum_to_one(self):
-        """B7.5: MTMC fusion weights 0.70 + 0.30 sum to 1.0."""
-        w_app = 0.70
-        w_st = 0.30
-        self.assertAlmostEqual(w_app + w_st, 1.0, places=5)
 
 
 if __name__ == "__main__":

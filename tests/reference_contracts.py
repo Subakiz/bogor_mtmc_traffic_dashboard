@@ -9,10 +9,7 @@ import json
 import math
 import os
 import sqlite3
-import time
 from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +234,6 @@ class DatabaseContract:
         sighting_id INTEGER PRIMARY KEY AUTOINCREMENT,
         camera_id INTEGER NOT NULL,
         local_track_id INTEGER NOT NULL,
-        global_vehicle_id INTEGER,
         vehicle_class TEXT NOT NULL,
         confidence REAL NOT NULL,
         bbox_x1 INTEGER NOT NULL,
@@ -246,36 +242,11 @@ class DatabaseContract:
         bbox_y2 INTEGER NOT NULL,
         heading_deg REAL NOT NULL,
         speed_px_s REAL NOT NULL,
-        embedding BLOB NOT NULL,
-        color_hist BLOB NOT NULL,
         timestamp_iso TEXT NOT NULL,
-        crop_thumbnail BLOB,
         FOREIGN KEY (camera_id) REFERENCES cameras(id)
     );
 
-    CREATE TABLE IF NOT EXISTS handoff_events (
-        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        global_vehicle_id INTEGER NOT NULL,
-        from_camera_id INTEGER NOT NULL,
-        to_camera_id INTEGER NOT NULL,
-        confidence REAL NOT NULL,
-        timestamp_iso TEXT NOT NULL,
-        FOREIGN KEY (from_camera_id) REFERENCES cameras(id),
-        FOREIGN KEY (to_camera_id) REFERENCES cameras(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS active_targets (
-        global_vehicle_id INTEGER PRIMARY KEY,
-        current_camera_id INTEGER NOT NULL,
-        last_sighting_id INTEGER NOT NULL,
-        locked_at_iso TEXT NOT NULL,
-        status TEXT DEFAULT 'tracking',
-        FOREIGN KEY (current_camera_id) REFERENCES cameras(id),
-        FOREIGN KEY (last_sighting_id) REFERENCES vehicle_sightings(sighting_id)
-    );
-
     CREATE INDEX IF NOT EXISTS idx_sightings_cam_time ON vehicle_sightings(camera_id, timestamp_iso);
-    CREATE INDEX IF NOT EXISTS idx_sightings_global_id ON vehicle_sightings(global_vehicle_id);
     """
 
     def __init__(self, db_path: str = ":memory:"):
@@ -292,30 +263,25 @@ class DatabaseContract:
         self,
         camera_id: int,
         local_track_id: int,
-        global_vehicle_id: Optional[int],
         vehicle_class: str,
         confidence: float,
         bbox: Tuple[int, int, int, int],
         heading_deg: float,
         speed_px_s: float,
-        embedding: bytes,
-        color_hist: bytes,
         timestamp_iso: str,
-        crop_thumbnail: Optional[bytes] = None,
     ) -> int:
         cur = self.conn.cursor()
         cur.execute(
             """
             INSERT INTO vehicle_sightings (
-                camera_id, local_track_id, global_vehicle_id, vehicle_class,
+                camera_id, local_track_id, vehicle_class,
                 confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2,
-                heading_deg, speed_px_s, embedding, color_hist, timestamp_iso, crop_thumbnail
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                heading_deg, speed_px_s, timestamp_iso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 camera_id,
                 local_track_id,
-                global_vehicle_id,
                 vehicle_class,
                 confidence,
                 bbox[0],
@@ -324,251 +290,8 @@ class DatabaseContract:
                 bbox[3],
                 heading_deg,
                 speed_px_s,
-                embedding,
-                color_hist,
                 timestamp_iso,
-                crop_thumbnail,
             ),
         )
         self.conn.commit()
         return cur.lastrowid
-
-    def record_handoff_event(
-        self,
-        global_vehicle_id: int,
-        from_camera_id: int,
-        to_camera_id: int,
-        confidence: float,
-        timestamp_iso: str,
-    ) -> int:
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO handoff_events (
-                global_vehicle_id, from_camera_id, to_camera_id, confidence, timestamp_iso
-            ) VALUES (?, ?, ?, ?, ?)
-            """,
-            (global_vehicle_id, from_camera_id, to_camera_id, confidence, timestamp_iso),
-        )
-        self.conn.commit()
-        return cur.lastrowid
-
-    def get_vehicle_journey(self, global_vehicle_id: int) -> List[Dict[str, Any]]:
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            SELECT s.*, c.name as camera_name, c.latitude, c.longitude, c.corridor
-            FROM vehicle_sightings s
-            JOIN cameras c ON s.camera_id = c.id
-            WHERE s.global_vehicle_id = ?
-            ORDER BY s.timestamp_iso ASC
-            """,
-            (global_vehicle_id,),
-        )
-        return [dict(row) for row in cur.fetchall()]
-
-
-# ---------------------------------------------------------------------------
-# 3. Re-ID Engine & Cosine Similarity Contract
-# ---------------------------------------------------------------------------
-class ReidEngineContract:
-    @staticmethod
-    def compute_appearance_similarity(
-        query_emb: np.ndarray,
-        query_hist: np.ndarray,
-        cand_embs: np.ndarray,
-        cand_hists: np.ndarray,
-    ) -> np.ndarray:
-        """
-        Computes fused appearance similarity scores:
-        S_appear = 0.60 * cos_sim(query_emb, cand_embs) + 0.40 * cos_sim(query_hist, cand_hists)
-        Returns 1D array of float32 in [-1.0, 1.0].
-        """
-        try:
-            from backend.reid_engine import compute_appearance_similarity as backend_fn
-            return backend_fn(query_emb, query_hist, cand_embs, cand_hists)
-        except (ImportError, AttributeError):
-            pass
-
-        if cand_embs.ndim == 1:
-            cand_embs = cand_embs.reshape(1, -1)
-        if cand_hists.ndim == 1:
-            cand_hists = cand_hists.reshape(1, -1)
-
-        # Normalize query vectors
-        q_emb_norm = query_emb / max(1e-8, float(np.linalg.norm(query_emb)))
-        q_hist_norm = query_hist / max(1e-8, float(np.linalg.norm(query_hist)))
-
-        # Normalize candidate vectors
-        cand_embs_norms = np.linalg.norm(cand_embs, axis=1, keepdims=True)
-        cand_embs_norms[cand_embs_norms < 1e-8] = 1.0
-        norm_cand_embs = cand_embs / cand_embs_norms
-
-        cand_hists_norms = np.linalg.norm(cand_hists, axis=1, keepdims=True)
-        cand_hists_norms[cand_hists_norms < 1e-8] = 1.0
-        norm_cand_hists = cand_hists / cand_hists_norms
-
-        # Vector dot products
-        sim_deep = np.dot(norm_cand_embs, q_emb_norm)
-        sim_color = np.dot(norm_cand_hists, q_hist_norm)
-
-        s_appear = 0.60 * sim_deep + 0.40 * sim_color
-        return np.clip(s_appear, -1.0, 1.0).astype(np.float32)
-
-    @staticmethod
-    def match_candidate_vehicle(
-        target_vehicle_signature: Dict[str, Any],
-        candidate_sightings: List[Dict[str, Any]],
-        current_time: float,
-        topology_contract: Optional[TopologyContract] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Evaluates candidate sightings using fused score:
-        S_fused = 0.70 * S_appear + 0.30 * S_st
-        Requires vehicle_class match, S_appear >= 0.65, S_fused >= 0.72.
-        Returns best matching sighting dict or None.
-        """
-        try:
-            from backend.reid_engine import match_candidate_vehicle as backend_fn
-            return backend_fn(target_vehicle_signature, candidate_sightings, current_time)
-        except (ImportError, AttributeError):
-            pass
-
-        if not candidate_sightings:
-            return None
-
-        target_class = target_vehicle_signature.get("vehicle_class")
-        target_emb = np.frombuffer(target_vehicle_signature["embedding"], dtype=np.float32)
-        target_hist = np.frombuffer(target_vehicle_signature["color_hist"], dtype=np.float32)
-        source_cam = target_vehicle_signature.get("camera_id")
-        target_time = target_vehicle_signature.get("timestamp", current_time - 30.0)
-
-        best_match = None
-        best_score = -1.0
-
-        for cand in candidate_sightings:
-            # Class Gating
-            if target_class and cand.get("vehicle_class") != target_class:
-                continue
-
-            cand_emb = np.frombuffer(cand["embedding"], dtype=np.float32)
-            cand_hist = np.frombuffer(cand["color_hist"], dtype=np.float32)
-
-            # Appearance Similarity
-            s_appear_arr = ReidEngineContract.compute_appearance_similarity(
-                target_emb, target_hist, cand_emb, cand_hist
-            )
-            s_appear = float(s_appear_arr[0])
-
-            if s_appear < 0.65:
-                continue
-
-            # Spatiotemporal Feasibility
-            cand_cam = cand.get("camera_id")
-            cand_time = cand.get("timestamp", current_time)
-            elapsed_time = cand_time - target_time
-
-            s_st = 0.5
-            if topology_contract and source_cam and cand_cam:
-                is_valid, st_score = topology_contract.is_valid_transition(
-                    source_cam, cand_cam, elapsed_time
-                )
-                if not is_valid:
-                    continue
-                s_st = st_score
-
-            s_fused = 0.70 * s_appear + 0.30 * s_st
-            if s_fused >= 0.72 and s_fused > best_score:
-                best_score = s_fused
-                best_match = cand.copy()
-                best_match["fused_score"] = float(s_fused)
-                best_match["appearance_score"] = float(s_appear)
-                best_match["spatiotemporal_score"] = float(s_st)
-
-        return best_match
-
-
-# ---------------------------------------------------------------------------
-# 4. Handoff Engine Contract
-# ---------------------------------------------------------------------------
-class HandoffEngineContract:
-    @staticmethod
-    def estimate_exit_heading(
-        motion_vector: Tuple[float, float], camera_azimuth_deg: float
-    ) -> Tuple[float, str]:
-        """
-        Estimates real-world road exit heading (Theta_exit) and cardinal direction.
-        motion_vector is (delta_x, delta_y) in image space.
-        """
-        try:
-            from backend.handoff_engine import estimate_exit_heading as backend_fn
-            return backend_fn(motion_vector, camera_azimuth_deg)
-        except (ImportError, AttributeError):
-            pass
-
-        dx, dy = motion_vector
-        if abs(dx) < 1e-4 and abs(dy) < 1e-4:
-            heading = camera_azimuth_deg % 360.0
-        else:
-            # Angle in standard screen coordinates (y down)
-            angle_rad = math.atan2(dy, dx)
-            # Offset by camera mounting azimuth
-            heading = (math.degrees(angle_rad) + camera_azimuth_deg) % 360.0
-
-        # Map heading to cardinal sector (8 directions)
-        sectors = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        idx = int(((heading + 22.5) % 360.0) // 45.0)
-        cardinal = sectors[idx]
-        return float(heading), cardinal
-
-    @staticmethod
-    def is_boundary_exit(
-        bbox: Tuple[int, int, int, int], frame_size: Tuple[int, int] = (640, 480), margin: int = 35
-    ) -> bool:
-        """
-        Detects if vehicle bounding box crosses the camera frame exit margin.
-        """
-        x1, y1, x2, y2 = bbox
-        fw, fh = frame_size
-        return (x1 <= margin) or (y1 <= margin) or (x2 >= fw - margin) or (y2 >= fh - margin)
-
-
-# ---------------------------------------------------------------------------
-# 5. Global ID Preserver Contract
-# ---------------------------------------------------------------------------
-class GlobalIDPreserverContract:
-    def __init__(self):
-        self.active_targets: Dict[int, Dict[str, Any]] = {}
-        self.handoff_history: List[Dict[str, Any]] = []
-
-    def lock_target(self, global_id: int, camera_id: int, signature: Dict[str, Any]):
-        self.active_targets[global_id] = {
-            "global_vehicle_id": global_id,
-            "current_camera_id": camera_id,
-            "signature": signature,
-            "locked_at": time.time(),
-            "status": "tracking",
-            "history": [camera_id],
-        }
-
-    def handoff_target(self, global_id: int, to_camera_id: int, confidence: float) -> Dict[str, Any]:
-        if global_id not in self.active_targets:
-            raise KeyError(f"Target {global_id} not currently locked")
-        t = self.active_targets[global_id]
-        from_cam = t["current_camera_id"]
-        t["current_camera_id"] = to_camera_id
-        t["history"].append(to_camera_id)
-
-        event = {
-            "type": "CAMERA_SWITCH",
-            "global_vehicle_id": global_id,
-            "from_camera_id": from_cam,
-            "to_camera_id": to_camera_id,
-            "confidence": confidence,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
-        self.handoff_history.append(event)
-        return event
-
-    def unlock_target(self, global_id: int):
-        self.active_targets.pop(global_id, None)

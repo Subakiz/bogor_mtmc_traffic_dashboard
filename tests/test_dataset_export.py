@@ -6,6 +6,7 @@ provenance, the export bundle, the CLI and LSTM sequences. Synthetic databases i
 import csv
 import io
 import json
+import sqlite3
 import unittest
 
 from backend import dataset
@@ -27,11 +28,9 @@ class ExportCase(DatasetTestCase):
              {"camera_id": 131, "start": t + 7200, "end": t + 7260, "vehicles": 5}],
             analytics=[{"camera_id": 167, "end": t + 180, "seconds": 60, "congestion": 0.3, "median_bps": 0.7, "queue": 0.1},
                        {"camera_id": 131, "end": t + 260, "seconds": 60, "congestion": 0.6}],
-            sightings=[{"camera_id": 167, "iso": "2026-10-11T01:02:30Z", "gid": 7},
-                       {"camera_id": 131, "iso": "2026-10-11T01:30:00.250000+00:00", "gid": 8},
-                       {"camera_id": 167, "iso": "2026-10-11T05:00:00Z", "gid": 9}],        # 12:00 WIB: out of range
-            handoffs=[{"gid": 7, "from": 131, "to": 167, "iso": "2026-10-11T01:05:00Z"},
-                      {"gid": 8, "from": 500, "to": 501, "iso": "2026-10-11T01:06:00Z"}])
+            sightings=[{"camera_id": 167, "iso": "2026-10-11T01:02:30Z", "track": 7},
+                       {"camera_id": 131, "iso": "2026-10-11T01:30:00.250000+00:00", "track": 8},
+                       {"camera_id": 167, "iso": "2026-10-11T05:00:00Z", "track": 9}])       # 12:00 WIB: out of range
 
     def rows(self, **kw):
         return self.dataset(START, END, **kw)
@@ -166,26 +165,26 @@ class TestRawExports(ExportCase):
         self.assertEqual([r["camera_id"] for r in self.raw("windows", camera_ids=[131])[0]], [131])
 
     def test_sightings_never_contain_blob_columns(self):
+        # a database not yet migrated may still carry BLOB columns
+        conn = sqlite3.connect(self.main)
+        conn.execute("ALTER TABLE vehicle_sightings ADD COLUMN embedding BLOB")
+        conn.execute("UPDATE vehicle_sightings SET embedding = ?", (BLOB_MARKER,))
+        conn.commit()
+        conn.close()
         rows, stream = self.raw("sightings")
         self.assertEqual(len(rows), 2, "the 12:00 WIB sighting is outside the range")
-        for blob in ("embedding", "color_hist", "crop_thumbnail"):
-            self.assertNotIn(blob, stream.columns)
-            self.assertTrue(all(blob not in r for r in rows))
+        self.assertNotIn("embedding", stream.columns)
+        self.assertTrue(all("embedding" not in r for r in rows))
         out = self.dir / "s.csv"
         dataset.export_raw("vehicle_sightings", START, END, None, "csv", out, self.main, self.analytics)
         self.assertNotIn(BLOB_MARKER, out.read_bytes())
         self.assertEqual(rows[1]["timestamp_local"], "2026-10-11T08:30:00.250000+07:00")
-        self.assertEqual(self.raw("sightings", camera_ids=[167])[0][0]["global_vehicle_id"], 7)
+        self.assertEqual(self.raw("sightings", camera_ids=[167])[0][0]["local_track_id"], 7)
 
     def test_sighting_time_range_uses_utc_strings_of_either_format(self):
         rows = list(dataset.iter_raw("sightings", "2026-10-11T08:30:00", "2026-10-11T08:31:00", main_db=self.main))
-        self.assertEqual([r["global_vehicle_id"] for r in rows], [8], "fractional '+00:00' timestamps are matched too")
+        self.assertEqual([r["local_track_id"] for r in rows], [8], "fractional '+00:00' timestamps are matched too")
         self.assertEqual(list(dataset.iter_raw("sightings", "2026-10-11T08:30:01", "2026-10-11T08:31:00", main_db=self.main)), [])
-
-    def test_handoffs_match_either_camera(self):
-        rows, _ = self.raw("handoffs", camera_ids=[167])
-        self.assertEqual([r["global_vehicle_id"] for r in rows], [7])
-        self.assertEqual(len(self.raw("handoff_events")[0]), 2)
 
     def test_cameras_metadata_hides_the_stream_url(self):
         rows, stream = self.raw("cameras")
@@ -291,7 +290,7 @@ class TestProvenanceAndBundle(ExportCase):
         self.assertTrue(main["path"].endswith("traffic_db.sqlite"))
         self.assertEqual(main["observation_windows"]["max_ts"], wib("2026-10-11T08:00:00") + 7260)
         self.assertEqual(main["vehicle_sightings"]["max_iso"], "2026-10-11T05:00:00Z")
-        self.assertEqual(main["handoff_events"]["max_iso"], "2026-10-11T01:06:00Z")
+        self.assertNotIn("handoff_events", main)
         self.assertEqual(prov["sources"]["analytics_db"]["camera_traffic_timeseries"]["max_ts"], wib("2026-10-11T08:04:20"))
         joined = " ".join(prov["caveats"]).lower()
         self.assertIn("crossings", joined)
@@ -303,7 +302,7 @@ class TestProvenanceAndBundle(ExportCase):
     def test_export_bundle_writes_data_dictionary_and_provenance(self):
         out = self.dir / "exports" / "nested"          # created on use
         prov = dataset.export_bundle(START, END, out, bucket_minutes=15, camera_ids=[167, 131], fill_gaps=True,
-                                     fmt="csv", raw=["observation_windows", "sightings", "handoffs", "cameras"],
+                                     fmt="csv", raw=["observation_windows", "sightings", "cameras"],
                                      main_db=self.main, analytics_db=self.analytics)
         names = sorted(p.name for p in out.iterdir())
         self.assertIn("dictionary.json", names)
@@ -318,7 +317,7 @@ class TestProvenanceAndBundle(ExportCase):
         main = files["traffic_long_15min_20261011T0800_20261011T0900.csv"]
         self.assertEqual(main["rows"], len(read_csv((out / main["name"]).read_text())))
         self.assertEqual(set(dictionary["tables"]),
-                         {"traffic_long", "raw_observation_windows", "raw_vehicle_sightings", "raw_handoff_events", "raw_cameras"})
+                         {"traffic_long", "raw_observation_windows", "raw_vehicle_sightings", "raw_cameras"})
         header = (out / main["name"]).read_text().splitlines()[0].split(",")
         self.assertEqual(header, list(dictionary["tables"]["traffic_long"]))
         for name, f in files.items():

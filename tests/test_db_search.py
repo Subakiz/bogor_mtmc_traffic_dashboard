@@ -23,15 +23,13 @@ class SearchSightingsTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.db = Database(os.path.join(cls.tmp.name, "s.sqlite"), auto_seed=True)
-        # (camera, track, gid, class)
-        plan = [(79, 1, 100, "car"), (79, 2, 101, "motorcycle"), (87, 3, 100, "car"), (87, 4, 102, "bus"),
-                (199, 5, 103, "truck"), (161, 6, 104, "car"), (161, 7, 105, "motorcycle"), (79, 8, 100, "car"),
-                (83, 9, 79, "car"),            # global vehicle 79 happens to share its number with camera 79
-                (92, 10, 106, "angkot")]
+        # (camera, track, class)
+        plan = [(79, 1, "car"), (79, 2, "motorcycle"), (87, 3, "car"), (87, 4, "bus"),
+                (199, 5, "truck"), (161, 6, "car"), (161, 7, "motorcycle"), (79, 8, "car"),
+                (83, 9, "car"), (92, 10, "angkot")]
         cls.sid = {}
-        for i, (cam, track, gid, klass) in enumerate(plan):
-            cls.sid[track] = cls.db.insert_vehicle_sighting(cam, track, gid, klass, 0.9, (0, 0, 1, 1), 0.0, 0.0,
-                                                            b"", b"", ts(i))
+        for i, (cam, track, klass) in enumerate(plan):
+            cls.sid[track] = cls.db.insert_vehicle_sighting(cam, track, klass, 0.9, (0, 0, 1, 1), 0.0, 0.0, ts(i))
         cls.db.optimize()
 
     @classmethod
@@ -44,17 +42,16 @@ class SearchSightingsTest(unittest.TestCase):
 
     def test_row_shape_matches_get_latest_sightings(self):
         latest = self.db.get_latest_sightings(1)[0]
-        found = self.db.search_sightings("100", limit=1)[0]
+        found = self.db.search_sightings("79", limit=1)[0]
         self.assertEqual(set(found), set(latest))
         self.assertIn("camera_name", found)
         self.assertIn("corridor", found)
 
-    def test_numeric_matches_global_vehicle_id_or_camera_id_exactly(self):
-        self.assertEqual(self.tracks("100"), [8, 3, 1])                       # vehicle 100, newest first
-        self.assertEqual(self.tracks("#100"), [8, 3, 1])
-        self.assertEqual(self.tracks("161"), [7, 6])                          # camera 161
-        self.assertEqual(self.tracks("79"), [9, 8, 2, 1])                     # vehicle 79 (track 9) + camera 79
-        self.assertEqual(self.tracks("10"), [], "exact match only: neither a vehicle nor a camera 10")
+    def test_numeric_matches_the_camera_id_exactly(self):
+        self.assertEqual(self.tracks("79"), [8, 2, 1])                        # camera 79, newest first
+        self.assertEqual(self.tracks("#79"), [8, 2, 1])
+        self.assertEqual(self.tracks("161"), [7, 6])
+        self.assertEqual(self.tracks("10"), [], "exact match only: no camera 10")
         self.assertEqual(self.tracks("99999"), [])
         self.assertEqual(self.tracks("9" * 40), [], "beyond SQLite's integer range: no match, no OverflowError")
         self.assertEqual(self.tracks("\u00b2"), [], "non-ASCII digits are text, not an id")
@@ -104,7 +101,7 @@ class SearchSightingsTest(unittest.TestCase):
         self.db.conn.set_trace_callback(lambda sql: statements.append(sql)
                                          if sql.startswith("SELECT timestamp_iso, sighting_id") else None)
         try:
-            for q in ("100", "79", "tugu", "ssa ring", "car"):
+            for q in ("161", "79", "tugu", "ssa ring", "car"):
                 self.db.search_sightings(q)
         finally:
             self.db.conn.set_trace_callback(None)

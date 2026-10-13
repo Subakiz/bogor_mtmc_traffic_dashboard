@@ -46,7 +46,6 @@ class StructuredTestRunner:
         "1": ("Tier 1 - Feature Coverage", "tests/tier1_features"),
         "2": ("Tier 2 - Boundary & Corner Cases", "tests/tier2_boundaries"),
         "3": ("Tier 3 - Cross-Feature Combinations", "tests/tier3_combinations"),
-        "4": ("Tier 4 - Real-World City Scenarios", "tests/tier4_scenarios"),
         "5": ("Tier 5 - Adversarial Hardening", "tests/tier5_adversarial"),
     }
 

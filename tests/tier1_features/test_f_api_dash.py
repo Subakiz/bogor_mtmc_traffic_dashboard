@@ -7,9 +7,8 @@ Tier 1 Tests for Features F-API-01, F-API-02, F-DASH-01, F-DASH-02, and F-DASH-0
 import json
 import time
 import unittest
-import numpy as np
 
-from tests.reference_contracts import TopologyContract, DatabaseContract, GlobalIDPreserverContract
+from tests.reference_contracts import TopologyContract, DatabaseContract
 from tests import TOTAL_CAMERAS, TOTAL_EDGES
 
 
@@ -43,82 +42,11 @@ class TestFAPI01FastAPIServices(unittest.TestCase):
         adj = self.topo.adjacency_by_exit
         self.assertGreaterEqual(len(adj), 150)
 
-    def test_f_api_01_vehicles_search_filtering(self):
-        """Test 3: Vehicle search supports filtering by corridor and vehicle class."""
-        # Querying mock dataset
-        sightings = [
-            {"id": 1, "class": "car", "corridor": "SSA_RING"},
-            {"id": 2, "class": "truck", "corridor": "BORR_SHOIS"},
-            {"id": 3, "class": "car", "corridor": "PAJAJARAN_CORRIDOR"},
-        ]
-        # Filter class == 'car'
-        filtered_cars = [s for s in sightings if s["class"] == "car"]
-        self.assertEqual(len(filtered_cars), 2)
-
-    def test_f_api_01_vehicle_journey_endpoint(self):
-        """Test 4: Journey endpoint returns chronological sightings and camera path."""
-        db = DatabaseContract(":memory:")
-        cur = db.conn.cursor()
-        cur.execute("INSERT INTO cameras (id, name, corridor, latitude, longitude) VALUES (79, 'Kujang', 'SSA', 0, 0)")
-        cur.execute("INSERT INTO cameras (id, name, corridor, latitude, longitude) VALUES (87, 'Otista', 'SSA', 0, 0)")
-
-        db.insert_vehicle_sighting(79, 1, 4001, "car", 0.9, (0, 0, 10, 10), 0, 0, b"0"*1024, b"0"*512, "2026-09-23T01:00:00Z")
-        db.insert_vehicle_sighting(87, 2, 4001, "car", 0.9, (0, 0, 10, 10), 0, 0, b"0"*1024, b"0"*512, "2026-09-23T01:01:00Z")
-
-        journey = db.get_vehicle_journey(4001)
-        self.assertEqual(len(journey), 2)
-        self.assertEqual(journey[0]["camera_id"], 79)
-        self.assertEqual(journey[1]["camera_id"], 87)
-        db.conn.close()
-
-    def test_f_api_01_follow_lock_and_unlock_routes(self):
-        """Test 5: Follow target lock and unlock maintain state in preserver engine."""
-        preserver = GlobalIDPreserverContract()
-        preserver.lock_target(101, 79, {"class": "car"})
-        self.assertIn(101, preserver.active_targets)
-        preserver.unlock_target(101)
-        self.assertNotIn(101, preserver.active_targets)
-
-
 class TestFAPI02WebSocketGateway(unittest.TestCase):
     """
     F-API-02: Real-Time WebSocket Telemetry Gateway
     Broadcasting CAMERA_SWITCH, TARGET_UPDATE, and camera traffic densities.
     """
-
-    def test_f_api_02_camera_switch_payload_schema(self):
-        """Test 1: CAMERA_SWITCH payload contains all required contract fields."""
-        payload = {
-            "type": "CAMERA_SWITCH",
-            "global_vehicle_id": 1001,
-            "from_camera_id": 79,
-            "to_camera_id": 87,
-            "to_camera_name": "CCTV OTISTA",
-            "to_stream_url": "https://restreamer2.kotabogor.go.id/memfs/test.m3u8",
-            "confidence": 0.92,
-            "timestamp": "2026-09-23T04:20:00Z",
-        }
-        required_keys = {
-            "type", "global_vehicle_id", "from_camera_id", "to_camera_id",
-            "to_camera_name", "to_stream_url", "confidence", "timestamp"
-        }
-        self.assertTrue(required_keys.issubset(payload.keys()))
-        self.assertEqual(payload["type"], "CAMERA_SWITCH")
-
-    def test_f_api_02_active_target_update_payload_schema(self):
-        """Test 2: TARGET_UPDATE payload contains bbox, heading, and candidate radar ETAs."""
-        payload = {
-            "type": "TARGET_UPDATE",
-            "global_vehicle_id": 1001,
-            "current_camera_id": 79,
-            "bbox": [100, 120, 200, 180],
-            "heading_deg": 240.0,
-            "candidate_cameras": [{"camera_id": 87, "eta_s": 55.0, "window_remaining_s": 85.0}],
-            "timestamp": "2026-09-23T04:20:05Z",
-        }
-        self.assertEqual(payload["type"], "TARGET_UPDATE")
-        self.assertIn("candidate_cameras", payload)
-        self.assertGreaterEqual(len(payload["candidate_cameras"]), 1)
 
     def test_f_api_02_camera_density_telemetry_payload(self):
         """Test 3: Telemetry delivers per-camera vehicle count and congestion level."""
@@ -223,118 +151,6 @@ class TestFDASH01InteractiveLeafletMapView(unittest.TestCase):
         center_lng = sum(lngs) / len(lngs)
         self.assertAlmostEqual(center_lat, -6.59, places=1)
         self.assertAlmostEqual(center_lng, 106.79, places=1)
-
-
-class TestFDASH02FollowCarLiveView(unittest.TestCase):
-    """
-    F-DASH-02: "Follow Car" Live View & Auto-Switcher
-    Target lock, HUD overlay, candidate radar countdown, and auto switching.
-    """
-
-    def test_f_dash_02_target_lock_activates_hud(self):
-        """Test 1: Target lock sets follow mode to active and stores locked vehicle ID."""
-        ui_state = {"follow_mode": False, "locked_vehicle_id": None}
-        # Simulate user clicking vehicle #501
-        ui_state["follow_mode"] = True
-        ui_state["locked_vehicle_id"] = 501
-        self.assertTrue(ui_state["follow_mode"])
-        self.assertEqual(ui_state["locked_vehicle_id"], 501)
-
-    def test_f_dash_02_candidate_radar_countdown(self):
-        """Test 2: Radar countdown computes remaining time in arrival window."""
-        t_exit = 100.0
-        t_min = 40.0
-        t_max = 120.0
-        current_time = 130.0
-
-        eta_s = max(0.0, (t_exit + t_min) - current_time)
-        window_remaining_s = max(0.0, (t_exit + t_max) - current_time)
-
-        self.assertEqual(eta_s, 10.0)
-        self.assertEqual(window_remaining_s, 90.0)
-
-    def test_f_dash_02_auto_video_feed_switch_trigger(self):
-        """Test 3: Receiving CAMERA_SWITCH event updates active video stream URL."""
-        player_state = {
-            "current_camera_id": 79,
-            "current_stream_url": "https://restreamer2.kotabogor.go.id/memfs/79.m3u8",
-        }
-        event = {
-            "type": "CAMERA_SWITCH",
-            "to_camera_id": 87,
-            "to_stream_url": "https://restreamer2.kotabogor.go.id/memfs/87.m3u8",
-        }
-
-        # Apply switch
-        player_state["current_camera_id"] = event["to_camera_id"]
-        player_state["current_stream_url"] = event["to_stream_url"]
-
-        self.assertEqual(player_state["current_camera_id"], 87)
-        self.assertEqual(player_state["current_stream_url"], "https://restreamer2.kotabogor.go.id/memfs/87.m3u8")
-
-    def test_f_dash_02_manual_target_unlock_restores_view(self):
-        """Test 4: Unlocking target resets active follow session."""
-        ui_state = {"follow_mode": True, "locked_vehicle_id": 501}
-        ui_state["follow_mode"] = False
-        ui_state["locked_vehicle_id"] = None
-        self.assertFalse(ui_state["follow_mode"])
-        self.assertIsNone(ui_state["locked_vehicle_id"])
-
-    def test_f_dash_02_seamless_video_handoff_delay_within_budget(self):
-        """Test 5: Stream switch state update executes in < 5 ms."""
-        t0 = time.perf_counter()
-        switch_event = {"to_cam": 81, "url": "https://mock.m3u8"}
-        active_url = switch_event["url"]
-        elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        self.assertLess(elapsed_ms, 5.0)
-        self.assertEqual(active_url, "https://mock.m3u8")
-
-
-class TestFDASH03GlobalVehicleSearchReplay(unittest.TestCase):
-    """
-    F-DASH-03: Global Vehicle Search & Journey Replay
-    Search filters, chronological timeline, polyline tracing, and crop gallery.
-    """
-
-    def test_f_dash_03_search_filter_parsing(self):
-        """Test 1: Search query parses vehicle ID, class, corridor, and time filters."""
-        params = {"vehicle_id": 501, "vehicle_class": "car", "corridor": "SSA_RING"}
-        self.assertEqual(params["vehicle_id"], 501)
-        self.assertEqual(params["vehicle_class"], "car")
-
-    def test_f_dash_03_journey_timeline_chronological_rendering(self):
-        """Test 2: Journey timeline displays camera sightings sorted chronologically."""
-        sightings = [
-            {"camera_name": "Tugu Kujang", "time": "2026-09-23T01:00:00Z"},
-            {"camera_name": "Otista", "time": "2026-09-23T01:01:15Z"},
-            {"camera_name": "Pasar Bogor", "time": "2026-09-23T01:02:30Z"},
-        ]
-        times = [s["time"] for s in sightings]
-        self.assertEqual(times, sorted(times))
-
-    def test_f_dash_03_multi_camera_crop_gallery(self):
-        """Test 3: Crop gallery provides thumbnail snapshots for each camera visit."""
-        journey = [
-            {"camera_id": 79, "crop_bytes": b"\xff\xd8\xff\xe0mock1"},
-            {"camera_id": 87, "crop_bytes": b"\xff\xd8\xff\xe0mock2"},
-        ]
-        for card in journey:
-            self.assertTrue(card["crop_bytes"].startswith(b"\xff\xd8"))
-
-    def test_f_dash_03_polyline_route_interpolation(self):
-        """Test 4: Journey polyline connects camera GPS coordinates along corridor."""
-        coords = [(-6.6014, 106.8051), (-6.6012, 106.8020), (-6.6009, 106.7995)]
-        self.assertEqual(len(coords), 3)
-        # Polyline has 2 segments
-        segments = [(coords[i], coords[i + 1]) for i in range(len(coords) - 1)]
-        self.assertEqual(len(segments), 2)
-
-    def test_f_dash_03_replay_timeline_seek(self):
-        """Test 5: Replay scrubber allows jumping to specific camera sighting."""
-        journey = [{"idx": 0, "cam": 79}, {"idx": 1, "cam": 87}, {"idx": 2, "cam": 83}]
-        selected_idx = 1
-        current_view = journey[selected_idx]
-        self.assertEqual(current_view["cam"], 87)
 
 
 if __name__ == "__main__":

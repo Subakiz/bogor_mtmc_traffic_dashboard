@@ -1,6 +1,6 @@
 """
 backend/detector.py
-BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard.
+BSW Kota Bogor Multi-Camera Traffic Intelligence Dashboard.
 CoreML Detection Service on Apple Neural Engine (FEAT-M1).
 
 Implements:

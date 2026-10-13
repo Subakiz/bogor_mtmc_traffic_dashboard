@@ -12,14 +12,20 @@ from unittest import mock
 import backend.database as database
 from backend.database import Database, COMPACT_MARKER
 
-BLOB = b"\x01" * 1024
-
-
-def fill(db, n, blob=True):
-    emb, hist = (BLOB, BLOB[:512]) if blob else (b"", b"")
+def fill(db, n):
     for i in range(n):
-        db.insert_vehicle_sighting(79 if i % 2 else 87, i, i // 2, "car", 0.9, (0, 0, 10, 10), 0.0, 0.0,
-                                   emb, hist, "2026-10-01T00:%02d:%02dZ" % (i // 60 % 60, i % 60))
+        db.insert_vehicle_sighting(79 if i % 2 else 87, i, "car", 0.9, (0, 0, 10, 10), 0.0, 0.0,
+                                   "2026-10-01T00:%02d:%02dZ" % (i // 60 % 60, i % 60))
+
+
+def leave_free_pages(db, n_bytes=2_000_000):
+    """Writes ~``n_bytes`` into a scratch table and drops it, leaving that many bytes of free pages
+    in the file (like the appearance blobs older versions stored)."""
+    with db.conn:
+        db.conn.execute("CREATE TABLE scratch (b BLOB)")
+        db.conn.executemany("INSERT INTO scratch VALUES (?)", [(b"\x01" * 1024,)] * (n_bytes // 1024))
+    with db.conn:
+        db.conn.execute("DROP TABLE scratch")
 
 
 class CompactTest(unittest.TestCase):
@@ -27,8 +33,8 @@ class CompactTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = os.path.join(self.tmp.name, "c.sqlite")
         self.db = Database(self.path, auto_seed=True)
-        fill(self.db, 1500)                                           # ~2.3 MB with blobs
-        self.db.expire_embeddings(0.0)                                # blank them all: pages are now ~90% empty
+        fill(self.db, 1500)
+        leave_free_pages(self.db)                                     # the file is now mostly free pages
         self.db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def tearDown(self):
@@ -47,7 +53,7 @@ class CompactTest(unittest.TestCase):
         r = self.db.compact()
         self.assertTrue(r["compacted"], r)
         self.assertEqual(r["auto_vacuum"], 2)
-        self.assertLess(r["after_bytes"], r["before_bytes"] // 2, "blanked pages must be reclaimed")
+        self.assertLess(r["after_bytes"], r["before_bytes"] // 2, "free pages must be reclaimed")
         self.assertEqual(r["reclaimed_bytes"], r["before_bytes"] - r["after_bytes"])
         self.assertIsNotNone(self.marker())
         self.assertEqual(self.db.conn.execute("PRAGMA auto_vacuum").fetchone()[0], 2)
@@ -56,7 +62,7 @@ class CompactTest(unittest.TestCase):
         self.assertEqual(self.db.conn.execute("SELECT COUNT(*) FROM vehicle_sightings").fetchone()[0], before_rows)
         self.assertEqual(self.db.get_traffic_stats()["total_sightings"], before_rows)
         # and writing still works afterwards (triggers survived the VACUUM)
-        fill(self.db, 5, blob=False)
+        fill(self.db, 5)
         self.assertEqual(self.db.get_traffic_stats()["total_sightings"], before_rows + 5)
 
     def test_second_call_is_a_noop_until_forced(self):

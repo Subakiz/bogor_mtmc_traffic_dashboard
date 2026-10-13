@@ -41,22 +41,6 @@
                 </span>
             </div>
         </div>
-
-        <div class="header-actions">
-            <form id="vehicleSearchForm" class="field" role="search">
-                <i data-lucide="search" class="icon"></i>
-                <input id="vehicleSearchInput" class="input" type="search" inputmode="numeric"
-                       placeholder="Look up vehicle ID" aria-label="Look up vehicle by ID" autocomplete="off" />
-            </form>
-            <button id="searchBtn" class="btn btn--primary" type="button">
-                <i data-lucide="route" class="icon"></i>Journey
-            </button>
-            <span class="divider-v"></span>
-            <button id="followModeToggle" class="btn" type="button" aria-pressed="false">
-                <i data-lucide="crosshair" class="icon"></i>
-                Follow mode: <span id="followModeText">Off</span>
-            </button>
-        </div>
     </header>
 
     <main class="app-main">
@@ -86,13 +70,6 @@
                     <span><i style="background:#ef5b6b"></i>&gt; 1500</span>
                 </div>
 
-                <div id="followBanner" class="follow-banner hidden" role="status">
-                    <div>
-                        <div class="follow-banner__title" id="followTargetId">No target selected</div>
-                        <div class="follow-banner__text" id="followRouteText">Open a vehicle from the Recent tab and choose Follow vehicle.</div>
-                    </div>
-                    <button id="cancelFollowBtn" class="btn btn--sm" type="button">Stop following</button>
-                </div>
             </div>
 
             <div class="kpis">
@@ -165,7 +142,6 @@
                     <div class="tablist" role="tablist" aria-label="Detail panels">
                         <button class="tab" role="tab" id="tabBtnCameras" data-tab="cameras" aria-selected="true">Cameras</button>
                         <button class="tab" role="tab" id="tabBtnTimeSeries" data-tab="timeseries" aria-selected="false">Analytics</button>
-                        <button class="tab" role="tab" id="tabBtnHandoff" data-tab="handoff" aria-selected="false">Handoff</button>
                         <button class="tab" role="tab" id="tabBtnSightings" data-tab="sightings" aria-selected="false">Recent</button>
                     </div>
                     <span class="live-tag"><span class="dot dot--live"></span>LIVE</span>
@@ -301,9 +277,6 @@
                                 <span>Sightings
                                     <a data-export="raw" data-table="sightings" data-format="csv" href="#" download>CSV</a>
                                     <a data-export="raw" data-table="sightings" data-format="jsonl" href="#" download>JSONL</a></span>
-                                <span>Handoffs
-                                    <a data-export="raw" data-table="handoffs" data-format="csv" href="#" download>CSV</a>
-                                    <a data-export="raw" data-table="handoffs" data-format="jsonl" href="#" download>JSONL</a></span>
                             </div>
 
                             <div class="export__foot">
@@ -314,45 +287,17 @@
                     </div>
                 </div>
 
-                <!-- Handoff -->
-                <div id="tabContentHandoff" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnHandoff" hidden>
-                    <div class="tabpanel__head">
-                        <span>Candidate downstream cameras</span>
-                        <span class="muted">Spatiotemporal road model</span>
-                    </div>
-                    <div id="candidateList" class="scroll">
-                        <div class="empty">Select a camera to compute downstream handoff candidates.</div>
-                    </div>
-                </div>
-
                 <!-- Recent -->
                 <div id="tabContentSightings" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnSightings" hidden>
                     <div class="tabpanel__head">
                         <span>Latest vehicles seen across the network</span>
-                        <span class="muted">Select one to view its journey</span>
+                        <span class="muted">Class and camera</span>
                     </div>
                     <div id="recentSightingsList" class="scroll"></div>
                 </div>
             </div>
         </section>
     </main>
-
-    <!-- Vehicle journey modal -->
-    <div id="journeyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalVehicleTitle">
-        <div class="modal__box">
-            <div class="modal__head">
-                <div>
-                    <h3 id="modalVehicleTitle">Vehicle journey</h3>
-                    <p id="modalVehicleSubtitle">Chronological sightings across the camera network</p>
-                </div>
-                <button id="closeModalBtn" class="btn btn--ghost btn--sm" type="button" aria-label="Close"><i data-lucide="x" class="icon"></i></button>
-            </div>
-            <div id="modalTimelineContent" class="modal__body"></div>
-            <div class="modal__foot">
-                <button id="followVehicleBtn" class="btn btn--primary btn--sm" type="button">Follow vehicle</button>
-            </div>
-        </div>
-    </div>
 
 </body>
 </html>

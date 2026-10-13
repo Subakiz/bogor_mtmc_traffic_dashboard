@@ -10,8 +10,7 @@ One inference worker drives the shared ANE detector for two kinds of work:
 - Rolling visits: up to ``MAX_OPEN_STREAMS - 1`` other cameras are observed concurrently, each
   for a short dwell burst at ROLLING_FPS (long enough for ByteTrack to follow vehicles through
   the view), then released for the next camera. Priority:
-    tier 1  follow candidates: downstream of the focus camera, or of a followed target's last
-            handoff (until its arrival window closes). Revisited every TIER1_REVISIT_S.
+    tier 1  cameras downstream of a focus camera. Revisited every TIER1_REVISIT_S.
     tier 2  arterial hubs, revisited every TIER2_REVISIT_S.
     tier 3  everything else, least recently visited first.
 
@@ -23,12 +22,12 @@ next-ranked candidates with their streams already open and decoding at a low rat
 inferred. When an active visit ends, the best ready standby takes over at once (dwell counts from
 that moment) and a new standby is opened behind it, so a visit no longer spends the first
 0.5-2 s of its slot connecting. A standby that never delivers a frame fails like a visit would,
-focus cameras take standby slots before active visits, and follow candidates (tier 1) displace
+focus cameras take standby slots before active visits, and downstream cameras (tier 1) displace
 lower-tier standbys.
 
-Sightings: once a track has been seen in MIN_TRACK_HITS frames it gets a global vehicle id from
-Re-ID and a single ``vehicle_sightings`` row (journeys, Follow-That-Car). A stationary vehicle still
-in place on the next visit inherits its earlier id instead of becoming a new sighting.
+Sightings: once a track has been seen in MIN_TRACK_HITS frames it gets a single
+``vehicle_sightings`` row. A stationary vehicle of the same class still in place (by box overlap) on
+the next visit is not recorded again.
 
 Volume: vehicles are counted when they cross the camera's counting line (backend/counting.py,
 learned from traffic motion; "passage" mode until learned), with direction. Counts are stored per
@@ -58,7 +57,6 @@ from backend.config import (
 )
 from backend.counting import CountingLines, TrackCounter, ground_point
 from backend.indexing_daemon import DEFAULT_ARTERIAL_HUBS
-from backend.reid import IdentityResolver, extract_appearance
 
 logger = logging.getLogger("rolling_tracker")
 
@@ -66,7 +64,6 @@ MIN_TRACK_HITS = 3             # frames a track must be seen in before it is cou
 TRACK_DEPARTURE_GRACE_S = 3.0  # unseen this long within an observation -> departed
 PARKED_SPEED_PX_S = 6.0        # below this a track still in view at visit end counts as parked
 PARKED_IOU = 0.5
-PARKED_SIMILARITY = 0.90
 PARKED_TTL_S = 1800.0
 PARKED_MAX_PER_CAMERA = 64
 FIRST_FRAME_TIMEOUT_S = 6.0    # stream open but no frame yet (playout starts at the newest segment)
@@ -314,8 +311,7 @@ class _Track:
     heading_deg: float
     speed_px_s: float
     hits: int = 1
-    gid: Optional[int] = None
-    embedding: Optional[np.ndarray] = None
+    sighted: bool = False        # has its vehicle_sightings row (or matched a parked vehicle)
     counter: Optional[TrackCounter] = None
 
 
@@ -327,12 +323,10 @@ def _new_window() -> Dict[str, int]:
 _CLASS_COLUMN = {"car": "cars", "motorcycle": "motorcycles", "truck": "trucks", "bus": "buses"}
 
 
-@dataclass(eq=False)   # identity comparison: the generated __eq__ compares numpy arrays (ValueError)
+@dataclass(eq=False)
 class _Parked:
-    gid: int
     class_name: str
     bbox: Tuple[int, int, int, int]
-    embedding: np.ndarray
     ts: float
 
 
@@ -376,7 +370,6 @@ class RollingTracker:
         analytics: Optional[Any] = None,
         detector: Optional[Any] = None,
         detector_factory: Optional[Callable[[], Any]] = None,
-        identity_resolver: Optional[IdentityResolver] = None,
         stream_factory: StreamFactory = _default_stream_factory,
         threaded_streams: bool = True,
         rolling_enabled: bool = ROLLING_ENABLED,
@@ -400,13 +393,6 @@ class RollingTracker:
         self.analytics = analytics
         self._detector = detector
         self._detector_factory = detector_factory
-        self.identity_resolver = identity_resolver or IdentityResolver(topology=topology)
-        # Global ids continue after the highest stored one: restarting at 1 merged new vehicles
-        # into the journeys of vehicles from earlier runs.
-        try:
-            self.identity_resolver.ensure_next_id_above(int(db.get_max_global_vehicle_id() or 0))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Could not read the highest global vehicle id: {exc}")
         self.counting = counting or CountingLines()   # in-memory unless given a persisted one
         self.pool = StreamPool(stream_factory, max_open_streams)
         self._threaded_streams = threaded_streams
@@ -450,8 +436,7 @@ class RollingTracker:
         self._focus: Dict[int, _Session] = {}
         self._visits: Dict[int, _Session] = {}
         self._standby: Dict[int, _Session] = {}
-        self._follow: Set[int] = set()
-        self._boost_until: Dict[int, float] = {}
+        self._downstream_of_focus: Set[int] = set()
         self._last_visit_end: Dict[int, float] = {}
         self._failed_until: Dict[int, float] = {}
         self._fail_streak: Dict[int, int] = {}   # consecutive failures per camera
@@ -465,7 +450,6 @@ class RollingTracker:
         self._frames_processed = 0
         self._parked_dedups = 0
         self._standby_promotions = 0
-        self._handoffs = 0
         self._started_at = 0.0
 
         self._stop = threading.Event()
@@ -632,7 +616,7 @@ class RollingTracker:
             "uptime_s": round(now - self._started_at, 1) if self._started_at else 0.0,
             "focus_camera_id": focus_ids[0] if focus_ids else None,   # most recently viewed
             "focus_camera_ids": focus_ids,
-            "follow_candidates": sorted(self._follow),
+            "downstream_of_focus": sorted(self._downstream_of_focus),
             "visits": visits,
             "standby_slots": self._slot_plan()[1],
             "standby_camera_ids": sorted(s.camera_id for s in standby),
@@ -649,8 +633,6 @@ class RollingTracker:
             "vehicles_seen": sum(dict(self._seen).values()),
             "counting_lines_learned": sum(1 for c in self.cameras if self.counting.line(c) is not None),
             "parked_dedups": self._parked_dedups,
-            "handoffs": self._handoffs,
-            "reid_pending_departures": self.identity_resolver.pending_count(),
             "cameras_backing_off": sorted(c for c, t in failed_until.items() if t > now),
             "cameras_unreachable": {
                 c: {"failures": n, "retry_in_s": round(max(0.0, failed_until.get(c, 0.0) - now))}
@@ -725,7 +707,7 @@ class RollingTracker:
                 session = self._new_session(cid, "focus", tier=0, now=now)
             self._focus[cid] = session
 
-        self._follow = set().union(*(self._downstream.get(c, set()) for c in self._focus)) - set(self._focus)
+        self._downstream_of_focus = set().union(*(self._downstream.get(c, set()) for c in self._focus)) - set(self._focus)
         self._trim_visits(now)
 
     def _trim_visits(self, now: float) -> None:
@@ -774,7 +756,7 @@ class RollingTracker:
             logger.warning(f"Camera {camera_id} unreachable ({reason}); backing off, retries get less frequent.")
 
     def _tier(self, camera_id: int, now: float) -> int:
-        if camera_id in self._follow or self._boost_until.get(camera_id, 0.0) > now:
+        if camera_id in self._downstream_of_focus:
             return 1
         if camera_id in self.hubs:
             return 2
@@ -849,7 +831,7 @@ class RollingTracker:
         self._preempt_standby(now)
 
     def _preempt_standby(self, now: float) -> None:
-        """A follow candidate (tier 1) that has no stream yet takes over the standby slot of a
+        """A downstream camera (tier 1) that has no stream yet takes over the standby slot of a
         lower-tier camera, so it is ready for the next free visit slot instead of queueing behind
         cameras that rank lower."""
         if not self._standby:
@@ -858,7 +840,7 @@ class RollingTracker:
         if max(victims.values()) <= 1:
             return
         busy = set(self._visits) | set(self._focus) | set(self._standby)
-        wanted = [cid for cid in set(self._follow) | {c for c, t in self._boost_until.items() if t > now}
+        wanted = [cid for cid in self._downstream_of_focus
                   if cid in self.cameras and cid not in busy and self._failed_until.get(cid, 0.0) <= now
                   and self._priority(cid, now)[2] >= 0.0]
         for cid in sorted(wanted, key=lambda c: self._priority(c, now)[0]):
@@ -1056,10 +1038,8 @@ class RollingTracker:
                 tr.heading_deg = float(det.get("heading_deg", tr.heading_deg))
                 tr.speed_px_s = float(det.get("speed_px_s", tr.speed_px_s))
                 tr.hits += 1
-            if tr.gid is None and tr.hits >= MIN_TRACK_HITS:
-                self._confirm_track(session, tr, frame, now)
-            if tr.gid is not None:
-                det["global_vehicle_id"] = tr.gid
+            if not tr.sighted and tr.hits >= MIN_TRACK_HITS:
+                self._confirm_track(session, tr, now)
 
             pt = ground_point(bbox, width, height)
             if tr.counter is None:
@@ -1074,7 +1054,6 @@ class RollingTracker:
             if now - tr.last_ts > TRACK_DEPARTURE_GRACE_S:
                 del session.tracks[tid]
                 self._learn_motion(session.camera_id, tr)
-                self._register_departure(session.camera_id, tr)
 
     def _count(self, session: _Session, tr: _Track) -> None:
         """Records one vehicle crossing in the session's current observation window."""
@@ -1114,96 +1093,37 @@ class RollingTracker:
         session.win = _new_window()
         session.win_start = session.last_frame_ts
 
-    def _confirm_track(self, session: _Session, tr: _Track, frame: np.ndarray, now: float) -> None:
-        appearance = extract_appearance(frame, tr.bbox)
-        if appearance is None:
-            # Crop too small to describe; wait for the vehicle to come closer, but don't let a
-            # vehicle that stays tiny go uncounted.
-            if tr.hits < MIN_TRACK_HITS * 3:
-                return
-            emb = np.zeros(256, dtype=np.float32)
-            hist = np.zeros(128, dtype=np.float32)
-        else:
-            emb, hist = appearance
+    def _confirm_track(self, session: _Session, tr: _Track, now: float) -> None:
         cid = session.camera_id
-        tr.embedding = emb if appearance is not None else None
-
-        if appearance is not None:
-            parked = self._match_parked(cid, tr, emb, now)
-            if parked is not None:
-                tr.gid = parked.gid
-                self._parked_dedups += 1
-                return
-
-        if appearance is not None:
-            gid, confidence, matched_from = self.identity_resolver.resolve(cid, tr.class_name, emb, now)
-        else:
-            gid, confidence, matched_from = self.identity_resolver.new_global_id(), 0.0, None
-        tr.gid = gid
-
-        iso = _iso(now)
+        tr.sighted = True
+        if self._match_parked(cid, tr, now) is not None:
+            self._parked_dedups += 1
+            return
         try:
-            sid = self.db.insert_vehicle_sighting(
-                camera_id=cid, local_track_id=tr.track_id, global_vehicle_id=gid,
-                vehicle_class=tr.class_name, confidence=tr.confidence, bbox=tr.bbox,
-                heading_deg=tr.heading_deg, speed_px_s=tr.speed_px_s,
-                # Appearance stays in memory (Re-ID, parked dedup); nothing reads it back from the
-                # table, and the blobs were ~90% of its size. Blanking them later freed no disk
-                # (SQLite never reuses the half-empty pages), so they are not written at all.
-                embedding=b"", color_hist=b"",
-                timestamp_iso=iso,
+            self.db.insert_vehicle_sighting(
+                camera_id=cid, local_track_id=tr.track_id, vehicle_class=tr.class_name,
+                confidence=tr.confidence, bbox=tr.bbox, heading_deg=tr.heading_deg,
+                speed_px_s=tr.speed_px_s, timestamp_iso=_iso(now),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Sighting insert failed on camera {cid}: {exc}")
             return
         self._seen[cid] = self._seen.get(cid, 0) + 1
 
-        if matched_from is not None and matched_from != cid:
-            self._on_handoff(gid, matched_from, cid, confidence, sid, iso, now)
-
-    def _on_handoff(self, gid: int, from_cid: int, to_cid: int, confidence: float,
-                    sid: int, iso: str, now: float) -> None:
-        self._handoffs += 1
-        try:
-            self.db.record_handoff_event(global_vehicle_id=gid, from_camera_id=from_cid,
-                                         to_camera_id=to_cid, confidence=confidence, timestamp_iso=iso)
-            if not self.db.is_active_target(gid):
-                return
-            self.db.update_active_target(global_vehicle_id=gid, current_camera_id=to_cid,
-                                         last_sighting_id=sid, status="tracking", locked_at_iso=iso)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Handoff bookkeeping failed for gid {gid}: {exc}")
-            return
-        # A followed vehicle reached a new junction: prioritise the cameras it can reach next
-        # until its arrival window there has closed.
-        for nxt in self._downstream.get(to_cid, set()):
-            try:
-                _, t_max = self.topology.calculate_arrival_window(to_cid, nxt)
-            except KeyError:
-                continue
-            if t_max != float("inf"):
-                self._boost_until[nxt] = max(self._boost_until.get(nxt, 0.0), now + float(t_max))
-
-    def _match_parked(self, camera_id: int, tr: _Track, emb: np.ndarray, now: float) -> Optional[_Parked]:
+    def _match_parked(self, camera_id: int, tr: _Track, now: float) -> Optional[_Parked]:
         entries = self._parked.get(camera_id)
         if not entries:
             return None
         entries[:] = [p for p in entries if now - p.ts <= PARKED_TTL_S]
         for i, p in enumerate(entries):
-            if (p.class_name == tr.class_name and _iou(p.bbox, tr.bbox) >= PARKED_IOU
-                    and float(np.dot(emb, p.embedding)) >= PARKED_SIMILARITY):
-                del entries[i]     # by position: list.remove() compares with == and used to raise
+            if p.class_name == tr.class_name and _iou(p.bbox, tr.bbox) >= PARKED_IOU:
+                del entries[i]
                 return p
         return None
 
-    def _register_departure(self, camera_id: int, tr: _Track) -> None:
-        if tr.gid is not None and tr.embedding is not None:
-            self.identity_resolver.register_departure(tr.gid, camera_id, tr.class_name,
-                                                      tr.embedding, tr.last_ts)
-
     def _end_session(self, session: _Session, now: float) -> None:
-        """Closes an observation: parks stationary vehicles, registers departures, closes the
-        analytics window over the observed span and drops the camera's tracker state."""
+        """Closes an observation: parks stationary vehicles, closes the analytics window over the
+        observed span and drops the camera's tracker state."""
         cid = session.camera_id
         self._flush_window(session)
         for tr in session.tracks.values():
@@ -1214,12 +1134,8 @@ class RollingTracker:
             logger.warning(f"Could not save counting lines: {exc}")
         parked = self._parked.setdefault(cid, [])
         for tr in session.tracks.values():
-            if tr.gid is None or tr.embedding is None:
-                continue
-            if tr.speed_px_s < PARKED_SPEED_PX_S:
-                parked.append(_Parked(tr.gid, tr.class_name, tr.bbox, tr.embedding, tr.last_ts))
-            else:
-                self._register_departure(cid, tr)
+            if tr.sighted and tr.speed_px_s < PARKED_SPEED_PX_S:
+                parked.append(_Parked(tr.class_name, tr.bbox, tr.last_ts))
         del parked[:-PARKED_MAX_PER_CAMERA]
         session.tracks.clear()
 

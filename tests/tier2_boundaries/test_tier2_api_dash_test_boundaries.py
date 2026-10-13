@@ -7,8 +7,8 @@ Tier 2 Boundary and Corner Case Tests for Features F-API-01, F-API-02, F-DASH-01
 import json
 import unittest
 
-from tests.mock_stream import MockCameraNetwork, MockHLSStreamServer, SyntheticFrameGenerator, SyntheticTrajectorySimulator
-from tests.reference_contracts import DatabaseContract, GlobalIDPreserverContract, TopologyContract
+from tests.mock_stream import MockCameraNetwork, MockHLSStreamServer, SyntheticFrameGenerator
+from tests.reference_contracts import TopologyContract
 
 
 class TestTier2APIDashTestBoundaries(unittest.TestCase):
@@ -38,13 +38,6 @@ class TestTier2APIDashTestBoundaries(unittest.TestCase):
         requested_limit = -5
         clamped_limit = min(1000, max(1, requested_limit))
         self.assertEqual(clamped_limit, 1)
-
-    def test_b_api_01_empty_journey_for_unknown_vehicle(self):
-        """B1.4: Journey query for vehicle ID 0 or negative returns empty array."""
-        db = DatabaseContract(":memory:")
-        self.assertEqual(db.get_vehicle_journey(0), [])
-        self.assertEqual(db.get_vehicle_journey(-1), [])
-        db.conn.close()
 
     def test_b_api_01_malformed_timestamp_string_detection(self):
         """B1.5: Malformed timestamp string fails standard ISO format validation."""
@@ -126,86 +119,12 @@ class TestTier2APIDashTestBoundaries(unittest.TestCase):
             self.assertGreater(len(str(lat).split(".")[-1]), 2)
             self.assertGreater(len(str(lng).split(".")[-1]), 2)
 
-    # --- F-DASH-02 Boundaries ---
-    def test_b_dash_02_radar_countdown_negative_clamped_to_zero(self):
-        """B2.1: Radar countdown clamps negative time remaining to 0.0 seconds."""
-        t_remaining = -15.4
-        clamped = max(0.0, t_remaining)
-        self.assertEqual(clamped, 0.0)
-
-    def test_b_dash_02_video_switch_null_url_fallback(self):
-        """B2.2: Switch event with null stream URL falls back to placeholder."""
-        event = {"to_camera_id": 87, "to_stream_url": None}
-        fallback_url = event["to_stream_url"] or "/assets/placeholder_stream.m3u8"
-        self.assertEqual(fallback_url, "/assets/placeholder_stream.m3u8")
-
-    def test_b_dash_02_duplicate_switch_event_deduplication(self):
-        """B2.3: Consecutive duplicate switch events to the same camera are ignored."""
-        current_cam = 87
-        incoming_cam = 87
-        is_switch_needed = (incoming_cam != current_cam)
-        self.assertFalse(is_switch_needed)
-
-    def test_b_dash_02_unlock_when_no_active_lock_idempotent(self):
-        """B2.4: Calling unlock when no vehicle is locked behaves idempotently."""
-        preserver = GlobalIDPreserverContract()
-        # Unlock non-locked target
-        preserver.unlock_target(999)
-        self.assertEqual(len(preserver.active_targets), 0)
-
-    def test_b_dash_02_video_player_hud_overlay_empty_candidates(self):
-        """B2.5: HUD renders safely when candidate camera list is empty."""
-        hud_data = {"locked_id": 501, "candidates": []}
-        self.assertEqual(len(hud_data["candidates"]), 0)
-
-    # --- F-DASH-03 Boundaries ---
-    def test_b_dash_03_single_sighting_journey_polyline(self):
-        """B3.1: Journey with only 1 camera sighting has 0 polyline segments."""
-        journey = [{"camera_id": 79, "lat": -6.6014, "lng": 106.8051}]
-        polyline_segments = [(journey[i], journey[i+1]) for i in range(len(journey)-1)]
-        self.assertEqual(len(polyline_segments), 0)
-
-    def test_b_dash_03_zero_result_search_modal(self):
-        """B3.2: Empty vehicle search returns empty array and does not throw."""
-        db = DatabaseContract(":memory:")
-        cur = db.conn.cursor()
-        cur.execute("SELECT * FROM vehicle_sightings WHERE global_vehicle_id = 99999999;")
-        rows = cur.fetchall()
-        self.assertEqual(len(rows), 0)
-        db.conn.close()
-
-    def test_b_dash_03_crop_gallery_missing_thumbnail_fallback(self):
-        """B3.3: Sighting with None crop_thumbnail displays placeholder icon."""
-        sighting = {"id": 1, "crop_thumbnail": None}
-        display_img = sighting["crop_thumbnail"] or "default_vehicle_icon.svg"
-        self.assertEqual(display_img, "default_vehicle_icon.svg")
-
-    def test_b_dash_03_replay_seek_out_of_bounds_clamping(self):
-        """B3.4: Scrubbing slider past journey length clamps to last available sighting index."""
-        journey_len = 5
-        requested_idx = 10
-        clamped_idx = min(journey_len - 1, max(0, requested_idx))
-        self.assertEqual(clamped_idx, 4)
-
-    def test_b_dash_03_long_journey_20_camera_polyline(self):
-        """B3.5: Journey across 20 cameras generates exactly 19 connected polyline segments."""
-        journey = [{"cam_id": i, "lat": -6.60 + i*0.001, "lng": 106.80 + i*0.001} for i in range(20)]
-        segments = [(journey[i], journey[i+1]) for i in range(len(journey)-1)]
-        self.assertEqual(len(segments), 19)
-
     # --- F-TEST-01 Boundaries ---
     def test_b_test_01_zero_frame_generation(self):
         """B1.1: Requesting synthetic frame with 0 vehicles produces clean background frame."""
         frame_arr, jpeg_bytes = self.frame_gen.generate_frame(79, vehicles=[])
         self.assertEqual(frame_arr.shape, (480, 640, 3))
         self.assertGreater(len(jpeg_bytes), 1000)
-
-    def test_b_test_01_single_camera_journey_simulation(self):
-        """B1.2: Simulating journey across a single camera produces valid intra-camera sightings."""
-        sim = SyntheticTrajectorySimulator()
-        sightings = sim.simulate_vehicle_corridor_journey(global_vehicle_id=1, route_camera_ids=[79])
-        self.assertGreater(len(sightings), 0)
-        self.assertTrue(all(s["camera_id"] == 79 for s in sightings))
 
     def test_b_test_01_mock_hls_server_custom_segment_duration(self):
         """B1.3: Mock HLS server supports custom segment durations (e.g. 1.0s)."""

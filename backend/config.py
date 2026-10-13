@@ -55,7 +55,7 @@ def _env_int(name: str, default: int) -> int:
 # ── Rolling tracker tunables (all overridable through the environment) ──────────
 FOCUS_FPS = _env_float("ROLLING_FOCUS_FPS", 15.0)        # inference rate for the camera being viewed
 ROLLING_FPS = _env_float("ROLLING_FPS", 8.0)             # inference rate while rolling through other cameras
-DWELL_TIER1_S = _env_float("ROLLING_DWELL_TIER1_S", 20.0)  # seconds per visit: follow-candidate cameras
+DWELL_TIER1_S = _env_float("ROLLING_DWELL_TIER1_S", 20.0)  # seconds per visit: cameras downstream of a focus camera
 DWELL_TIER2_S = _env_float("ROLLING_DWELL_TIER2_S", 15.0)  # seconds per visit: arterial hubs
 DWELL_TIER3_S = _env_float("ROLLING_DWELL_TIER3_S", 12.0)  # seconds per visit: peripheral cameras
 TIER1_REVISIT_S = _env_float("ROLLING_TIER1_REVISIT_S", 8.0)
@@ -67,22 +67,16 @@ FOCUS_TTL_S = _env_float("ROLLING_FOCUS_TTL_S", 10.0)    # viewer considered gon
 ROLLING_ENABLED = os.environ.get("ROLLING_ENABLED", "1").lower() not in ("0", "false", "no", "off")
 
 # ── Housekeeping / response caching ─────────────────────────────────────────────
-# Appearance blobs of sightings older than this are blanked (re-identification only needs recent
-# ones, held in memory). 0 keeps them forever.
-EMBEDDING_TTL_S = _env_float("EMBEDDING_TTL_S", 3600.0)
 MAINTENANCE_INTERVAL_S = _env_float("MAINTENANCE_INTERVAL_S", 300.0)
 # Dashboard aggregates are computed at most once per this many seconds, however many tabs poll.
 STATS_CACHE_TTL_S = _env_float("STATS_CACHE_TTL_S", 3.0)
 
 # ── Storage / retention ─────────────────────────────────────────────────────────
-# Sightings (and handoff events) older than this many days are deleted in small batches by the
-# maintenance thread. 0 keeps everything. All-time totals (dashboard counters, ``global_vehicles``)
+# Sightings older than this many days are deleted in small batches by the
+# maintenance thread. 0 keeps everything. All-time totals (dashboard counters)
 # are maintained by insert triggers and are NOT reduced by pruning; ``observation_windows`` (the
 # traffic-volume history) is never pruned.
 SIGHTING_RETENTION_DAYS = _env_float("SIGHTING_RETENTION_DAYS", 0.0)
-# A followed vehicle ('tracking' active target) that has not been updated for this long stops
-# being a target: it no longer boosts cameras and maintenance marks it 'expired'. 0 = never expire.
-ACTIVE_TARGET_TTL_S = _env_float("ACTIVE_TARGET_TTL_S", 1800.0)
 # Cap on the WAL file kept after a checkpoint (PRAGMA journal_size_limit), so one large write
 # burst or a long reader cannot leave a multi-hundred-MB WAL on disk.
 DB_JOURNAL_SIZE_LIMIT_BYTES = _env_int("DB_JOURNAL_SIZE_LIMIT_BYTES", 32 * 1024 * 1024)

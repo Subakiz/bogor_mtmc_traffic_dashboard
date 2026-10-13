@@ -2,15 +2,13 @@
 tests/test_database.py
 Comprehensive Unit Test Suite for SQLite WAL Persistence Layer (F-ARCH-01).
 Tests:
-- Schema creation (cameras, topology_edges, vehicle_sightings, handoff_events, active_targets)
+- Schema creation (cameras, topology_edges, vehicle_sightings, observation_windows)
+- Dropping the old re-identification tables and columns from an existing database
 - WAL journal mode pragma and synchronous pragma
 - Automatic seeding of all 94 BSW CCTV cameras and 220 topology edges
-- Vehicle sightings insertion with 1024-byte embedding & 512-byte color histogram BLOBs
-- Chronological journey reconstruction with camera metadata join
+- Vehicle sightings insertion
 - Recent sightings retrieval with temporal sliding window
 - Multi-parameter vehicle search
-- Predictive handoff event recording
-- Active target state management
 - Traffic statistics aggregation
 - SQL injection immunity and foreign key integrity enforcement
 """
@@ -20,7 +18,6 @@ import sqlite3
 import tempfile
 import time
 import unittest
-import numpy as np
 
 from tests import TOTAL_CAMERAS
 from backend.database import (
@@ -29,13 +26,8 @@ from backend.database import (
     seed_cameras_from_topology,
     init_db,
     insert_vehicle_sighting,
-    get_vehicle_journey,
     get_recent_sightings,
     search_vehicles,
-    update_active_target,
-    get_active_target,
-    list_active_targets,
-    record_handoff_event,
     get_traffic_stats,
 )
 
@@ -52,27 +44,28 @@ class TestDatabaseUnit(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_schema_tables_and_indices_created(self):
-        """Verify all 5 required tables and performance indices are created."""
+        """Verify the required tables and performance indices are created, and no re-id tables."""
         cur = self.db.conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = {row[0] for row in cur.fetchall()}
-        required = {"cameras", "topology_edges", "vehicle_sightings", "handoff_events", "active_targets"}
+        required = {"cameras", "topology_edges", "vehicle_sightings", "observation_windows"}
         for t in required:
             self.assertIn(t, tables, f"Missing table: {t}")
+        self.assertFalse(tables & {"handoff_events", "active_targets", "global_vehicles"})
 
         cur.execute("SELECT name FROM sqlite_master WHERE type='index';")
         indices = {row[0] for row in cur.fetchall()}
         self.assertIn("idx_sightings_cam_time", indices)
-        self.assertIn("idx_sightings_global_id", indices)
+        self.assertNotIn("idx_sightings_global_id", indices)
         self.assertIn("idx_sightings_time", indices)
         # the covering indexes of the old COUNT(DISTINCT) scans are gone: the all-time aggregates now
         # come from trigger-maintained tables (tests/test_db_totals.py)
         self.assertNotIn("idx_sightings_agg", indices)
         self.assertNotIn("idx_sightings_local_track", indices)
-        for t in ("sighting_totals", "sighting_tracks", "camera_track_totals", "global_vehicles", "sighting_counters"):
+        for t in ("sighting_totals", "sighting_tracks", "camera_track_totals", "sighting_counters"):
             self.assertIn(t, tables, f"Missing totals table: {t}")
         cur.execute("SELECT name FROM sqlite_master WHERE type='trigger';")
-        self.assertEqual({row[0] for row in cur.fetchall()}, {"trg_sightings_totals", "trg_handoffs_total"})
+        self.assertEqual({row[0] for row in cur.fetchall()}, {"trg_sightings_totals"})
 
     def test_wal_journal_mode_applied(self):
         """Verify SQLite WAL pragma and synchronous NORMAL are active."""
@@ -105,25 +98,17 @@ class TestDatabaseUnit(unittest.TestCase):
             self.assertNotEqual(row["name"], "")
             self.assertNotEqual(row["latitude"], 0.0)
 
-    def test_insert_sighting_with_vector_blobs(self):
-        """Verify inserting sighting stores 1024-byte embedding, 512-byte histogram, and crop thumbnail."""
-        emb_bytes = np.random.randn(256).astype(np.float32).tobytes()
-        hist_bytes = np.random.randn(128).astype(np.float32).tobytes()
-        thumb = b"\xff\xd8\xff\xe0mock_jpeg_stream_data"
-
+    def test_insert_sighting(self):
+        """Verify inserting a sighting stores its camera, track, class, box and motion."""
         sighting_id = self.db.insert_vehicle_sighting(
             camera_id=79,
             local_track_id=42,
-            global_vehicle_id=1001,
             vehicle_class="car",
             confidence=0.94,
             bbox=(100, 150, 220, 260),
             heading_deg=245.5,
             speed_px_s=72.4,
-            embedding=emb_bytes,
-            color_hist=hist_bytes,
             timestamp_iso="2026-09-23T04:20:00Z",
-            crop_thumbnail=thumb,
         )
         self.assertGreater(sighting_id, 0)
 
@@ -132,41 +117,69 @@ class TestDatabaseUnit(unittest.TestCase):
         row = cur.fetchone()
         self.assertEqual(row["camera_id"], 79)
         self.assertEqual(row["local_track_id"], 42)
-        self.assertEqual(row["global_vehicle_id"], 1001)
         self.assertEqual(row["vehicle_class"], "car")
         self.assertAlmostEqual(row["confidence"], 0.94)
         self.assertEqual((row["bbox_x1"], row["bbox_y1"], row["bbox_x2"], row["bbox_y2"]), (100, 150, 220, 260))
         self.assertAlmostEqual(row["heading_deg"], 245.5)
-        self.assertEqual(len(row["embedding"]), 1024)
-        self.assertEqual(len(row["color_hist"]), 512)
-        self.assertEqual(row["crop_thumbnail"], thumb)
+        for gone in ("global_vehicle_id", "embedding", "color_hist", "crop_thumbnail"):
+            self.assertNotIn(gone, row.keys())
 
-    def test_chronological_journey_retrieval(self):
-        """Verify get_vehicle_journey returns chronological sequence with joined camera details."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
+    def test_reid_schema_dropped_from_existing_database(self):
+        """A database created with the re-identification schema loses its tables and sighting
+        columns on open, keeps its sightings, and accepts new sighting inserts."""
+        path = os.path.join(self.temp_dir.name, "old_schema.sqlite")
+        conn = sqlite3.connect(path)
+        conn.executescript("""
+            CREATE TABLE cameras (id INTEGER PRIMARY KEY, name TEXT NOT NULL, corridor TEXT NOT NULL,
+                latitude REAL NOT NULL, longitude REAL NOT NULL, camera_type TEXT DEFAULT 'FIXED',
+                stream_url TEXT, status TEXT DEFAULT 'online');
+            CREATE TABLE vehicle_sightings (
+                sighting_id INTEGER PRIMARY KEY AUTOINCREMENT, camera_id INTEGER NOT NULL,
+                local_track_id INTEGER NOT NULL, global_vehicle_id INTEGER, vehicle_class TEXT NOT NULL,
+                confidence REAL NOT NULL, bbox_x1 INTEGER NOT NULL, bbox_y1 INTEGER NOT NULL,
+                bbox_x2 INTEGER NOT NULL, bbox_y2 INTEGER NOT NULL, heading_deg REAL NOT NULL,
+                speed_px_s REAL NOT NULL, embedding BLOB NOT NULL, color_hist BLOB NOT NULL,
+                timestamp_iso TEXT NOT NULL, crop_thumbnail BLOB,
+                FOREIGN KEY (camera_id) REFERENCES cameras(id));
+            CREATE TABLE handoff_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                global_vehicle_id INTEGER NOT NULL, from_camera_id INTEGER NOT NULL,
+                to_camera_id INTEGER NOT NULL, confidence REAL NOT NULL, timestamp_iso TEXT NOT NULL);
+            CREATE TABLE active_targets (global_vehicle_id INTEGER PRIMARY KEY,
+                current_camera_id INTEGER NOT NULL, last_sighting_id INTEGER NOT NULL,
+                locked_at_iso TEXT NOT NULL, status TEXT DEFAULT 'tracking',
+                FOREIGN KEY (last_sighting_id) REFERENCES vehicle_sightings(sighting_id));
+            CREATE TABLE maintenance_state (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+            CREATE INDEX idx_sightings_global_id ON vehicle_sightings(global_vehicle_id);
+            INSERT INTO cameras (id, name, corridor, latitude, longitude) VALUES (79, 'Tugu Kujang', 'X', -6.6, 106.8);
+            INSERT INTO vehicle_sightings (camera_id, local_track_id, global_vehicle_id, vehicle_class,
+                confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2, heading_deg, speed_px_s, embedding,
+                color_hist, timestamp_iso) VALUES (79, 5, 900, 'car', 0.9, 0, 0, 10, 10, 0, 0, X'00', X'00',
+                '2026-09-23T00:00:00Z');
+            INSERT INTO active_targets VALUES (900, 79, 1, '2026-09-23T00:00:00Z', 'tracking');
+        """)
+        conn.commit()
+        conn.close()
 
-        # Insert sightings at 3 separate timestamps across different cameras
-        self.db.insert_vehicle_sighting(79, 1, 888, "car", 0.9, (10, 10, 50, 50), 240.0, 50.0, emb, hist, "2026-09-23T05:00:00Z")
-        self.db.insert_vehicle_sighting(87, 2, 888, "car", 0.92, (20, 20, 60, 60), 235.0, 55.0, emb, hist, "2026-09-23T05:01:15Z")
-        self.db.insert_vehicle_sighting(83, 3, 888, "car", 0.91, (30, 30, 70, 70), 180.0, 48.0, emb, hist, "2026-09-23T05:02:30Z")
-
-        journey = self.db.get_vehicle_journey(888)
-        self.assertEqual(len(journey), 3)
-        self.assertEqual([j["camera_id"] for j in journey], [79, 87, 83])
-        self.assertIn("TUGU KUJANG", journey[0]["camera_name"].upper())
-        self.assertIn("OTISTA", journey[1]["camera_name"].upper())
-        self.assertIn("PASAR BOGOR", journey[2]["camera_name"].upper())
+        db = Database(path, auto_seed=False)
+        try:
+            cur = db.conn.cursor()
+            tables = {r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertFalse(tables & {"handoff_events", "active_targets", "global_vehicles"})
+            columns = {r[1] for r in cur.execute("PRAGMA table_info(vehicle_sightings)")}
+            self.assertFalse(columns & {"global_vehicle_id", "embedding", "color_hist", "crop_thumbnail"})
+            self.assertEqual(cur.execute("SELECT count(*) FROM vehicle_sightings").fetchone()[0], 1)
+            sid = db.insert_vehicle_sighting(79, 6, "truck", 0.8, (0, 0, 5, 5), 0, 0, "2026-09-23T00:01:00Z")
+            self.assertGreater(sid, 1)
+        finally:
+            db.close()
+        Database(path, auto_seed=False).close()   # already migrated: opening again is a no-op
 
     def test_recent_sightings_temporal_window(self):
         """Verify get_recent_sightings filters by window_s."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
-
         # Insert sightings at 0s, 30s, and 120s
-        self.db.insert_vehicle_sighting(79, 1, None, "car", 0.9, (10, 10, 50, 50), 0, 0, emb, hist, "2026-09-23T05:00:00Z")
-        self.db.insert_vehicle_sighting(79, 2, None, "car", 0.9, (10, 10, 50, 50), 0, 0, emb, hist, "2026-09-23T05:01:30Z")
-        self.db.insert_vehicle_sighting(79, 3, None, "car", 0.9, (10, 10, 50, 50), 0, 0, emb, hist, "2026-09-23T05:02:00Z")
+        self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (10, 10, 50, 50), 0, 0, "2026-09-23T05:00:00Z")
+        self.db.insert_vehicle_sighting(79, 2, "car", 0.9, (10, 10, 50, 50), 0, 0, "2026-09-23T05:01:30Z")
+        self.db.insert_vehicle_sighting(79, 3, "car", 0.9, (10, 10, 50, 50), 0, 0, "2026-09-23T05:02:00Z")
 
         # Window of 45 seconds from latest (05:02:00Z) should return sightings at 05:02:00 and 05:01:30, but not 05:00:00
         recent = self.db.get_recent_sightings(79, window_s=45.0)
@@ -176,12 +189,9 @@ class TestDatabaseUnit(unittest.TestCase):
 
     def test_search_vehicles_with_filters(self):
         """Verify search_vehicles by class, camera_id, time range."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
-
-        self.db.insert_vehicle_sighting(79, 1, 101, "car", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T01:00:00Z")
-        self.db.insert_vehicle_sighting(79, 2, 102, "truck", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T01:05:00Z")
-        self.db.insert_vehicle_sighting(87, 3, 103, "bus", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T01:10:00Z")
+        self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:00:00Z")
+        self.db.insert_vehicle_sighting(79, 2, "truck", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:05:00Z")
+        self.db.insert_vehicle_sighting(87, 3, "bus", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:10:00Z")
 
         trucks = self.db.search_vehicles(vehicle_class="truck")
         self.assertEqual(len(trucks), 1)
@@ -190,65 +200,22 @@ class TestDatabaseUnit(unittest.TestCase):
         cam79_results = self.db.search_vehicles(camera_id=79)
         self.assertEqual(len(cam79_results), 2)
 
-    def test_active_target_upsert_and_retrieve(self):
-        """Verify active target locking, state query, and listing."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
-        sid = self.db.insert_vehicle_sighting(79, 1, 999, "car", 0.9, (10, 10, 50, 50), 240.0, 30.0, emb, hist, "2026-09-23T02:00:00Z")
-
-        self.db.update_active_target(global_vehicle_id=999, current_camera_id=79, last_sighting_id=sid, status="tracking")
-
-        target = self.db.get_active_target(999)
-        self.assertIsNotNone(target)
-        self.assertEqual(target["current_camera_id"], 79)
-        self.assertEqual(target["status"], "tracking")
-
-        active_list = self.db.list_active_targets()
-        self.assertEqual(len(active_list), 1)
-        self.assertEqual(active_list[0]["global_vehicle_id"], 999)
-
-    def test_handoff_event_and_referential_integrity(self):
-        """Verify handoff events recording and foreign key enforcement."""
-        eid = self.db.record_handoff_event(
-            global_vehicle_id=999,
-            from_camera_id=79,
-            to_camera_id=87,
-            confidence=0.91,
-            timestamp_iso="2026-09-23T02:01:30Z",
-        )
-        self.assertGreater(eid, 0)
-
-        # Non-existent camera violates foreign key constraint
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.db.record_handoff_event(
-                global_vehicle_id=999,
-                from_camera_id=999999,
-                to_camera_id=87,
-                confidence=0.9,
-                timestamp_iso="2026-09-23T02:01:30Z",
-            )
-
     def test_traffic_stats_aggregation(self):
         """Verify get_traffic_stats returns correct aggregated metrics."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
-
-        self.db.insert_vehicle_sighting(79, 1, 501, "car", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T03:00:00Z")
-        self.db.insert_vehicle_sighting(79, 2, 502, "motorcycle", 0.85, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T03:00:05Z")
-        self.db.insert_vehicle_sighting(87, 3, 501, "car", 0.92, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T03:01:20Z")
+        self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T03:00:00Z")
+        self.db.insert_vehicle_sighting(79, 2, "motorcycle", 0.85, (0, 0, 10, 10), 0, 0, "2026-09-23T03:00:05Z")
+        self.db.insert_vehicle_sighting(87, 3, "car", 0.92, (0, 0, 10, 10), 0, 0, "2026-09-23T03:01:20Z")
 
         stats = self.db.get_traffic_stats()
         self.assertEqual(stats["total_sightings"], 3)
-        self.assertEqual(stats["unique_global_vehicles"], 2)
+        self.assertEqual(stats["total_unique_vehicles"], 3)
         self.assertEqual(stats["class_breakdown"]["car"], 2)
         self.assertEqual(stats["class_breakdown"]["motorcycle"], 1)
 
     def test_sql_injection_safety(self):
         """Verify parameterized queries handle SQL injection strings safely."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
         payload = "'; DROP TABLE cameras; --"
-        sid = self.db.insert_vehicle_sighting(79, 1, None, payload, 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T00:00:00Z")
+        sid = self.db.insert_vehicle_sighting(79, 1, payload, 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T00:00:00Z")
         self.assertGreater(sid, 0)
 
         # Confirm cameras table still exists and has 94 rows
@@ -258,14 +225,11 @@ class TestDatabaseUnit(unittest.TestCase):
 
     def test_get_camera_vehicle_counts_all_94_cameras(self):
         """Verify get_camera_vehicle_counts accounts for all 94 cameras with accurate metrics."""
-        emb = np.zeros(256, dtype=np.float32).tobytes()
-        hist = np.zeros(128, dtype=np.float32).tobytes()
-
         # Insert sightings for camera 79 and 161
-        self.db.insert_vehicle_sighting(79, 1, 101, "car", 0.9, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T04:00:00Z")
-        self.db.insert_vehicle_sighting(79, 2, 102, "motorcycle", 0.85, (0, 0, 10, 10), 0, 0, emb, hist, "2026-09-23T04:00:05Z")
-        self.db.insert_vehicle_sighting(79, 1, 101, "car", 0.91, (5, 5, 15, 15), 0, 0, emb, hist, "2026-09-23T04:00:10Z")
-        self.db.insert_vehicle_sighting(161, 3, 103, "truck", 0.88, (0, 0, 20, 20), 0, 0, emb, hist, "2026-09-23T04:01:00Z")
+        self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T04:00:00Z")
+        self.db.insert_vehicle_sighting(79, 2, "motorcycle", 0.85, (0, 0, 10, 10), 0, 0, "2026-09-23T04:00:05Z")
+        self.db.insert_vehicle_sighting(79, 1, "car", 0.91, (5, 5, 15, 15), 0, 0, "2026-09-23T04:00:10Z")
+        self.db.insert_vehicle_sighting(161, 3, "truck", 0.88, (0, 0, 20, 20), 0, 0, "2026-09-23T04:01:00Z")
 
         counts = self.db.get_camera_vehicle_counts()
         self.assertEqual(len(counts), TOTAL_CAMERAS, "Must return count records for all 94 cameras")
