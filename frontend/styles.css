@@ -323,7 +323,9 @@ button { cursor: pointer; }
 
 /* Map */
 .map-wrap { position: relative; flex: 1; min-height: 420px; overflow: hidden; isolation: isolate; }
-#map { position: absolute; inset: 0; background: var(--map-bg); z-index: 1; }
+/* Leaflet sets position: relative inline when it starts before this rule applies, which leaves #map
+   0 px tall and clips everything (blank map in Safari); !important and explicit size keep it filling the card. */
+#map { position: absolute !important; inset: 0; width: 100%; height: 100%; background: var(--map-bg); z-index: 1; }
 
 .map-legend {
     position: absolute; left: 12px; bottom: 12px; z-index: 500;
