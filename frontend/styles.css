@@ -552,6 +552,39 @@ button { cursor: pointer; }
 .legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-2); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i { width: 12px; height: 3px; display: inline-block; border-radius: 2px; }
+/* Stepped timeframe slider above the chart (iOS-style track and knob). JS sets --pct (filled part). */
+.range-slider { --knob: 20px; position: relative; margin: 0 2px 12px; }
+.range-slider input[type="range"] {
+    -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 22px; margin: 0;
+    background: transparent; cursor: pointer;
+}
+.range-slider input[type="range"]:focus-visible { outline: none; }
+.range-slider input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--fill-strong) var(--pct, 0%));
+}
+.range-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: var(--knob); height: var(--knob); margin-top: -8px;
+    border: none; border-radius: 50%; background: #ffffff;
+    box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+.range-slider input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--fill-strong); }
+.range-slider input[type="range"]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+.range-slider input[type="range"]::-moz-range-thumb {
+    width: var(--knob); height: var(--knob); border: none; border-radius: 50%; background: #ffffff;
+    box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+.range-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--accent-soft), 0 3px 8px rgba(0, 0, 0, 0.16); }
+.range-slider input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--accent-soft), 0 3px 8px rgba(0, 0, 0, 0.16); }
+.range-slider__ticks { position: relative; height: 16px; margin-top: 4px; }
+.range-slider__ticks button {
+    position: absolute; top: 0; transform: translateX(-50%); padding: 0 4px; border: none; background: none;
+    color: var(--text-3); font: inherit; font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; cursor: pointer;
+}
+.range-slider__ticks button[aria-pressed="true"] { color: var(--text); font-weight: 600; }
+.range-slider__ticks button:disabled { opacity: 0.4; cursor: default; }
+.range-slider__ticks button:first-child { transform: translateX(calc(-1 * var(--knob) / 2)); }
+.range-slider__ticks button:last-child { transform: translateX(calc(-100% + var(--knob) / 2)); }
 .chart-canvas { width: 100%; height: 150px; background: transparent; border: none; display: block; }
 
 .export { padding: 14px; background: var(--surface-2); border: none; border-radius: var(--radius); }

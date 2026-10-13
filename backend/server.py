@@ -419,11 +419,17 @@ def export_traffic_dataset(
         raise HTTPException(400, detail=f"Unsupported format '{format}'. Supported: 'csv', 'json'.")
 
 
+FLOW_MAX_MINUTES = 30 * 24 * 60.0   # the Analytics chart's longest timeframe (30 days)
+FLOW_MAX_BUCKETS = 720               # bucket size is raised so a series never has more points
+
+
 def _flow_summary(camera_id: int, minutes: float, bucket_minutes: float) -> Dict[str, Any]:
     """Counting-line flow of one camera: the headline rate over ``minutes`` and a bucketed series
-    (flow in veh/h per bucket, with the mean congestion index of the same bucket)."""
-    minutes = min(max(1.0, minutes), 1440.0)
-    bucket_minutes = min(max(1.0, bucket_minutes), minutes)
+    (flow in veh/h per bucket, with the mean congestion index of the same bucket).
+    ``history_start_ts`` is when the camera's stored data begins (None if it has none), so the
+    dashboard can tell which timeframes the data actually covers."""
+    minutes = min(max(1.0, minutes), FLOW_MAX_MINUTES)
+    bucket_minutes = min(max(1.0, bucket_minutes, minutes / FLOW_MAX_BUCKETS), minutes)
     rate = db.get_camera_rates(window_s=minutes * 60.0, camera_ids=[camera_id]).get(camera_id)
     series = db.get_camera_flow_series(camera_id, minutes=minutes, bucket_minutes=bucket_minutes)
     congestion = {c["t"]: c["congestion"] for c in
@@ -435,10 +441,14 @@ def _flow_summary(camera_id: int, minutes: float, bucket_minutes: float) -> Dict
     series.extend({"t": t, "t_end": t + bucket_minutes * 60.0, "windows": 0, "observed_s": 0.0,
                    "vehicles": 0, "vph": None, "low_sample": True, "congestion": c} for t, c in congestion.items())
     series.sort(key=lambda p: p["t"])
+    starts = [ts for ts in (db.get_camera_first_observed(camera_id),
+                            _analytics_engine.get_first_timestamp(camera_id) if _analytics_engine else None)
+              if ts is not None]
     return {
         "basis": "counting-line crossings",
         "window_minutes": minutes,
         "bucket_minutes": bucket_minutes,
+        "history_start_ts": min(starts) if starts else None,
         "rate": rate,
         "windows": rate["windows"] if rate else 0,
         "series": series,

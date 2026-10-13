@@ -226,11 +226,13 @@ document.addEventListener("DOMContentLoaded", () => {
     loadTopology();
     loadStats();
     setInterval(() => {
-        if (activeTab === "timeseries") {
+        // Skip a tick while the last fetch is still out (long ranges on a busy server)
+        if (activeTab === "timeseries" && !chartRange.inFlight) {
             loadTimeSeriesMetrics(currentCameraId);
         }
     }, 2500);
     setupEventListeners();
+    setupRangeSlider();
     initWebSocket();
 });
 
@@ -900,17 +902,114 @@ function fmtDuration(seconds) {
     return seconds < 90 ? `${Math.round(seconds)} s` : `${(seconds / 60).toFixed(seconds < 600 ? 1 : 0)} min`;
 }
 
+// Timeframes of the Analytics chart's slider. Buckets grow with the window so the chart keeps a
+// readable number of points (a camera is only observed during visits, so short buckets over long
+// windows would be mostly gaps).
+const CHART_RANGES = [
+    { label: "1 h", long: "1 hour", minutes: 60, bucket: 5 },
+    { label: "6 h", long: "6 hours", minutes: 360, bucket: 15 },
+    { label: "24 h", long: "24 hours", minutes: 1440, bucket: 30 },
+    { label: "7 d", long: "7 days", minutes: 10080, bucket: 120 },
+    { label: "30 d", long: "30 days", minutes: 43200, bucket: 360 },
+];
+const chartRange = { preferred: 0, historyStart: {}, request: 0, inFlight: false };   // historyStart: camera id -> ts | null
+try {
+    const saved = Number(localStorage.getItem("chartRange"));
+    if (Number.isInteger(saved) && saved >= 0 && saved < CHART_RANGES.length) chartRange.preferred = saved;
+} catch (e) { /* storage unavailable */ }
+
+// Longest timeframe worth offering for a camera: a range is only enabled while the next-shorter one
+// doesn't already show all of its stored data. Unknown coverage (not fetched yet) allows everything.
+function maxChartRange(cameraId) {
+    if (!(cameraId in chartRange.historyStart)) return CHART_RANGES.length - 1;
+    const start = chartRange.historyStart[cameraId];
+    if (start === null || start === undefined) return 0;
+    const spanMin = (Date.now() / 1000 - start) / 60;
+    let max = 0;
+    while (max + 1 < CHART_RANGES.length && CHART_RANGES[max].minutes < spanMin) max++;
+    return max;
+}
+
+const activeChartRange = cameraId => Math.min(chartRange.preferred, maxChartRange(cameraId));
+
+function syncRangeSlider(cameraId) {
+    const input = document.getElementById("tsRangeInput");
+    const ticks = document.getElementById("tsRangeTicks");
+    if (!input || !ticks) return;
+    const active = activeChartRange(cameraId), max = maxChartRange(cameraId);
+    const last = CHART_RANGES.length - 1;
+    if (!ticks.children.length) {
+        CHART_RANGES.forEach((r, i) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = r.label;
+            b.tabIndex = -1;
+            b.style.left = `calc(var(--knob) / 2 + (100% - var(--knob)) * ${i / last})`;
+            b.addEventListener("click", () => setChartRange(i));
+            ticks.appendChild(b);
+        });
+    }
+    [...ticks.children].forEach((b, i) => {
+        b.setAttribute("aria-pressed", String(i === active));
+        b.disabled = i > max;
+        b.title = i > max ? "No data stored that far back for this camera" : "";
+    });
+    input.value = String(active);
+    input.style.setProperty("--pct", `${(active / last) * 100}%`);
+    input.setAttribute("aria-valuetext", CHART_RANGES[active].long);
+}
+
+function setChartRange(index) {
+    const max = maxChartRange(currentCameraId);
+    chartRange.preferred = Math.min(Math.max(index, 0), max);
+    try { localStorage.setItem("chartRange", String(chartRange.preferred)); } catch (e) { /* storage unavailable */ }
+    syncRangeSlider(currentCameraId);
+    loadTimeSeriesMetrics(currentCameraId);
+}
+
+function setupRangeSlider() {
+    const input = document.getElementById("tsRangeInput");
+    if (!input) return;
+    input.max = String(CHART_RANGES.length - 1);
+    input.addEventListener("input", () => {
+        const max = maxChartRange(currentCameraId);
+        if (Number(input.value) > max) input.value = String(max);   // ranges beyond the stored data
+        setChartRange(Number(input.value));
+    });
+    syncRangeSlider(currentCameraId);
+}
+
+const fmtSpan = minutes => minutes < 120 ? `${Math.round(minutes)} min`
+    : minutes < 2880 ? `${Math.round(minutes / 60)} h` : `${+(minutes / 1440).toFixed(1)} d`;
+
 async function loadTimeSeriesMetrics(cameraId) {
     try {
-        const res = await fetch(`/api/cameras/${cameraId}/metrics`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const range = CHART_RANGES[activeChartRange(cameraId)];
+        const request = ++chartRange.request;
+        chartRange.inFlight = true;
+        let res, data;
+        try {
+            res = await fetch(`/api/cameras/${cameraId}/metrics?minutes=${range.minutes}&bucket_minutes=${range.bucket}`);
+            data = res.ok ? await res.json() : null;
+        } finally {
+            if (request === chartRange.request) chartRange.inFlight = false;
+        }
+        if (!data || request !== chartRange.request) return;   // a newer request (other range/camera) wins
+        if (cameraId !== currentCameraId) return;
+        const flow = data.flow || {};
+        chartRange.historyStart[cameraId] = flow.history_start_ts ?? null;
+        if (activeChartRange(cameraId) !== CHART_RANGES.indexOf(range)) {
+            // The chosen range reaches past this camera's stored data: show the longest one it covers.
+            syncRangeSlider(cameraId);
+            loadTimeSeriesMetrics(cameraId);
+            return;
+        }
+        syncRangeSlider(cameraId);
 
         const live = data.live || {};
         const history = data.recent_history || [];
         const lastRec = history.length > 0 ? history[history.length - 1] : null;
-        const flow = data.flow || {};
-        const rate = flow.rate || null;      // counting-line rate over the window; null if never observed
+        const rate = data.rate || null;      // counting-line rate over the last hour; null if not observed
         const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
 
         setText("tsCamName", `${data.camera_name || "Camera"} (ID ${cameraId})`);
@@ -979,9 +1078,9 @@ async function loadTimeSeriesMetrics(cameraId) {
         const isWknd = lastRec ? lastRec.is_weekend : ([0, 6].includes(now.getDay()) ? 1 : 0);
         setText("tsWeekendBadge", isWknd ? "Weekend" : "Weekday");
 
-        const minutes = flow.window_minutes || 60;
+        const minutes = flow.window_minutes || range.minutes;
         const series = flow.series || [];
-        setText("tsHistoryPoints", `last ${minutes} min`);
+        setText("tsHistoryPoints", `last ${range.long}`);
         setText("tsTotalDbRecords", `${flow.windows || 0} windows`);
         renderTimeSeriesChart(series, minutes);
     } catch (err) {
@@ -1019,7 +1118,7 @@ function renderTimeSeriesChart(series, minutes) {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.font = `12.5px ${FONT}`;
-        ctx.fillText(`No observations in the last ${minutes} min yet`, w / 2, h / 2);
+        ctx.fillText(`No observations in the last ${fmtSpan(minutes)} yet`, w / 2, h / 2);
         return;
     }
 
@@ -1114,9 +1213,9 @@ function renderTimeSeriesChart(series, minutes) {
     ctx.fillStyle = MUTED;
     ctx.textBaseline = "top";
     ctx.textAlign = "left";
-    ctx.fillText(`${minutes} min ago`, pad.left, pad.top + chartH + 6);
+    ctx.fillText(`${fmtSpan(minutes)} ago`, pad.left, pad.top + chartH + 6);
     ctx.textAlign = "center";
-    ctx.fillText(`${Math.round(minutes / 2)} min`, pad.left + chartW / 2, pad.top + chartH + 6);
+    ctx.fillText(`${fmtSpan(minutes / 2)} ago`, pad.left + chartW / 2, pad.top + chartH + 6);
     ctx.textAlign = "right";
     ctx.fillText("Now", pad.left + chartW, pad.top + chartH + 6);
 }

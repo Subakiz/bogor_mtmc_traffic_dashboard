@@ -18,14 +18,14 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="/static/styles.css?v=20261013_apple" />
+    <link rel="stylesheet" href="/static/styles.css?v=20261013_range" />
 
     <!-- Deferred scripts download in parallel with parsing and run in this order, before
          DOMContentLoaded: leaflet (L), hls.js (Hls), lucide, then app.js, which uses all three. -->
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     <script defer src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script defer src="/static/app.js?v=20261013_apple"></script>
+    <script defer src="/static/app.js?v=20261013_range"></script>
 </head>
 <body>
 
@@ -219,6 +219,10 @@
                                     <span><i style="background:var(--chart-flow)"></i>Flow (veh/h)</span>
                                     <span><i style="background:var(--chart-congestion)"></i>Congestion</span>
                                 </div>
+                            </div>
+                            <div class="range-slider" id="tsRange">
+                                <input type="range" id="tsRangeInput" min="0" max="4" step="1" value="0" aria-label="Chart timeframe" aria-valuetext="1 hour">
+                                <div class="range-slider__ticks" id="tsRangeTicks" aria-hidden="true"></div>
                             </div>
                             <canvas id="trafficMlCanvas" class="chart-canvas" aria-label="Flow and congestion history chart"></canvas>
                         </div>

@@ -453,6 +453,8 @@ class TestCrossingVolume(unittest.TestCase):
         self.assertEqual([p["t"] for p in series], [900.0, 1200.0])
         self.assertAlmostEqual(series[0]["congestion"], round((0.2 * 10 + 0.6 * 30) / 40, 3), places=3)
         self.assertAlmostEqual(series[1]["congestion"], 0.1, places=3)
+        self.assertEqual(self.engine.get_first_timestamp(7), 1000.0)
+        self.assertIsNone(self.engine.get_first_timestamp(8))
 
 
 def window(camera_id, end, seconds, volume=0, congestion=0.1, basis="crossings", **kw):
