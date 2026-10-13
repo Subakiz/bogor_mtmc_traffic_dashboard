@@ -9,6 +9,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 
 from fastapi.testclient import TestClient
@@ -16,7 +17,9 @@ from fastapi.testclient import TestClient
 from backend.database import Database
 
 
-class TestFailedWriteReleasesLock(unittest.TestCase):
+class _LockTestBase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = os.path.join(self.tmp.name, "lock.sqlite")
@@ -46,6 +49,10 @@ class TestFailedWriteReleasesLock(unittest.TestCase):
         t.join()
         return result.get("ok", False)
 
+
+class TestFailedWriteReleasesLock(_LockTestBase):
+    __test__ = True
+
     def test_foreign_key_failure_rolls_back(self):
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.update_active_target(global_vehicle_id=14, current_camera_id=79,
@@ -60,6 +67,34 @@ class TestFailedWriteReleasesLock(unittest.TestCase):
                 confidence=0.9, bbox=(0, 0, 10, 10), heading_deg=0.0, speed_px_s=0.0,
                 embedding=b"\0" * 1024, color_hist=b"\0" * 512, timestamp_iso="2026-01-01T00:00:00Z",
             )
+        self.assertTrue(self._other_thread_can_write())
+
+
+class TestStorageOperationsReleaseTheLock(_LockTestBase):
+    __test__ = True
+
+    def _add(self, track, gid, age_days):
+        from datetime import datetime, timedelta, timezone
+        ts = (datetime.now(timezone.utc) - timedelta(days=age_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return self.db.insert_vehicle_sighting(79, track, gid, "car", 0.9, (0, 0, 10, 10), 0.0, 0.0, b"", b"", ts)
+
+    def test_prune_with_a_pinned_sighting_leaves_no_transaction_open(self):
+        old = self._add(1, 14, age_days=30)
+        self._add(2, 15, age_days=30)
+        self.db.update_active_target(global_vehicle_id=14, current_camera_id=79, last_sighting_id=old)
+        self.assertEqual(self.db.prune_sightings(older_than_s=86400, batch=1), 1)
+        self.assertFalse(self.db.conn.in_transaction)
+        self.assertEqual(self.db.prune_handoff_events(older_than_s=86400), 0)
+        self.assertFalse(self.db.conn.in_transaction)
+        self.assertTrue(self._other_thread_can_write())
+
+    def test_target_expiry_and_vacuum_leave_no_transaction_open(self):
+        sid = self._add(1, 14, age_days=0)
+        self.db.update_active_target(global_vehicle_id=14, current_camera_id=79, last_sighting_id=sid)
+        self.db.expire_active_targets(ttl_s=0.0001, now=time.time() + 10)
+        self.db.compact(force=True)
+        self.db.incremental_vacuum(10)
+        self.assertFalse(self.db.conn.in_transaction)
         self.assertTrue(self._other_thread_can_write())
 
 

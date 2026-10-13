@@ -14,6 +14,7 @@ import sys
 import json
 import time
 import asyncio
+import functools
 import threading
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
@@ -28,9 +29,10 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, Response
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from pydantic import BaseModel
 import cv2
 import numpy as np
@@ -40,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.config import (
     PROJECT_ROOT, DATA_DIR, FRONTEND_DIR, ENGINE_ROOT, ANALYTICS_DB_PATH, DEFAULT_MODEL_PATH,
+    COUNTING_LINES_PATH, FREE_FLOW_PATH, TRAFFIC_LANES_PATH,
     EMBEDDING_TTL_S, MAINTENANCE_INTERVAL_S, STATS_CACHE_TTL_S, ensure_engine_importable,
 )
 from backend.database import Database, DEFAULT_DB_PATH
@@ -51,15 +54,33 @@ from backend.detector import ANEVehicleDetector, ALLOWED_VEHICLE_CLASSES
 
 app = FastAPI(title="BSW Kota Bogor Traffic Intelligence Dashboard", version="1.0.0")
 
-# Anti-cache middleware for local development
-@app.middleware("http")
-async def add_no_cache_headers(request: Request, call_next):
-    response = await call_next(request)
-    if request.url.path.startswith("/static/") or request.url.path == "/":
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-    return response
+class _RevalidatePageAssets:
+    """The page and its static assets are revalidated on every load (``no-cache``: the browser
+    sends If-None-Match and gets a 304 when nothing changed) instead of being re-downloaded.
+    Plain ASGI on purpose: ``@app.middleware("http")`` (BaseHTTPMiddleware) wraps every request,
+    including each frame poll, and halved the server's request throughput."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "") if scope["type"] == "http" else ""
+        if not (path == "/" or path.startswith("/static/")):
+            return await self.app(scope, receive, send)
+
+        async def send_revalidate(message):
+            if message["type"] == "http.response.start":
+                headers = [(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"]
+                message["headers"] = headers + [(b"cache-control", b"no-cache")]
+            await send(message)
+
+        await self.app(scope, receive, send_revalidate)
+
+
+app.add_middleware(_RevalidatePageAssets)
+# JSON (topology, cameras, counts) compresses ~8x; JPEG frames and the MJPEG stream are left alone.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5,
+                   exclude_content_types=DEFAULT_EXCLUDED_CONTENT_TYPES + ("multipart/x-mixed-replace",))
 
 # Mount frontend static directory
 FRONTEND_DIR.mkdir(exist_ok=True)
@@ -117,7 +138,8 @@ ensure_engine_importable()
 try:
     from car_tracker import TrafficAnalyticsEngine
     _analytics_engine = TrafficAnalyticsEngine(
-        db_path=ANALYTICS_DB_PATH, free_flow_path=str(DATA_DIR / "free_flow_speeds.json"))
+        db_path=ANALYTICS_DB_PATH, free_flow_path=FREE_FLOW_PATH, lanes_path=TRAFFIC_LANES_PATH,
+        assume_crossings=True)   # the rolling tracker always reports counting-line crossings
 except Exception as _e:
     print(f"Warning: TrafficAnalyticsEngine unavailable: {_e}")
     _analytics_engine = None
@@ -136,19 +158,25 @@ def _camera_or_404(camera_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
     return cam
 
-# Active WebSocket connections
-active_connections: List[WebSocket] = []
-
 class HandoffRequest(BaseModel):
     camera_id: int
     exit_direction: str
-    vehicle_id: int
+    vehicle_id: Optional[int] = None   # the followed vehicle, if any
     vehicle_type: Optional[str] = "car"
 
 @app.on_event("startup")
 def startup_event():
     from backend.database import seed_cameras_from_topology
     seed_cameras_from_topology(db.conn, str(DATA_DIR / "bogor_camera_topology.json"))
+
+    # One-time: switch to incremental auto-vacuum and reclaim the pages left ~90% empty by the
+    # appearance blobs older versions stored (a no-op once done). Runs before the tracker writes.
+    result = db.compact()
+    if result.get("compacted"):
+        print(f"Database compacted: {result['before_bytes'] / 1e6:.1f} MB -> "
+              f"{result['after_bytes'] / 1e6:.1f} MB in {result['seconds']:.1f}s.")
+    elif result.get("reason") not in (None, "already compacted"):
+        print(f"Database compaction skipped: {result.get('reason')}")
 
     # Rolling tracker: tracks the viewed camera and rolls through every other camera so
     # vehicles are counted citywide. Disable the rolling part with ROLLING_ENABLED=0.
@@ -161,6 +189,8 @@ def startup_event():
 def shutdown_event():
     maintenance.stop()
     rolling_tracker.stop()
+    if _analytics_engine is not None:
+        _analytics_engine.close()
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def get_dashboard():
@@ -302,7 +332,7 @@ def vehicle_timeline(vehicle_id: int):
 @app.get("/api/vehicles/search")
 def search_vehicle_ids(query: str = ""):
     """Searches vehicles by ID or attributes."""
-    results = db.search_vehicles(query)
+    results = db.search_sightings(query)   # indexed: ids, vehicle class, camera name / corridor
     clean_results = [_sanitize_sighting(r) for r in results]
     return {"query": query, "results": clean_results}
 
@@ -366,23 +396,16 @@ def predict_handoff(req: HandoffRequest):
             "distance_m": cand.get("distance_m", 0)
         })
 
-    # Record handoff intent only for a vehicle that has actually been sighted: the dashboard
-    # calls this on every camera switch with a placeholder id, and active_targets must point at
-    # a real sighting (FOREIGN KEY on last_sighting_id).
-    best_candidate_id = candidates[0]["target_camera_id"] if candidates else None
-    journey = db.get_vehicle_journey(req.vehicle_id) if best_candidate_id else []
+    # A followed vehicle (one that has actually been sighted: active_targets has a FOREIGN KEY on
+    # last_sighting_id) becomes an active target, so the tracker visits its candidate cameras
+    # first. The prediction itself is not a handoff and is not stored as one -- handoff_events
+    # only holds re-identifications the tracker observed.
+    journey = db.get_vehicle_journey(req.vehicle_id) if req.vehicle_id and candidates else []
     if journey:
         from datetime import datetime, timezone
         now_iso = datetime.now(timezone.utc).isoformat()
         latest = journey[-1]
         try:
-            db.record_handoff_event(
-                global_vehicle_id=req.vehicle_id,
-                from_camera_id=req.camera_id,
-                to_camera_id=best_candidate_id,
-                confidence=0.92,
-                timestamp_iso=now_iso
-            )
             db.update_active_target(
                 global_vehicle_id=req.vehicle_id,
                 current_camera_id=latest["camera_id"],
@@ -428,39 +451,36 @@ def stop_daemon():
     return {"status": "stopped", "message": "Rolling coverage stopped"}
 
 def _heartbeat_payload() -> Dict[str, Any]:
-    """Everything the dashboard refreshes on each tick. Built on a worker thread from the shared
-    cache, so N open tabs cost one computation per cache interval and never block the event loop.
-    ``counts`` / ``recent`` are what the dashboard would otherwise fetch with two more requests."""
-    stats, active_targets = _cached_stats()
-    analytics_summary = _analytics_engine.get_all_camera_summaries() if _analytics_engine else []
+    """What the dashboard refreshes on each tick: ``counts`` / ``recent``, which it would
+    otherwise fetch with two more requests. (It used to also carry all-time stats, analytics
+    summaries and rolling status that the page never read, at ~4x the size and DB work.)"""
     return {
         "type": "heartbeat",
         "timestamp": time.time(),
-        "stats": stats,
-        "camera_counts": stats.get("camera_counts", {}),
-        "top_cameras": stats.get("top_cameras", []),
-        "active_targets": active_targets,
-        "analytics_summary": analytics_summary,
-        "rolling": _rolling_summary(),
         "counts": get_camera_counts(),
         "recent": [_sanitize_sighting(r) for r in _latest_sightings_cached(12)],
     }
 
 
+HEARTBEAT_INTERVAL_S = 2.0
+_heartbeat_cache = _TTLCache(HEARTBEAT_INTERVAL_S / 2)
+
+
+def _heartbeat_text() -> str:
+    """The heartbeat serialized once and shared by every open socket."""
+    return _heartbeat_cache.get("heartbeat", lambda: json.dumps(_heartbeat_payload(), default=str))
+
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    active_connections.append(websocket)
     try:
         while True:
-            # Periodic live stats every 2 seconds; the DB work runs off the event loop.
-            await websocket.send_json(await asyncio.to_thread(_heartbeat_payload))
-            await asyncio.sleep(2.0)
+            # Periodic live stats; the DB work and serialization run off the event loop.
+            await websocket.send_text(await asyncio.to_thread(_heartbeat_text))
+            await asyncio.sleep(HEARTBEAT_INTERVAL_S)
     except (WebSocketDisconnect, RuntimeError):
         pass   # client went away (RuntimeError: send on a socket that already closed)
-    finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
 
 
 # ── Per-Camera Traffic Analytics & Time-Series Endpoints (LSTM / ML Ready) ────
@@ -524,7 +544,7 @@ def _flow_summary(camera_id: int, minutes: float, bucket_minutes: float) -> Dict
     (flow in veh/h per bucket, with the mean congestion index of the same bucket)."""
     minutes = min(max(1.0, minutes), 1440.0)
     bucket_minutes = min(max(1.0, bucket_minutes), minutes)
-    rate = db.get_camera_rates(window_s=minutes * 60.0).get(camera_id)
+    rate = db.get_camera_rates(window_s=minutes * 60.0, camera_ids=[camera_id]).get(camera_id)
     series = db.get_camera_flow_series(camera_id, minutes=minutes, bucket_minutes=bucket_minutes)
     congestion = {c["t"]: c["congestion"] for c in
                   (_analytics_engine.get_congestion_series(camera_id, minutes, bucket_minutes)
@@ -555,7 +575,7 @@ def get_camera_traffic_metrics(camera_id: int, minutes: float = 60.0, bucket_min
     metrics["camera_name"] = cam_name
     metrics["camera_id"] = camera_id
     metrics["flow"] = _flow_summary(camera_id, minutes, bucket_minutes)
-    metrics["rate"] = metrics["flow"]["rate"] if minutes == 60.0 else db.get_camera_rates(window_s=3600.0).get(camera_id)
+    metrics["rate"] = metrics["flow"]["rate"] if minutes == 60.0 else db.get_camera_rates(window_s=3600.0, camera_ids=[camera_id]).get(camera_id)
     line = rolling_tracker.counting.line(camera_id)
     metrics["counting_line"] = None if line is None else {
         "endpoints": line.endpoints(), "direction_labels": line.labels(),
@@ -584,13 +604,8 @@ def get_detector() -> ANEVehicleDetector:
 
 rolling_tracker = RollingTracker(
     db=db, topology=topology, analytics=_analytics_engine, detector_factory=get_detector,
-    counting=CountingLines(str(DATA_DIR / "counting_lines.json")),
+    counting=CountingLines(COUNTING_LINES_PATH),
 )
-
-def _rolling_summary() -> Dict[str, Any]:
-    st = rolling_tracker.get_status()
-    return {k: st[k] for k in ("running", "rolling_enabled", "focus_camera_id", "visits",
-                               "cameras_covered", "total_cameras", "vehicles_counted")}
 
 def _draw_counting_overlay(img: np.ndarray, latest: Dict[str, Any]) -> None:
     """Counting line (once learned) and this session's crossing counts, bottom-left."""
@@ -610,6 +625,9 @@ def _draw_counting_overlay(img: np.ndarray, latest: Dict[str, Any]) -> None:
     for i, text in enumerate(rows):
         cv2.putText(img, text, (25, h - bh - 15 + 22 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX,
                     0.46 if i == 0 else 0.4, (0, 240, 255) if i == 0 else (210, 210, 210), 1, cv2.LINE_AA)
+
+
+MAX_FRAME_WIDTH = 1280      # annotated frames are downscaled to at most this width
 
 
 def _render_annotated_frame(frame: Any, detections: List[Dict[str, Any]], ane_ms: float,
@@ -645,9 +663,16 @@ def _render_annotated_frame(frame: Any, detections: List[Dict[str, Any]], ane_ms
     cv2.putText(annotated, f"ANE: {ane_ms:.1f}ms | YOLOv8 CoreML", (25, 37),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.46, (0, 240, 255), 1)
 
+    # 1080p cameras made ~440 KB frames (~4 MB/s per viewer at 10 fps); 1280 px wide is what the
+    # player shows and halves both the size and the encode time.
+    h, w = annotated.shape[:2]
+    if w > MAX_FRAME_WIDTH:
+        annotated = cv2.resize(annotated, (MAX_FRAME_WIDTH, round(h * MAX_FRAME_WIDTH / w)),
+                               interpolation=cv2.INTER_AREA)
     ret_jpg, jpeg = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
     return jpeg.tobytes() if ret_jpg else b""
 
+@functools.lru_cache(maxsize=256)
 def _generate_placeholder_frame(camera_name: str, message: str) -> bytes:
     import numpy as np
     img = np.zeros((720, 1280, 3), dtype=np.uint8)
@@ -668,105 +693,165 @@ def _generate_placeholder_frame(camera_name: str, message: str) -> bytes:
     ret_jpg, jpeg = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 80])
     return jpeg.tobytes() if ret_jpg else b""
 
-# Rendered JPEG of the newest focus frame, shared by every viewer of that camera.
+# Rendered JPEG of the newest focus frame, shared by every viewer of that camera, keyed by the
+# tracker's frame_no (a reopened capture restarts its own seq at 1, which served a stale frame).
 _render_cache: Dict[int, Tuple[int, bytes]] = {}
 _render_lock = threading.Lock()
 
-def _latest_focus_jpeg(camera_id: int) -> bytes:
-    """Marks the camera as viewed and returns its newest annotated frame (b"" while connecting)."""
-    rolling_tracker.set_focus(camera_id)
-    latest = rolling_tracker.get_focus_frame(camera_id)
-    if latest is None:
-        return b""
+FRAME_WAIT_S = 1.0         # a frame request with ?after= waits this long for a newer frame
+FRAME_POLL_S = 0.02
+VIEWER_LIMIT_MESSAGE = "VIEWER LIMIT: OTHER CAMERAS ARE BEING WATCHED"
+_NO_STORE = {"Cache-Control": "no-store"}
+
+
+def _render_focus_jpeg(camera_id: int, latest: Dict[str, Any]) -> bytes:
     with _render_lock:
         cached = _render_cache.get(camera_id)
-        if cached is not None and cached[0] == latest["seq"]:
+        if cached is not None and cached[0] == latest["frame_no"]:
             return cached[1]
     jpeg_bytes = _render_annotated_frame(latest["frame"], latest["detections"], latest["ane_ms"], latest)
     if jpeg_bytes:
         with _render_lock:
-            _render_cache[camera_id] = (latest["seq"], jpeg_bytes)
+            _render_cache[camera_id] = (latest["frame_no"], jpeg_bytes)
     return jpeg_bytes
 
+
 @app.get("/api/stream/{camera_id}/frame")
-def get_single_annotated_frame(camera_id: int):
-    """Returns the latest single annotated JPEG frame for smooth fallback polling."""
-    cam = _camera_or_404(camera_id)
+async def get_single_annotated_frame(camera_id: int, after: Optional[int] = None):
+    """Newest annotated JPEG of a watched camera; polling it keeps the camera in focus.
 
-    cam_name = cam.get("name", f"Camera #{camera_id}")
-    stream_url = cam.get("stream_url")
-    if not stream_url:
-        placeholder = _generate_placeholder_frame(cam_name, "NO STREAM URL CONFIGURED")
-        return Response(content=placeholder, media_type="image/jpeg")
-
-    jpeg_bytes = _latest_focus_jpeg(camera_id)
-
-    if not jpeg_bytes:
-        placeholder = _generate_placeholder_frame(cam_name, "CONNECTING HLS STREAM...")
-        return Response(
-            content=placeholder,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0"}
-        )
-
-    return Response(
-        content=jpeg_bytes,
-        media_type="image/jpeg",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
-
-@app.get("/api/stream/{camera_id}")
-async def stream_ai_video(camera_id: int, request: Request):
-    """
-    Streams live video annotated on Apple Neural Engine (ANE)
-    with YOLOv8 bounding boxes, vehicle classifications, and and per-class colours.
+    Pass the previous response's ``X-Frame-No`` as ``after``: the request then waits up to
+    FRAME_WAIT_S for a newer frame and answers 204 if none came, so a viewer never downloads
+    (and the server never re-sends) the same frame twice -- plain polling re-sent ~70% of them.
     """
     cam = _camera_or_404(camera_id)
-
     cam_name = cam.get("name", f"Camera #{camera_id}")
-    stream_url = cam.get("stream_url")
-    if not stream_url:
-        raise HTTPException(status_code=404, detail="Camera stream not found")
+    if not cam.get("stream_url"):
+        return Response(content=_generate_placeholder_frame(cam_name, "NO STREAM URL CONFIGURED"),
+                        media_type="image/jpeg", headers=_NO_STORE)
 
-    def part(jpeg: bytes) -> bytes:
-        return (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(jpeg)).encode("ascii")
-                + b"\r\n\r\n" + jpeg + b"\r\n")
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + FRAME_WAIT_S
+    while True:
+        if not rolling_tracker.set_focus(camera_id):
+            return Response(content=_generate_placeholder_frame(cam_name, VIEWER_LIMIT_MESSAGE),
+                            media_type="image/jpeg", headers={**_NO_STORE, "X-Frame-State": "viewer-limit"})
+        latest = rolling_tracker.get_focus_frame(camera_id)
+        if latest is not None and latest["frame_no"] != after:
+            jpeg_bytes = await asyncio.to_thread(_render_focus_jpeg, camera_id, latest)
+            if jpeg_bytes:
+                return Response(content=jpeg_bytes, media_type="image/jpeg",
+                                headers={**_NO_STORE, "X-Frame-No": str(latest["frame_no"])})
+        if loop.time() >= deadline:
+            if latest is None:
+                with _render_lock:
+                    _render_cache.pop(camera_id, None)
+                return Response(content=_generate_placeholder_frame(cam_name, "CONNECTING HLS STREAM..."),
+                                media_type="image/jpeg", headers={**_NO_STORE, "X-Frame-State": "connecting"})
+            return Response(status_code=204, headers=_NO_STORE)
+        await asyncio.sleep(FRAME_POLL_S)
 
-    async def frame_gen():
-        # Stop as soon as the viewer goes away: every iteration keeps this camera in focus, so a
-        # stream left running after a camera switch would hold a tracker focus slot.
-        while not await request.is_disconnected():
-            jpeg_bytes = await asyncio.to_thread(_latest_focus_jpeg, camera_id)
-            if not jpeg_bytes:
-                yield part(_generate_placeholder_frame(cam_name, "CONNECTING STREAM..."))
-                await asyncio.sleep(0.3)
-                continue
-            yield part(jpeg_bytes)
-            await asyncio.sleep(0.035)
+# ── Data export for further analysis (backend/dataset.py; CLI: scripts/export_dataset.py) ──────
+EXPORT_MAX_DAYS = 31
+_EXPORT_MEDIA = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson"}
 
-    return StreamingResponse(
-        frame_gen(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "X-Accel-Buffering": "no",
-            "Connection": "close"
-        }
-    )
+
+def _export_range(start: Optional[str], end: Optional[str]) -> Tuple[float, float]:
+    from backend import dataset
+    try:
+        end_ts = dataset.parse_time(end) if end else time.time()
+        start_ts = dataset.parse_time(start) if start else end_ts - 86400.0
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if end_ts <= start_ts:
+        raise HTTPException(status_code=400, detail="end must be after start")
+    if end_ts - start_ts > EXPORT_MAX_DAYS * 86400:
+        raise HTTPException(status_code=400, detail=f"range is limited to {EXPORT_MAX_DAYS} days; "
+                                                    "use scripts/export_dataset.py for longer exports")
+    return start_ts, end_ts
+
+
+def _export_cameras(camera_ids: Optional[str]) -> Optional[List[int]]:
+    if not camera_ids:
+        return None
+    try:
+        return [int(c) for c in camera_ids.split(",") if c.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="camera_ids must be comma-separated integers")
+
+
+def _export_response(chunks, fmt: str, name: str, start_ts: float, end_ts: float) -> StreamingResponse:
+    from backend import dataset
+    stamp = lambda ts: dataset.to_local_iso(ts)[:16].replace(":", "")   # noqa: E731
+    filename = f"{name}_{stamp(start_ts)}_{stamp(end_ts)}.{fmt}"
+    return StreamingResponse(chunks, media_type=_EXPORT_MEDIA[fmt],
+                             headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                                      "Cache-Control": "no-store"})
+
+
+@app.get("/api/export/dataset")
+def export_dataset(start: Optional[str] = None, end: Optional[str] = None, bucket_minutes: float = 15,
+                   camera_ids: Optional[str] = None, format: str = "csv", layout: str = "long",
+                   fill_gaps: bool = False, value: str = "vph"):
+    """Analysis-ready per-camera time series: fixed WIB-aligned buckets with counting-line volume
+    (prorated by overlap), observed seconds/coverage and congestion metrics. ``start``/``end`` are
+    ISO (no offset = WIB) or epoch seconds; default the last 24 h. Columns: /api/export/dictionary."""
+    from backend import dataset
+    if format not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=400, detail="format must be csv or jsonl (Parquet: scripts/export_dataset.py)")
+    start_ts, end_ts = _export_range(start, end)
+    try:
+        stream = dataset.build_dataset(start_ts, end_ts, bucket_minutes, camera_ids=_export_cameras(camera_ids),
+                                       fill_gaps=fill_gaps, main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH,
+                                       layout=layout, value=value)
+        chunks = dataset.iter_text(stream, format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return _export_response(chunks, format, f"traffic_{layout}_{int(bucket_minutes)}min", start_ts, end_ts)
+
+
+@app.get("/api/export/raw")
+def export_raw_table(table: str, start: Optional[str] = None, end: Optional[str] = None,
+                     camera_ids: Optional[str] = None, format: str = "csv"):
+    """Raw rows for the range: observation_windows, sightings (no appearance blobs), handoffs,
+    cameras or analytics windows, with a WIB ``*_local`` column next to each UTC time."""
+    from backend import dataset
+    if format not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=400, detail="format must be csv or jsonl")
+    start_ts, end_ts = _export_range(start, end)
+    try:
+        stream = dataset.iter_raw(table, start_ts, end_ts, camera_ids=_export_cameras(camera_ids),
+                                  main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH)
+        chunks = dataset.iter_text(stream, format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return _export_response(chunks, format, table, start_ts, end_ts)
+
+
+@app.get("/api/export/dictionary")
+def export_dictionary(name: str = "dataset"):
+    """Column descriptions, units and types of an export (``dataset``, ``dataset_wide`` or a raw table)."""
+    from backend import dataset
+    try:
+        return dataset.data_dictionary(name)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 
 # Mount static frontend assets
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 if __name__ == "__main__":
     import uvicorn
+    # HOST=0.0.0.0 (default) serves the dashboard to the local network; HOST=127.0.0.1 keeps it local.
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
     print("\n" + "=" * 65)
     print(" Starting BSW Kota Bogor MTMC Dashboard Server")
-    print(" URL: http://127.0.0.1:8000")
+    print(f" Listening on {host}:{port}")
     print("=" * 65 + "\n")
-    uvicorn.run("backend.server:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("backend.server:app", host=host, port=port, reload=False)

@@ -137,5 +137,41 @@ class TestStreamCaptureUnit(unittest.TestCase):
             sc.release()
 
 
+    def test_realtime_playout_follows_the_stream_clock(self):
+        """Live sources are played at stream speed (not raced through or slowed down), only
+        frames due at max_fps are converted, and a max_fps change applies immediately."""
+        class ClockCapture(MockVideoCapture):
+            def __init__(self):
+                super().__init__(fps=15.0)
+                self.grabs = 0
+                self.retrieves = 0
+
+            def grab(self) -> bool:
+                self.grabs += 1
+                return super().grab()
+
+            def retrieve(self):
+                self.retrieves += 1
+                return super().retrieve()
+
+        cap = ClockCapture()
+        sc = ThreadedStreamCapture(source=cap, camera_id=7, max_fps=5.0, realtime=True)
+        try:
+            time.sleep(1.0)
+            grabs, retrieves = cap.grabs, cap.retrieves
+            # ~15 grabs/s of a 15 fps stream (an unpaced loop would grab thousands) ...
+            self.assertGreaterEqual(grabs, 10)
+            self.assertLessEqual(grabs, 22)
+            # ... of which only ~5/s are converted.
+            self.assertGreaterEqual(retrieves, 3)
+            self.assertLessEqual(retrieves, 8)
+
+            sc.max_fps = 15.0
+            time.sleep(1.0)
+            self.assertGreaterEqual(cap.retrieves - retrieves, 10)
+        finally:
+            sc.release()
+
+
 if __name__ == "__main__":
     unittest.main()

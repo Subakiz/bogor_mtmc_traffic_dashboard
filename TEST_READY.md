@@ -1,3 +1,5 @@
+> **Stale notes (written 2026-09-23 for an older layout).** Counts, paths and the old `tests/test_runner.py` CLI no longer apply; run `.venv/bin/python3.11 -m pytest -q` and see `CLAUDE.md` for the current state.
+
 # TEST READY: E2E Test Suite & Infrastructure Certification
 
 **Project:** BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard  
@@ -29,7 +31,7 @@ All **23 features** from `PROJECT.md § Feature Inventory` are covered with dedi
 
 ### Command
 ```bash
-python3 tests/test_runner.py
+.venv/bin/python3.11 -m pytest -q   # replaces the removed tests/test_runner.py
 ```
 
 ### Verified Terminal Output
@@ -83,14 +85,11 @@ python3 tests/test_runner.py
      - Scenario 5: Simpang Pahlawan multi-vehicle disambiguation.
      - Scenarios 6–12: Sholeh Iskandar expressway, Bubulak west corridor, Batutulis south corridor, Tajur east corridor, intra-junction fixed-to-PTZ handshake, SSA full-loop circuit, and multi-corridor journey replay audit.
 
-7. **`tests/test_runner.py`**:
-   - Standalone CLI runner with tier filtering (`--tier 1`, `--tier 2`, etc.), `--verbose`, and `--json` export.
-
-8. **`TEST_INFRA.md`**:
+7. **`TEST_INFRA.md`**:
    - Comprehensive infrastructure and verification guide.
 
 ---
 
 ## 4. Certification Statement
 
-The E2E test harness is **certified ready** for continuous milestone integration testing. Implementing agents for M1, M2, M3, M4, and M5 can run `python3 tests/test_runner.py` to verify that their implementations satisfy interface contracts and maintain 100% pass rates across all tiers.
+The E2E test harness is **certified ready** for continuous milestone integration testing. Implementing agents for M1, M2, M3, M4, and M5 can run `pytest` to verify that their implementations satisfy interface contracts and maintain 100% pass rates across all tiers.

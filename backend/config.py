@@ -18,7 +18,15 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 
 ENGINE_ROOT = Path(os.environ.get("CCTV_YOLO_ANE_ROOT", PROJECT_ROOT)).expanduser()
 DEFAULT_MODEL_PATH = os.environ.get("DEFAULT_MODEL", str(ENGINE_ROOT / "yolov8m.mlpackage"))
-ANALYTICS_DB_PATH = str(DATA_DIR / "traffic_timeseries.db")
+# Optional 16:9 export of the same model (``yolo export model=yolov8m.pt format=coreml imgsz=384,640
+# nms=True``), used for frames it covers without losing resolution: ~40% less ANE time per frame.
+WIDE_MODEL_PATH = os.environ.get("WIDE_MODEL", str(ENGINE_ROOT / "yolov8m_384x640.mlpackage"))
+# Writable state; each path can be redirected (the test suite points them at a temp dir so it never
+# touches the live databases while the server runs).
+ANALYTICS_DB_PATH = os.environ.get("ANALYTICS_DB_PATH") or str(DATA_DIR / "traffic_timeseries.db")
+COUNTING_LINES_PATH = os.environ.get("COUNTING_LINES_PATH") or str(DATA_DIR / "counting_lines.json")
+FREE_FLOW_PATH = os.environ.get("FREE_FLOW_PATH") or str(DATA_DIR / "free_flow_speeds.json")
+TRAFFIC_LANES_PATH = os.environ.get("TRAFFIC_LANES_PATH") or str(DATA_DIR / "traffic_lanes.npz")
 
 
 def ensure_engine_importable() -> None:
@@ -65,3 +73,16 @@ EMBEDDING_TTL_S = _env_float("EMBEDDING_TTL_S", 3600.0)
 MAINTENANCE_INTERVAL_S = _env_float("MAINTENANCE_INTERVAL_S", 300.0)
 # Dashboard aggregates are computed at most once per this many seconds, however many tabs poll.
 STATS_CACHE_TTL_S = _env_float("STATS_CACHE_TTL_S", 3.0)
+
+# ── Storage / retention ─────────────────────────────────────────────────────────
+# Sightings (and handoff events) older than this many days are deleted in small batches by the
+# maintenance thread. 0 keeps everything. All-time totals (dashboard counters, ``global_vehicles``)
+# are maintained by insert triggers and are NOT reduced by pruning; ``observation_windows`` (the
+# traffic-volume history) is never pruned.
+SIGHTING_RETENTION_DAYS = _env_float("SIGHTING_RETENTION_DAYS", 0.0)
+# A followed vehicle ('tracking' active target) that has not been updated for this long stops
+# being a target: it no longer boosts cameras and maintenance marks it 'expired'. 0 = never expire.
+ACTIVE_TARGET_TTL_S = _env_float("ACTIVE_TARGET_TTL_S", 1800.0)
+# Cap on the WAL file kept after a checkpoint (PRAGMA journal_size_limit), so one large write
+# burst or a long reader cannot leave a multi-hundred-MB WAL on disk.
+DB_JOURNAL_SIZE_LIMIT_BYTES = _env_int("DB_JOURNAL_SIZE_LIMIT_BYTES", 32 * 1024 * 1024)

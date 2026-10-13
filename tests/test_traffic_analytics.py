@@ -5,24 +5,42 @@ Validates:
 - Vehicle kinematics, displacement, speed proxy, and flow vector tracking.
 - Per-camera volume aggregation and class breakdowns.
 - Spatial occupancy ratio and congestion index calculation.
-- Continuous cyclic temporal encodings (sin_hour, cos_hour, sin_dow, cos_dow).
-- SQLite persistence in WAL mode.
+- Continuous cyclic temporal encodings (sin_hour, cos_hour, sin_dow, cos_dow), in local WIB time.
+- SQLite persistence in WAL mode on one persistent connection; no I/O under the engine lock.
+- Windows of any length are queryable (no window_seconds equality filter); bucketed queries are
+  weighted by window length.
+- Volume basis follows whether the caller reports counting-line crossings.
 - LSTM 3D sliding-window tensor formatting (X, y).
 """
 
+import math
+import os
+import random
 import sqlite3
+import statistics
 import tempfile
+import threading
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 
 from car_tracker.analytics import (
+    LOCAL_TZ,
     TimeWindowMetrics,
     TrafficAnalyticsDatabase,
     TrafficAnalyticsEngine,
+    _LiveMean,
 )
+
+WIB = timezone(timedelta(hours=7))
+
+
+def wib(text):
+    """Epoch seconds of a WIB wall-clock time, computed without the code under test."""
+    return datetime.fromisoformat(text).replace(tzinfo=WIB).timestamp()
 
 
 def insert_fixture_windows(engine, camera_id=167, camera_name="WARUNG JAMBU", count=120, window_seconds=60):
@@ -61,8 +79,8 @@ class TestTrafficAnalyticsEngine(unittest.TestCase):
 
     def test_cyclic_temporal_features(self):
         """Verify cyclic sine/cosine encodings cycle smoothly and stay bounded in [-1, 1]."""
-        # Midnight UTC: hour=0, min=0 -> sin(0)=0, cos(0)=1
-        ts_midnight = 1728518400.0  # An exact midnight epoch
+        # Local (WIB) midnight: hour=0, min=0 -> sin(0)=0, cos(0)=1
+        ts_midnight = wib("2024-10-10T00:00:00")
         h, m, dow, is_wknd, sin_h, cos_h, sin_d, cos_d = self.engine.compute_temporal_features(ts_midnight)
         self.assertEqual(h, 0)
         self.assertEqual(m, 0)
@@ -73,6 +91,34 @@ class TestTrafficAnalyticsEngine(unittest.TestCase):
         self.assertGreaterEqual(cos_h, -1.0)
         self.assertLessEqual(cos_h, 1.0)
         self.assertIn(is_wknd, [0, 1])
+
+    def test_temporal_features_are_local_wib_time_not_utc(self):
+        # 1728518400 is 2024-10-10 00:00 UTC = 07:00 WIB, a Thursday
+        self.assertEqual(self.engine.compute_temporal_features(1728518400.0)[:4], (7, 0, 3, 0))
+        # Friday 18 Oct 2024 20:30 UTC is already Saturday 03:30 WIB: weekend, and the day rolled over
+        h, m, dow, wknd, *_ = self.engine.compute_temporal_features(wib("2024-10-19T03:30:00"))
+        self.assertEqual((h, m, dow, wknd), (3, 30, 5, 1))
+        self.assertEqual(datetime.fromtimestamp(wib("2024-10-19T03:30:00"), timezone.utc).weekday(), 4)
+        # 06:00 local = a quarter of the day
+        _, _, _, _, sin_h, cos_h, _, _ = self.engine.compute_temporal_features(wib("2024-10-19T06:00:00"))
+        self.assertAlmostEqual(sin_h, 1.0, places=4)
+        self.assertAlmostEqual(cos_h, 0.0, places=4)
+        self.assertEqual(LOCAL_TZ.utcoffset(datetime(2024, 10, 10)), timedelta(hours=7))
+
+    def test_flushed_windows_store_local_features_and_both_iso_forms(self):
+        t0 = wib("2024-10-19T03:30:00")          # Saturday 03:30 WIB = Friday 20:30 UTC
+        for i in range(12):
+            self.engine.record_frame(7, "C", t0 + i, {"car": 1}, [
+                {"track_id": 1, "class_id": 2, "class_name": "car", "box": (50 + 5 * i, 50, 110 + 5 * i, 110), "conf": 0.9}],
+                (720, 1280))
+        self.engine.flush_camera(7)
+        (row,) = self.engine.db.query_timeseries(camera_id=7)
+        self.assertEqual((row["hour"], row["minute"], row["day_of_week"], row["is_weekend"]), (3, 30, 5, 1))
+        end = row["timestamp"]
+        self.assertEqual(row["timestamp_iso"], datetime.fromtimestamp(end, timezone.utc).isoformat())
+        self.assertEqual(row["timestamp_iso"][-6:], "+00:00", "the sortable UTC column keeps its meaning")
+        self.assertEqual(row["timestamp_local_iso"], datetime.fromtimestamp(end, WIB).isoformat())
+        self.assertEqual(row["timestamp_local_iso"][-6:], "+07:00")
 
     def test_record_frame_and_kinematics(self):
         """Simulate moving vehicles and verify displacement and speed proxy."""
@@ -324,7 +370,7 @@ class TestCrossingVolume(unittest.TestCase):
         return self.engine.flush_camera(self.CAM)
 
     def rows(self):
-        return self.engine.db.query_timeseries(camera_id=self.CAM, window_seconds=11)
+        return self.engine.db.query_timeseries(camera_id=self.CAM)
 
     def test_volume_is_crossings_not_track_ids(self):
         metrics = self.feed({2: "car", 5: "motorcycle", 9: "car"})
@@ -354,7 +400,7 @@ class TestCrossingVolume(unittest.TestCase):
 
     def test_csv_export_carries_the_volume_basis(self):
         self.feed({2: "car"})
-        csv_text = self.engine.export_csv_str(camera_id=self.CAM, window_seconds=11)
+        csv_text = self.engine.export_csv_str(camera_id=self.CAM)
         self.assertIn("volume_basis", csv_text.splitlines()[0])
         self.assertIn("crossings", csv_text)
 
@@ -389,6 +435,444 @@ class TestCrossingVolume(unittest.TestCase):
         self.assertEqual([p["t"] for p in series], [900.0, 1200.0])
         self.assertAlmostEqual(series[0]["congestion"], round((0.2 * 10 + 0.6 * 30) / 40, 3), places=3)
         self.assertAlmostEqual(series[1]["congestion"], 0.1, places=3)
+
+
+def window(camera_id, end, seconds, volume=0, congestion=0.1, basis="crossings", **kw):
+    return TimeWindowMetrics(
+        camera_id=camera_id, camera_name=f"CAM {camera_id}", timestamp=end,
+        timestamp_iso=datetime.fromtimestamp(end, timezone.utc).isoformat(), window_seconds=seconds,
+        total_volume=volume, car_volume=volume, motorcycle_volume=0, truck_volume=0, bus_volume=0,
+        avg_active_vehicles=kw.get("active", 2.0), peak_active_vehicles=kw.get("peak", 3),
+        occupancy_ratio=kw.get("occupancy", 0.1), avg_speed_px_s=kw.get("speed", 30.0), stopped_vehicles=0,
+        congestion_index=congestion, avg_flow_dx=0.0, avg_flow_dy=0.0, flow_rate_vpm=0.0, flow_rate_vph=0.0,
+        hour=0, minute=0, day_of_week=0, is_weekend=0, sin_hour=0.0, cos_hour=1.0, sin_dow=0.0, cos_dow=1.0,
+        volume_basis=basis, median_speed_bps=kw.get("median"), queue_share=kw.get("queue"))
+
+
+class TestPersistentConnection(unittest.TestCase):
+    """One writer connection for the life of the engine instead of one per insert."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = TrafficAnalyticsDatabase(str(Path(self.tmp.name) / "p.db"))
+        self.addCleanup(self.db.close)
+
+    def test_inserts_do_not_open_connections(self):
+        real = sqlite3.connect
+        with mock.patch("car_tracker.analytics.sqlite3.connect", side_effect=real) as connect:
+            for i in range(50):
+                self.db.insert_metrics(window(1, 1000.0 + i, 10, volume=1))
+            self.assertEqual(connect.call_count, 0)
+            self.db.query_timeseries(camera_id=1)
+            self.db.query_timeseries(camera_id=1)
+            self.assertEqual(connect.call_count, 1, "one read connection, opened on first use and then reused")
+        writer = self.db._wconn
+        self.db.insert_metrics(window(1, 2000.0, 10))
+        self.assertIs(self.db._wconn, writer)
+
+    def test_wal_mode_and_busy_timeout(self):
+        conn = self.db._writer()
+        self.assertEqual(conn.execute("PRAGMA journal_mode").fetchone()[0].lower(), "wal")
+        self.assertGreaterEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 5000)
+
+    def test_close_is_idempotent_and_the_database_reconnects_lazily(self):
+        self.db.insert_metrics(window(1, 1000.0, 10, volume=2))
+        self.db.close()
+        self.db.close()
+        self.assertIsNone(self.db._wconn)
+        self.db.insert_metrics(window(1, 1010.0, 10, volume=3))
+        self.assertEqual([r["total_volume"] for r in self.db.query_timeseries(camera_id=1)], [2, 3])
+
+    def test_a_failed_insert_leaves_nothing_open_and_the_next_insert_works(self):
+        bad = window(1, 1000.0, 10)
+        bad.camera_name = None                       # NOT NULL violation
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.insert_metrics(bad)
+        self.db.insert_metrics(window(1, 1001.0, 10, volume=4))
+        self.assertEqual(len(self.db.query_timeseries()), 1)
+        other = sqlite3.connect(self.db.db_path, timeout=1)       # no write lock is left behind
+        other.execute("INSERT INTO analytics_meta VALUES ('probe', '1')")
+        other.commit()
+        other.close()
+
+    def test_threads_can_write_and_read_concurrently(self):
+        errors = []
+
+        def writer(base):
+            try:
+                for i in range(60):
+                    self.db.insert_metrics(window(base, 5000.0 + i, 10, volume=1))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        def reader():
+            try:
+                for _ in range(60):
+                    self.db.query_timeseries(limit=50)
+                    self.db.congestion_series(1, 0.0, 60.0)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        threads = [threading.Thread(target=writer, args=(c,)) for c in (1, 2, 3)] + [threading.Thread(target=reader)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(20)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(self.db.query_timeseries(limit=1000)), 180)
+        self.assertEqual({r["camera_id"]: r["cumulative_volume"] for r in self.db.get_cumulative_summary()},
+                         {1: 60, 2: 60, 3: 60})
+
+
+class TestLockDiscipline(unittest.TestCase):
+    """The engine lock guards in-memory state only: no database or file I/O while it is held."""
+
+    CAM = 5
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.ff = str(Path(self.tmp.name) / "ff.json")
+        self.engine = TrafficAnalyticsEngine(db_path=str(Path(self.tmp.name) / "l.db"), primary_window_seconds=5,
+                                             free_flow_path=self.ff)
+        self.addCleanup(self.engine.close)
+
+    def frames(self, seconds, start=1000.0, fps=5):
+        for i in range(int(seconds * fps)):
+            t = i / fps
+            dets = [{"track_id": tid, "class_id": 2, "class_name": "car", "conf": 0.9,
+                     "box": ((tid * 110 + t * 160) % 1400 - 60, 300, (tid * 110 + t * 160) % 1400 + 20, 360),
+                     "counted_now": False} for tid in range(1, 11)]
+            self.engine.record_frame(self.CAM, "C", start + t, {"car": len(dets)}, dets, (720, 1280))
+
+    def test_database_insert_and_free_flow_file_are_written_outside_the_lock(self):
+        held = []
+        real_insert = self.engine.db.insert_metrics
+        self.engine.db.insert_metrics = lambda m: (held.append(("insert", self.engine._lock.locked())), real_insert(m))[1]
+        real_replace = os.replace
+        with mock.patch("car_tracker.analytics.os.replace",
+                        side_effect=lambda a, b: (held.append(("free_flow", self.engine._lock.locked())), real_replace(a, b))[1]):
+            self.frames(12)
+            self.engine.flush_camera(self.CAM)
+        kinds = {k for k, _ in held}
+        self.assertEqual(kinds, {"insert", "free_flow"}, held)
+        self.assertFalse([h for h in held if h[1]], f"I/O happened under the engine lock: {held}")
+        self.assertTrue(os.path.exists(self.ff))
+
+    def test_a_slow_database_does_not_block_other_callers(self):
+        entered, release = threading.Event(), threading.Event()
+        real_insert = self.engine.db.insert_metrics
+
+        def slow(m):
+            entered.set()
+            release.wait(10)
+            return real_insert(m)
+
+        self.engine.db.insert_metrics = slow
+        worker = threading.Thread(target=self.frames, args=(8,))
+        worker.start()
+        try:
+            self.assertTrue(entered.wait(10), "a window should have closed and reached the database")
+            done = []
+            probe = threading.Thread(target=lambda: done.append(self.engine.get_live_metrics(self.CAM)))
+            probe.start()
+            probe.join(2)
+            self.assertEqual(len(done), 1, "get_live_metrics blocked on the database write (engine lock held)")
+        finally:
+            release.set()
+            worker.join(20)
+
+    def test_dead_code_is_gone(self):
+        self.assertFalse(hasattr(self.engine, "_history_10s"))
+        self.assertFalse(hasattr(self.engine, "_cong_recent"))
+
+
+class TestLiveMean(unittest.TestCase):
+    def test_matches_a_brute_force_windowed_mean(self):
+        rng, t, kept = random.Random(7), 0.0, []
+        mean = _LiveMean(20.0)
+        for _ in range(12000):
+            t += rng.uniform(0.0, 0.5)
+            v = rng.random()
+            got = mean.add(t, v)
+            kept = [(a, b) for a, b in kept if t - a <= 20.0] + [(t, v)]
+            self.assertAlmostEqual(got, statistics.fmean(b for _, b in kept), places=9)
+
+    def test_window_resets_after_a_long_pause(self):
+        mean = _LiveMean(20.0)
+        for i in range(10):
+            mean.add(float(i), 1.0)
+        self.assertEqual(mean.add(1000.0, 0.25), 0.25)
+
+    def test_engine_live_index_is_the_mean_over_the_last_20_seconds(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        engine = TrafficAnalyticsEngine(db_path=os.path.join(tmp.name, "m.db"))
+        self.addCleanup(engine.close)
+        values = []
+        with mock.patch.object(TrafficAnalyticsEngine, "_congestion_index", side_effect=lambda **kw: values[-1]):
+            seen = []
+            for i in range(60):
+                values.append(0.0 if i < 30 else 1.0)
+                snap = engine.record_frame(1, "C", 100.0 + i, {}, [], (720, 1280))
+                seen.append(snap["congestion_index"])
+        self.assertEqual(seen[29], 0.0)
+        self.assertAlmostEqual(seen[39], round(10 / 21, 3), places=3)         # t=130..139 of the 20 s span 119..139
+        self.assertEqual(seen[59], 1.0)
+
+
+class TestWindowQueries(unittest.TestCase):
+    """Rolling visits write windows of 2-62 s; queries must not assume 60."""
+
+    CAM = 9
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.engine = TrafficAnalyticsEngine(db_path=str(Path(self.tmp.name) / "w.db"))
+        self.addCleanup(self.engine.close)
+        self.t0 = wib("2026-10-11T08:00:00")
+
+    def put(self, end_offset, seconds, volume, congestion, **kw):
+        self.engine.db.insert_metrics(window(self.CAM, self.t0 + end_offset, seconds, volume, congestion, **kw))
+
+    def test_raw_query_returns_windows_of_every_length(self):
+        for i, secs in enumerate((2, 12, 37, 60, 62)):
+            self.put(100 * (i + 1), secs, 1, 0.1)
+        rows = self.engine.db.query_timeseries(camera_id=self.CAM)
+        self.assertEqual([r["window_seconds"] for r in rows], [2, 12, 37, 60, 62])
+        self.assertEqual(len(self.engine.export_timeseries_dataset(camera_id=self.CAM)), 5)
+        self.assertEqual(len(self.engine.export_csv_str(camera_id=self.CAM).strip().splitlines()), 6)
+        newest = self.engine.db.query_timeseries(camera_id=self.CAM, limit=2, order_asc=False)
+        self.assertEqual([r["window_seconds"] for r in newest], [62, 60])
+
+    def test_bucketed_query_weights_windows_by_length(self):
+        self.put(10, 10, 2, 0.2, speed=20.0)
+        self.put(40, 30, 4, 0.6, speed=40.0)
+        self.put(100, 20, 1, 0.1, speed=30.0)
+        rows = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=60)
+        self.assertEqual(len(rows), 2)
+        a, b = rows
+        self.assertEqual((a["timestamp"], a["window_seconds"], a["observed_seconds"], a["n_windows"]), (self.t0 + 60, 60, 40.0, 2))
+        self.assertEqual(a["total_volume"], 6)
+        self.assertAlmostEqual(a["congestion_index"], (0.2 * 10 + 0.6 * 30) / 40, places=3)
+        self.assertAlmostEqual(a["avg_speed_px_s"], (20 * 10 + 40 * 30) / 40, places=2)
+        self.assertAlmostEqual(a["flow_rate_vpm"], 6 / 40 * 60, places=2)        # per OBSERVED second, not per bucket second
+        self.assertAlmostEqual(a["flow_rate_vph"], 6 / 40 * 3600, places=1)
+        self.assertEqual((a["volume_basis"], a["hour"], a["minute"]), ("crossings", 8, 0))     # local time of the bucket start
+        self.assertEqual(a["timestamp_local_iso"], datetime.fromtimestamp(self.t0 + 60, WIB).isoformat())
+        self.assertEqual((b["timestamp"], b["total_volume"], b["observed_seconds"]), (self.t0 + 120, 1, 20.0))
+
+    def test_bucketed_query_marks_mixed_volume_bases_and_ignores_zero_speed(self):
+        self.put(10, 10, 2, 0.2, speed=0.0, occupancy=0.0)
+        self.put(20, 10, 3, 0.2, speed=50.0, basis="tracks")
+        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=60)
+        self.assertEqual(row["volume_basis"], "mixed")
+        self.assertAlmostEqual(row["avg_speed_px_s"], 50.0, places=2, msg="a window without moving traffic has no speed")
+
+    def test_bucket_edges_are_local_midnight_aligned(self):
+        self.put(30, 10, 1, 0.1)
+        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=3600)
+        self.assertEqual(row["timestamp"], wib("2026-10-11T09:00:00"))
+        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=86400)
+        self.assertEqual(row["timestamp"], wib("2026-10-12T00:00:00"))
+        with self.assertRaises(ValueError):
+            self.engine.db.query_timeseries(window_seconds=0)
+
+    def test_time_filters_and_camera_filter(self):
+        self.put(10, 10, 1, 0.1)
+        self.put(500, 10, 1, 0.1)
+        self.engine.db.insert_metrics(window(77, self.t0 + 20, 10, 1))
+        self.assertEqual(len(self.engine.db.query_timeseries(start_ts=self.t0 + 100)), 1)
+        self.assertEqual(len(self.engine.db.query_timeseries(end_ts=self.t0 + 100)), 2)
+        self.assertEqual(len(self.engine.db.query_timeseries()), 3)
+
+    def test_camera_summary_uses_windows_of_any_length(self):
+        for i in range(10):
+            self.put(20 * (i + 1), 12, 3, 0.4, speed=45.0)
+        summary = self.engine.get_camera_summary(self.CAM)
+        self.assertAlmostEqual(summary["recent_avg_flow_rate_vpm"], 30 / 120 * 60, places=2)
+        self.assertAlmostEqual(summary["recent_avg_speed_px_s"], 45.0, places=2)
+        self.assertAlmostEqual(summary["recent_avg_congestion_index"], 0.4, places=3)
+        self.assertEqual(summary["recent_congestion_label"], "Moderate")
+        self.assertEqual(self.engine.get_camera_summary(404)["recent_avg_flow_rate_vpm"], 0.0)
+
+
+class TestVolumeBasisFollowsTheCaller(unittest.TestCase):
+    """An empty window carries the basis of the caller that reports crossings, not of its contents."""
+
+    SHAPE = (720, 1280)
+
+    def engine_at(self, name, **kw):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        engine = TrafficAnalyticsEngine(db_path=str(Path(tmp.name) / f"{name}.db"), **kw)
+        self.addCleanup(engine.close)
+        return engine
+
+    @staticmethod
+    def det(tid, counted=None):
+        d = {"track_id": tid, "class_id": 2, "class_name": "car", "box": (50 + 3 * tid, 50, 110 + 3 * tid, 110), "conf": 0.9}
+        if counted is not None:
+            d["counted_now"] = counted
+        return d
+
+    def visit(self, engine, cam, dets_fn, start=1000.0, frames=12):
+        for i in range(frames):
+            dets = dets_fn(i)
+            engine.record_frame(cam, "C", start + i, {"car": len(dets)}, dets, self.SHAPE)
+        return engine.flush_camera(cam)
+
+    def test_an_empty_window_on_a_crossings_caller_is_a_crossings_window(self):
+        engine = self.engine_at("a")
+        self.visit(engine, 1, lambda i: [self.det(100 + i, counted=False)])          # the caller shows it reports crossings
+        empty = self.visit(engine, 2, lambda i: [], start=2000.0)
+        self.assertEqual((empty.volume_basis, empty.total_volume), ("crossings", 0))
+        (row,) = engine.db.query_timeseries(camera_id=2)
+        self.assertEqual(row["volume_basis"], "crossings")
+
+    def test_without_any_crossing_report_an_empty_window_stays_track_based(self):
+        engine = self.engine_at("b")
+        empty = self.visit(engine, 2, lambda i: [])
+        self.assertEqual((empty.volume_basis, empty.total_volume), ("tracks", 0))
+
+    def test_explicit_assume_crossings_overrides_inference(self):
+        yes = self.engine_at("c", assume_crossings=True)
+        self.assertEqual(self.visit(yes, 2, lambda i: []).volume_basis, "crossings")
+        no = self.engine_at("d", assume_crossings=False)
+        self.visit(no, 1, lambda i: [self.det(100 + i, counted=False)])
+        self.assertEqual(self.visit(no, 2, lambda i: [], start=2000.0).volume_basis, "tracks")
+
+    def test_detections_without_counted_now_stay_track_based_even_if_others_report_crossings(self):
+        engine = self.engine_at("e")
+        self.visit(engine, 1, lambda i: [self.det(100 + i, counted=True)])
+        moving = lambda i: [{"track_id": 1, "class_id": 2, "class_name": "car", "box": (50 + 25 * i, 50, 110 + 25 * i, 110), "conf": 0.9}]
+        legacy = self.visit(engine, 3, moving, start=3000.0)
+        self.assertEqual((legacy.volume_basis, legacy.total_volume), ("tracks", 1))
+
+    def test_live_snapshot_and_live_metrics_report_the_same_basis(self):
+        engine = self.engine_at("f")
+        engine.record_frame(1, "C", 10.0, {"car": 1}, [self.det(1, counted=False)], self.SHAPE)
+        snap = engine.record_frame(2, "C", 10.0, {}, [], self.SHAPE)
+        self.assertEqual((snap["volume_basis"], snap["window_volume"]), ("crossings", 0))
+        self.assertEqual(engine.get_live_metrics(2)["current_window"]["volume_basis"], "crossings")
+
+    def test_primary_window_flush_uses_the_same_rule(self):
+        engine = self.engine_at("g", primary_window_seconds=5)
+        engine.record_frame(1, "C", 10.0, {"car": 1}, [self.det(1, counted=False)], self.SHAPE)
+        for i in range(8):
+            engine.record_frame(2, "C", 100.0 + i, {}, [], self.SHAPE)
+        rows = engine.db.query_timeseries(camera_id=2)
+        self.assertTrue(rows)
+        self.assertEqual({r["volume_basis"] for r in rows}, {"crossings"})
+
+
+class TestSpeedColumns(unittest.TestCase):
+    CAM, SHAPE = 3, (720, 1280)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.engine = TrafficAnalyticsEngine(db_path=str(Path(self.tmp.name) / "s.db"), primary_window_seconds=600)
+        self.addCleanup(self.engine.close)
+
+    def scene(self, seconds, pos, ids, fps=5.0, start=1000.0):
+        for i in range(int(seconds * fps)):
+            t = i / fps
+            dets = [{"track_id": tid, "class_id": 2, "class_name": "car", "conf": 0.9,
+                     "box": (pos(tid, t)[0] - 40, pos(tid, t)[1] - 30, pos(tid, t)[0] + 40, pos(tid, t)[1] + 30)} for tid in ids]
+            self.engine.record_frame(self.CAM, "T", start + t, {"car": len(dets)}, dets, self.SHAPE)
+        return self.engine.flush_camera(self.CAM)
+
+    def test_flowing_traffic_has_a_body_size_speed_and_no_queue(self):
+        m = self.scene(30, lambda tid, t: ((tid * 110 + t * 160) % 1400 - 60, 300), range(1, 11))
+        self.assertGreater(m.median_speed_bps, 1.5)
+        self.assertLess(m.median_speed_bps, 2.5)
+        self.assertGreater(m.mean_speed_bps, 1.0)
+        self.assertEqual(m.queue_share, 0.0)
+        self.assertGreater(m.avg_traffic_vehicles, 5)
+        (row,) = self.engine.db.query_timeseries(camera_id=self.CAM)
+        self.assertEqual(row["median_speed_bps"], m.median_speed_bps)
+        self.assertEqual(row["queue_share"], 0.0)
+
+    def test_a_standing_queue_is_all_queue_share(self):
+        m = self.scene(30, lambda tid, t: (80 + 130 * tid + min(t, 4.0) * 40, 400), range(1, 9))
+        self.assertGreater(m.queue_share, 0.7)
+        self.assertLess(m.median_speed_bps, 0.1)
+
+    def test_no_moving_vehicles_means_speed_is_null_not_zero(self):
+        m = self.scene(15, lambda tid, t: (100 + 120 * tid, 500), range(1, 5))        # parked
+        self.assertIsNone(m.median_speed_bps)
+        self.assertIsNone(m.mean_speed_bps)
+        self.assertIsNone(m.queue_share)
+        self.assertEqual(m.avg_traffic_vehicles, 0.0)
+        (row,) = self.engine.db.query_timeseries(camera_id=self.CAM)
+        self.assertIsNone(row["median_speed_bps"])
+
+
+class TestMigrations(unittest.TestCase):
+    """Rows written by earlier versions are repaired once when the database is opened."""
+
+    LEGACY = """CREATE TABLE camera_traffic_timeseries (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        camera_id INTEGER NOT NULL, camera_name TEXT NOT NULL, timestamp REAL NOT NULL, timestamp_iso TEXT NOT NULL,
+        window_seconds INTEGER NOT NULL, total_volume INTEGER NOT NULL, car_volume INTEGER NOT NULL,
+        motorcycle_volume INTEGER NOT NULL, truck_volume INTEGER NOT NULL, bus_volume INTEGER NOT NULL,
+        avg_active_vehicles REAL NOT NULL, peak_active_vehicles INTEGER NOT NULL, occupancy_ratio REAL NOT NULL,
+        avg_speed_px_s REAL NOT NULL, stopped_vehicles INTEGER NOT NULL, congestion_index REAL NOT NULL,
+        avg_flow_dx REAL NOT NULL, avg_flow_dy REAL NOT NULL, flow_rate_vpm REAL NOT NULL, flow_rate_vph REAL NOT NULL,
+        hour INTEGER NOT NULL, minute INTEGER NOT NULL, day_of_week INTEGER NOT NULL, is_weekend INTEGER NOT NULL,
+        sin_hour REAL NOT NULL, cos_hour REAL NOT NULL, sin_dow REAL NOT NULL, cos_dow REAL NOT NULL,
+        volume_basis TEXT NOT NULL DEFAULT 'tracks')"""
+
+    def make_legacy(self, path, rows):
+        conn = sqlite3.connect(path)
+        conn.execute(self.LEGACY)
+        for ts, volume, basis in rows:
+            utc = datetime.fromtimestamp(ts, timezone.utc)
+            conn.execute("INSERT INTO camera_traffic_timeseries VALUES (NULL,5,'OLD',?,?,12,?,0,0,0,0,1.0,1,0.1,1.0,0,0.1,"
+                         "0,0,0,0,?,?,?,?,0,1,0,1,?)",
+                         (ts, utc.isoformat(), volume, utc.hour, utc.minute, utc.weekday(), 1 if utc.weekday() >= 5 else 0, basis))
+        conn.commit()
+        conn.close()
+
+    def test_time_features_are_rewritten_in_local_time_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "old.db")
+            ts = wib("2026-10-12T03:30:00")                    # Monday 03:30 WIB = Sunday 20:30 UTC
+            self.make_legacy(path, [(ts, 4, "crossings")])
+            db = TrafficAnalyticsDatabase(path)
+            (row,) = db.query_timeseries()
+            self.assertEqual((row["hour"], row["minute"], row["day_of_week"], row["is_weekend"]), (3, 30, 0, 0))
+            self.assertEqual(row["timestamp_local_iso"], datetime.fromtimestamp(ts, WIB).isoformat())
+            self.assertAlmostEqual(row["sin_hour"], math.sin(2 * math.pi * 3.5 / 24), places=4)
+            # already migrated: a second open must not touch rows again
+            db._writer().execute("UPDATE camera_traffic_timeseries SET hour = 99")
+            db._writer().commit()
+            db.close()
+            again = TrafficAnalyticsDatabase(path)
+            self.assertEqual(again.query_timeseries()[0]["hour"], 99)
+            again.close()
+
+    def test_empty_track_windows_after_the_first_crossings_window_become_crossings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "old.db")
+            self.make_legacy(path, [(1000.0, 5, "tracks"), (1010.0, 0, "tracks"),        # before the caller reported crossings
+                                    (1020.0, 3, "crossings"), (1030.0, 0, "tracks"),     # empty windows of the crossings era
+                                    (1040.0, 7, "tracks")])                              # a real track-based window
+            db = TrafficAnalyticsDatabase(path)
+            got = [(r["timestamp"], r["volume_basis"]) for r in db.query_timeseries()]
+            db.close()
+            self.assertEqual(got, [(1000.0, "tracks"), (1010.0, "tracks"), (1020.0, "crossings"),
+                                   (1030.0, "crossings"), (1040.0, "tracks")])
+
+    def test_a_new_database_needs_no_migration_and_has_all_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = TrafficAnalyticsDatabase(os.path.join(tmp, "new.db"))
+            cols = {r[1] for r in db._read("PRAGMA table_info(camera_traffic_timeseries)")}
+            db.close()
+        self.assertLessEqual({"timestamp_local_iso", "median_speed_bps", "mean_speed_bps", "queue_share",
+                              "avg_traffic_vehicles", "volume_basis"}, cols)
 
 
 if __name__ == "__main__":

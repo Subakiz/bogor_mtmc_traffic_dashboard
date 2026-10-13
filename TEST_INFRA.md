@@ -1,9 +1,11 @@
+> **Stale notes (written 2026-09-23 for an older layout).** Counts, paths and the old `tests/test_runner.py` CLI no longer apply; run `.venv/bin/python3.11 -m pytest -q` and see `CLAUDE.md` for the current state.
+
 # Test Infrastructure & E2E Verification Guide
 **Project:** BSW Kota Bogor Multi-Camera Tracking ("Follow That Car") Traffic Intelligence Dashboard  
 **Status:** READY / CERTIFIED  
 **Date:** 2026-09-23  
 **Test Suite Root:** `/Users/nabils/teamwork_projects/bogor_mtmc_traffic_dashboard/tests`  
-**Test Runner:** `python3 tests/test_runner.py`  
+**Test Runner:** `pytest` (the former `tests/test_runner.py` CLI was removed)  
 
 ---
 
@@ -16,7 +18,7 @@ The BSW Kota Bogor E2E Test Suite provides complete, requirement-driven, opaque-
 - **Execution Speed:** ~0.25 seconds for the entire test suite
 - **Pass Rate:** **100.0%** (272 / 272 passed)
 - **Zero Network Flakiness:** Synthetic frame and trajectory generator reproduces bitwise identical inputs given seed
-- **Dual Runner Support:** Fully executable via custom CLI `python3 tests/test_runner.py` or standard `pytest`
+- **Runner:** standard `pytest` (the custom tier CLI `tests/test_runner.py` was removed)
 
 ---
 
@@ -26,7 +28,6 @@ The BSW Kota Bogor E2E Test Suite provides complete, requirement-driven, opaque-
 tests/
 ├── mock_stream.py                 # Deterministic synthetic frame & trajectory simulator
 ├── reference_contracts.py         # Authoritative interface contracts & backend adapters
-├── test_runner.py                 # Structured multi-tier CLI test runner
 ├── tier1_features/                # Tier 1: Isolation feature coverage (>=5 tests per feature)
 │   ├── test_f_geo_01_06.py        # F-GEO-01..06 (30 tests)
 │   ├── test_f_arch_01_02.py       # F-ARCH-01..02 (10 tests)
@@ -123,29 +124,10 @@ All 23 features defined in `PROJECT.md § Feature Inventory` are covered with de
 
 ### Execute All Tiers (Default)
 ```bash
-python3 tests/test_runner.py
+.venv/bin/python3.11 -m pytest -q
 ```
 
 ### Execute a Specific Tier
 ```bash
-python3 tests/test_runner.py --tier 1    # Run Tier 1 Feature Coverage (115 tests)
-python3 tests/test_runner.py --tier 2    # Run Tier 2 Boundary Cases (115 tests)
-python3 tests/test_runner.py --tier 3    # Run Tier 3 Cross-Feature Pairs (25 tests)
-python3 tests/test_runner.py --tier 4    # Run Tier 4 Real-World Scenarios (12 scenarios)
-python3 tests/test_runner.py --tier 5    # Run Tier 5 Adversarial Stress (5 tests)
-```
-
-### Verbose Mode
-```bash
-python3 tests/test_runner.py --verbose
-```
-
-### Output Structured JSON Summary
-```bash
-python3 tests/test_runner.py --json
-```
-
-### Run via Pytest
-```bash
-pytest
+.venv/bin/python3.11 -m pytest tests/tier1_features -q   # likewise tier2_boundaries, tier3_combinations, tier4_scenarios, tier5_adversarial
 ```
