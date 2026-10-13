@@ -30,6 +30,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
+from backend.camera_sources import load_extra_nodes
+
 try:  # tunables; the module stays importable on its own
     from backend.config import DB_JOURNAL_SIZE_LIMIT_BYTES
 except ImportError:  # pragma: no cover
@@ -375,7 +377,7 @@ def seed_cameras_from_topology(
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    nodes = data.get("nodes", [])
+    nodes = data.get("nodes", []) + load_extra_nodes()
     edges = data.get("edges", [])
 
     cur.execute("SELECT id FROM cameras;")

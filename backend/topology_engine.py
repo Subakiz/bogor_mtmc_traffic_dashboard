@@ -18,6 +18,8 @@ import json
 import math
 import heapq
 
+from backend.camera_sources import load_extra_nodes
+
 
 class TopologyEngine:
     """
@@ -87,7 +89,8 @@ class TopologyEngine:
         self.cameras: Dict[int, dict] = {}
         self.corridors: Dict[str, List[int]] = {}
         
-        for raw_node in data.get("nodes", []):
+        # Extra cities (data/sources/*.json): nodes only, no road edges; ids are namespaced.
+        for raw_node in data.get("nodes", []) + load_extra_nodes():
             cid = int(raw_node["id"])
             node = dict(raw_node)
             node["id"] = cid
@@ -177,6 +180,14 @@ class TopologyEngine:
                 cluster = self.intra_junction_clusters[u] | self.intra_junction_clusters[v]
                 for member in cluster:
                     self.intra_junction_clusters[member] = cluster
+        # Edgeless sources name their junctions: cameras sharing one watch the same vehicles.
+        by_junction: Dict[str, Set[int]] = {}
+        for cid, cam in self.cameras.items():
+            if cam.get("source"):
+                by_junction.setdefault(cam.get("junction_name") or str(cid), set()).add(cid)
+        for cluster in by_junction.values():
+            for member in cluster:
+                self.intra_junction_clusters[member] = cluster
 
     # =========================================================================
     # Contract Implementation: Camera Metadata & Inventory

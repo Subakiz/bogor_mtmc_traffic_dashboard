@@ -850,6 +850,12 @@ function filterMarkersByCorridor(corridor) {
             map.removeLayer(marker);
         }
     });
+    // A single-corridor view pans to its cameras (Tasikmalaya is ~200 km from Bogor).
+    if (corridor !== "ALL") {
+        const pts = allCameras.filter(c => cameraMarkers[c.id] && map.hasLayer(cameraMarkers[c.id]))
+            .map(c => [c.latitude, c.longitude]);
+        if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
+    }
 }
 
 // 7. WebSocket heartbeat drives stats refresh
