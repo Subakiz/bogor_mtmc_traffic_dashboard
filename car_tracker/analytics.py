@@ -478,6 +478,12 @@ class TrafficAnalyticsDatabase:
         return [{"t": r["bucket"] * bucket_s, "congestion": round(float(r["congestion"]), 3),
                  "seconds": int(r["seconds"])} for r in rows]
 
+    def first_timestamp(self, camera_id: int) -> Optional[float]:
+        """Timestamp of the camera's oldest stored window (None if it has none)."""
+        rows = self._read("SELECT MIN(timestamp) AS ts FROM camera_traffic_timeseries WHERE camera_id = ?;",
+                          (camera_id,))
+        return None if not rows or rows[0]["ts"] is None else float(rows[0]["ts"])
+
     def query_timeseries(
         self,
         camera_id: Optional[int] = None,
@@ -1458,6 +1464,9 @@ class TrafficAnalyticsEngine:
         bucket_s = max(1.0, float(bucket_minutes) * 60.0)
         since = (now if now is not None else time.time()) - float(minutes) * 60.0
         return self.db.congestion_series(camera_id, since, bucket_s)
+
+    def get_first_timestamp(self, camera_id: int) -> Optional[float]:
+        return self.db.first_timestamp(camera_id)
 
     def get_all_camera_summaries(self) -> List[Dict[str, Any]]:
         """List summaries across all cameras."""

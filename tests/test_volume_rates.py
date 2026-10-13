@@ -47,6 +47,13 @@ class CameraRatesTest(unittest.TestCase):
         self.assertEqual(rates[87]["vph"], 0.0)
         self.assertTrue(r["low_sample"])                      # 30 s observed: rough estimate
 
+    def test_first_observed_is_the_oldest_window(self):
+        self.assertIsNone(self.db.get_camera_first_observed(79))
+        self.db.insert_observation_window(window(79, 5000.0, 15.0, 1))
+        self.db.insert_observation_window(window(79, 2000.0, 15.0, 1))
+        self.db.insert_observation_window(window(87, 1000.0, 15.0, 1))
+        self.assertEqual(self.db.get_camera_first_observed(79), 2000.0)
+
 
 class CitywideRateTest(unittest.TestCase):
     def test_cameras_at_one_junction_count_once(self):
@@ -122,5 +129,14 @@ class CameraMetricsEndpointTest(unittest.TestCase):
 
     def test_window_parameters_are_clamped(self):
         flow = self.client.get("/api/cameras/167/metrics?minutes=99999&bucket_minutes=0").json()["flow"]
-        self.assertEqual(flow["window_minutes"], 1440.0)
+        self.assertEqual(flow["window_minutes"], 43200.0)      # 30 days, the chart's longest range
+        self.assertEqual(flow["bucket_minutes"], 60.0)         # raised to keep <= 720 buckets
+        flow = self.client.get("/api/cameras/167/metrics?minutes=60&bucket_minutes=0").json()["flow"]
         self.assertEqual(flow["bucket_minutes"], 1.0)
+
+    def test_metrics_report_where_the_stored_history_starts(self):
+        flow = self.client.get("/api/cameras/167/metrics?minutes=10080&bucket_minutes=120").json()["flow"]
+        self.assertEqual((flow["window_minutes"], flow["bucket_minutes"]), (10080.0, 120.0))
+        self.assertIn("history_start_ts", flow)
+        if flow["series"]:
+            self.assertLessEqual(flow["history_start_ts"], flow["series"][0]["t_end"])

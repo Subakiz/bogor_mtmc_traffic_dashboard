@@ -1051,6 +1051,14 @@ class Database:
             }
         return rates
 
+    def get_camera_first_observed(self, camera_id: int,
+                                  conn: Optional[sqlite3.Connection] = None) -> Optional[float]:
+        """End time of the camera's oldest observation window (None if it was never observed)."""
+        cur = (conn or self.conn).cursor()
+        cur.execute("SELECT MIN(end_ts) FROM observation_windows WHERE camera_id = ?", (camera_id,))
+        row = cur.fetchone()
+        return None if row is None or row[0] is None else float(row[0])
+
     def get_camera_flow_series(self, camera_id: int, minutes: float = 60.0, bucket_minutes: float = 5.0,
                                now: Optional[float] = None,
                                conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
