@@ -1080,7 +1080,7 @@ async function loadTimeSeriesMetrics(cameraId) {
 
         const minutes = flow.window_minutes || range.minutes;
         const series = flow.series || [];
-        setText("tsHistoryPoints", `last ${range.long}`);
+        setText("tsHistoryPoints", `last ${range.long} · WIB`);
         setText("tsTotalDbRecords", `${flow.windows || 0} windows`);
         renderTimeSeriesChart(series, minutes);
     } catch (err) {
@@ -1209,13 +1209,42 @@ function renderTimeSeriesChart(series, minutes) {
         ctx.fill();
     });
 
-    // Time labels
-    ctx.fillStyle = MUTED;
+    // Time axis: clock times in WIB, at round steps chosen so the labels don't collide
+    const { step, label } = wibTicks(tEnd - tStart, chartW, ctx);
     ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-    ctx.fillText(`${fmtSpan(minutes)} ago`, pad.left, pad.top + chartH + 6);
     ctx.textAlign = "center";
-    ctx.fillText(`${fmtSpan(minutes / 2)} ago`, pad.left + chartW / 2, pad.top + chartH + 6);
-    ctx.textAlign = "right";
-    ctx.fillText("Now", pad.left + chartW, pad.top + chartH + 6);
+    const WIB = 7 * 3600;
+    for (let t = Math.ceil((tStart + WIB) / step) * step - WIB; t <= tEnd; t += step) {
+        const x = xAt(t), text = label(t), half = ctx.measureText(text).width / 2;
+        if (x - half < 0 || x + half > w) continue;      // would be cut off at the canvas edge
+        ctx.strokeStyle = GRID;
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top + chartH);
+        ctx.lineTo(x, pad.top + chartH + 3);
+        ctx.stroke();
+        ctx.fillStyle = MUTED;
+        ctx.fillText(text, x, pad.top + chartH + 6);
+    }
+}
+
+// Tick step (seconds) and label format for a time axis spanning `spanS` seconds over `widthPx`.
+// Times are WIB (UTC+7, no daylight saving) whatever the viewer's own time zone: the cameras are in
+// Bogor. Steps under a day read "14:00"; day steps read "Mon 13" (a week) or "13 Oct" (longer).
+const WIB_OFFSET_S = 7 * 3600;
+const TICK_STEPS_S = [300, 600, 900, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400, 172800, 432000, 604800];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function wibTicks(spanS, widthPx, ctx) {
+    const wib = t => new Date((t + WIB_OFFSET_S) * 1000);   // read with getUTC* = WIB wall clock
+    const clock = t => { const d = wib(t); return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; };
+    const weekday = t => { const d = wib(t); return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`; };
+    const date = t => { const d = wib(t); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+    const formatFor = step => step < 86400 ? clock : (spanS <= 8 * 86400 ? weekday : date);
+    for (const step of TICK_STEPS_S) {
+        const minGap = ctx.measureText(formatFor(step)(0) + "0").width + 16;
+        if (step < 86400 && spanS > 3 * 86400) continue;     // multi-day ranges tick on whole days
+        if ((step / spanS) * widthPx >= minGap) return { step, label: formatFor(step) };
+    }
+    const step = TICK_STEPS_S[TICK_STEPS_S.length - 1];
+    return { step, label: formatFor(step) };
 }
