@@ -35,6 +35,14 @@ def bucket_seconds(bucket_minutes: Union[int, float]) -> int:
     return bs
 
 
+def snap_bucket_minutes(bucket_minutes: Union[int, float]) -> int:
+    """The smallest valid bucket length (whole minutes dividing a day) that is at least ``bucket_minutes``."""
+    m = max(1, math.ceil(float(bucket_minutes) - 1e-9))
+    while 1440 % m:
+        m += 1
+    return m
+
+
 def bucket_range(start_ts: float, end_ts: float, bs: int) -> Tuple[int, int]:
     """Indices ``[k0, k1)`` of the buckets lying completely inside ``[start_ts, end_ts)``; bucket
     ``k`` covers UTC ``[k*bs - off, (k+1)*bs - off)``, i.e. it is aligned to local wall-clock time."""

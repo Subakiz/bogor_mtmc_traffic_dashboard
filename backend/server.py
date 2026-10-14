@@ -46,7 +46,9 @@ from backend.config import (
 )
 from backend.database import Database, DEFAULT_DB_PATH
 from backend.topology_engine import get_default_engine
+from backend.bucketing import snap_bucket_minutes
 from backend.counting import CountingLines
+from backend.dataset import flow_series
 from backend.maintenance import SightingMaintenance
 from backend.rolling_tracker import RollingTracker
 from backend.detector import ANEVehicleDetector, ALLOWED_VEHICLE_CLASSES
@@ -373,18 +375,10 @@ def _flow_summary(camera_id: int, minutes: float, bucket_minutes: float) -> Dict
     ``history_start_ts`` is when the camera's stored data begins (None if it has none), so the
     dashboard can tell which timeframes the data actually covers."""
     minutes = min(max(1.0, minutes), FLOW_MAX_MINUTES)
-    bucket_minutes = min(max(1.0, bucket_minutes, minutes / FLOW_MAX_BUCKETS), minutes)
+    bucket_minutes = snap_bucket_minutes(min(max(1.0, bucket_minutes, minutes / FLOW_MAX_BUCKETS), minutes))
     rate = db.get_camera_rates(window_s=minutes * 60.0, camera_ids=[camera_id]).get(camera_id)
-    series = db.get_camera_flow_series(camera_id, minutes=minutes, bucket_minutes=bucket_minutes)
-    congestion = {c["t"]: c["congestion"] for c in
-                  (_analytics_engine.get_congestion_series(camera_id, minutes, bucket_minutes)
-                   if _analytics_engine else [])}
-    for point in series:
-        point["congestion"] = congestion.pop(point["t"], None)
-    # Buckets with a congestion reading but no counted observation still belong on the chart.
-    series.extend({"t": t, "t_end": t + bucket_minutes * 60.0, "windows": 0, "observed_s": 0.0,
-                   "vehicles": 0, "vph": None, "low_sample": True, "congestion": c} for t, c in congestion.items())
-    series.sort(key=lambda p: p["t"])
+    series = flow_series(camera_id, minutes, bucket_minutes, main_db=db.db_path,
+                         analytics_db=_analytics_engine.db.db_path if _analytics_engine else None)
     starts = [ts for ts in (db.get_camera_first_observed(camera_id),
                             _analytics_engine.get_first_timestamp(camera_id) if _analytics_engine else None)
               if ts is not None]

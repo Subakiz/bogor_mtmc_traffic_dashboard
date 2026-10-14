@@ -1061,43 +1061,6 @@ class Database:
         row = cur.fetchone()
         return None if row is None or row[0] is None else float(row[0])
 
-    def get_camera_flow_series(self, camera_id: int, minutes: float = 60.0, bucket_minutes: float = 5.0,
-                               now: Optional[float] = None,
-                               conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-        """
-        Counting-line flow of one camera over the last ``minutes`` in epoch-aligned buckets of
-        ``bucket_minutes``: crossings / observed seconds * 3600 per bucket (None when the camera
-        was not observed in that bucket). Buckets without observation are omitted.
-        """
-        bucket_s = max(1.0, float(bucket_minutes) * 60.0)
-        cutoff = (now if now is not None else time.time()) - float(minutes) * 60.0
-        cur = (conn or self.conn).cursor()
-        cur.execute(
-            """
-            SELECT CAST(end_ts / ? AS INTEGER) AS bucket, COUNT(*) AS windows, SUM(observed_s) AS observed_s,
-                   SUM(vehicles) AS vehicles, SUM(cars) AS cars, SUM(motorcycles) AS motorcycles,
-                   SUM(trucks) AS trucks, SUM(buses) AS buses
-            FROM observation_windows
-            WHERE camera_id = ? AND end_ts >= ?
-            GROUP BY bucket ORDER BY bucket
-            """,
-            (bucket_s, camera_id, cutoff),
-        )
-        series = []
-        for r in cur.fetchall():
-            obs = float(r["observed_s"] or 0.0)
-            per_h = (3600.0 / obs) if obs > 0 else 0.0
-            series.append({
-                "t": r["bucket"] * bucket_s,
-                "t_end": (r["bucket"] + 1) * bucket_s,
-                "windows": int(r["windows"]),
-                "observed_s": round(obs, 1),
-                "vehicles": int(r["vehicles"] or 0),
-                "vph": round((r["vehicles"] or 0) * per_h, 1) if obs > 0 else None,
-                "low_sample": obs < 60.0,
-            })
-        return series
-
     def get_traffic_stats(self, conn: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
         """
         Returns real-time aggregated traffic statistics across all 94 cameras.

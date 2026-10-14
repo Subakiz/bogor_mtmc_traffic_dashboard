@@ -825,6 +825,25 @@ def build_dataset(start: TimeLike, end: TimeLike, bucket_minutes: Union[int, flo
 
 # ── Writers ─────────────────────────────────────────────────────────────────────
 
+def flow_series(camera_id: int, minutes: float, bucket_minutes: Union[int, float], now: Optional[float] = None,
+                main_db: Optional[str] = None, analytics_db: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The Analytics chart's series for one camera over the last ``minutes``: the same buckets and
+    proration as :func:`build_dataset` (so the chart and the export agree), widened to whole buckets
+    so the bucket holding ``now`` is included. Unobserved buckets are omitted (the chart line breaks)."""
+    bs = bucket_seconds(bucket_minutes)
+    now = time.time() if now is None else float(now)
+    off = LOCAL_UTC_OFFSET_S
+    start = math.floor((now - float(minutes) * 60.0 + off) / bs) * bs - off
+    end = math.ceil((now + off) / bs) * bs - off
+    stream = DatasetStream(start, end, bucket_minutes, camera_ids=[camera_id], main_db=main_db, analytics_db=analytics_db)
+    return [{
+        "t": r["bucket_start_ts"], "t_end": r["bucket_start_ts"] + bs,
+        "windows": r["n_windows"], "observed_s": round(r["observed_s"], 1),
+        "vehicles": round(r["crossings"] or 0.0, 1), "vph": None if r["vph"] is None else round(r["vph"], 1),
+        "low_sample": r["low_sample"], "congestion": r["congestion_index"],
+    } for r in stream]
+
+
 def _fmt_csv(value: Any) -> Any:
     if value is None:
         return ""

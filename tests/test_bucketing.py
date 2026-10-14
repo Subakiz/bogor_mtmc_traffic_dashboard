@@ -2,7 +2,7 @@
 import math
 import unittest
 
-from backend.bucketing import LOCAL_UTC_OFFSET_S, bucket_range, bucket_seconds, spread
+from backend.bucketing import LOCAL_UTC_OFFSET_S, bucket_range, bucket_seconds, snap_bucket_minutes, spread
 
 OFF = LOCAL_UTC_OFFSET_S
 
@@ -13,6 +13,11 @@ class BucketingRuleTest(unittest.TestCase):
         for bad in (0, 0.5, 7, 1441, "x", None):
             with self.assertRaises(ValueError):
                 bucket_seconds(bad)
+
+    def test_any_requested_length_snaps_up_to_a_valid_bucket(self):
+        self.assertEqual([snap_bucket_minutes(m) for m in (0, 1, 5, 7, 11, 45.5, 1000)], [1, 1, 5, 8, 12, 48, 1440])
+        for m in range(1, 1441, 37):
+            bucket_seconds(snap_bucket_minutes(m))     # never raises
 
     def test_buckets_are_aligned_to_local_wall_clock(self):
         bs = 900

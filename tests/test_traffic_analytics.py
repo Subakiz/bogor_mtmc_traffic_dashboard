@@ -401,22 +401,6 @@ class TestCrossingVolume(unittest.TestCase):
         row = db.query_timeseries(camera_id=5)[0]
         self.assertEqual((row["total_volume"], row["volume_basis"]), (99, "tracks"))
 
-    def test_congestion_series_buckets_weight_windows_by_length(self):
-        for ts, win, cong in ((1000.0, 10, 0.2), (1100.0, 30, 0.6), (1400.0, 60, 0.1)):
-            self.engine.db.insert_metrics(TimeWindowMetrics(
-                camera_id=7, camera_name="C", timestamp=ts, timestamp_iso="x", window_seconds=win,
-                total_volume=1, car_volume=1, motorcycle_volume=0, truck_volume=0, bus_volume=0,
-                avg_active_vehicles=1.0, peak_active_vehicles=1, occupancy_ratio=0.1, avg_speed_px_s=1.0,
-                stopped_vehicles=0, congestion_index=cong, avg_flow_dx=0.0, avg_flow_dy=0.0,
-                flow_rate_vpm=1.0, flow_rate_vph=60.0, hour=0, minute=0, day_of_week=0, is_weekend=0,
-                sin_hour=0.0, cos_hour=1.0, sin_dow=0.0, cos_dow=1.0, volume_basis="crossings"))
-        series = self.engine.get_congestion_series(7, minutes=60, bucket_minutes=5, now=1500.0)
-        self.assertEqual([p["t"] for p in series], [900.0, 1200.0])
-        self.assertAlmostEqual(series[0]["congestion"], round((0.2 * 10 + 0.6 * 30) / 40, 3), places=3)
-        self.assertAlmostEqual(series[1]["congestion"], 0.1, places=3)
-        self.assertEqual(self.engine.get_first_timestamp(7), 1000.0)
-        self.assertIsNone(self.engine.get_first_timestamp(8))
-
 
 def window(camera_id, end, seconds, volume=0, congestion=0.1, basis="crossings", **kw):
     return TimeWindowMetrics(
@@ -491,7 +475,6 @@ class TestPersistentConnection(unittest.TestCase):
             try:
                 for _ in range(60):
                     self.db.query_timeseries(limit=50)
-                    self.db.congestion_series(1, 0.0, 60.0)
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 

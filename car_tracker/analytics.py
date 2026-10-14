@@ -460,22 +460,6 @@ class TrafficAnalyticsDatabase:
 
     # ── reads ────────────────────────────────────────────────────────────────
 
-    def congestion_series(self, camera_id: int, since_ts: float, bucket_s: float) -> List[Dict[str, Any]]:
-        """Congestion index of one camera in epoch-aligned buckets: the mean over the windows that
-        ended in the bucket, weighted by window length (windows can be any length: rolling visits
-        close a window at the end of each visit)."""
-        sql = """
-            SELECT CAST(timestamp / ? AS INTEGER) AS bucket,
-                   SUM(congestion_index * window_seconds) / SUM(window_seconds) AS congestion,
-                   SUM(window_seconds) AS seconds
-            FROM camera_traffic_timeseries
-            WHERE camera_id = ? AND timestamp >= ? AND window_seconds > 0
-            GROUP BY bucket ORDER BY bucket;
-        """
-        rows = self._read(sql, (bucket_s, camera_id, since_ts))
-        return [{"t": r["bucket"] * bucket_s, "congestion": round(float(r["congestion"]), 3),
-                 "seconds": int(r["seconds"])} for r in rows]
-
     def first_timestamp(self, camera_id: int) -> Optional[float]:
         """Timestamp of the camera's oldest stored window (None if it has none)."""
         rows = self._read("SELECT MIN(timestamp) AS ts FROM camera_traffic_timeseries WHERE camera_id = ?;",
@@ -1456,12 +1440,6 @@ class TrafficAnalyticsEngine:
             "recent_congestion_label": self.get_congestion_label(avg_cong),
             "last_updated": cumul.get("last_updated", 0),
         }
-
-    def get_congestion_series(self, camera_id: int, minutes: float = 60.0, bucket_minutes: float = 5.0,
-                              now: Optional[float] = None) -> List[Dict[str, Any]]:
-        bucket_s = max(1.0, float(bucket_minutes) * 60.0)
-        since = (now if now is not None else time.time()) - float(minutes) * 60.0
-        return self.db.congestion_series(camera_id, since, bucket_s)
 
     def get_first_timestamp(self, camera_id: int) -> Optional[float]:
         return self.db.first_timestamp(camera_id)
