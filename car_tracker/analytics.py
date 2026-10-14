@@ -40,6 +40,8 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from .congestion import congestion_label
+
 try:  # IANA zone when the system has tzdata, otherwise the same fixed offset (WIB has no DST)
     from zoneinfo import ZoneInfo
     LOCAL_TZ = ZoneInfo("Asia/Jakarta")
@@ -1042,7 +1044,7 @@ class TrafficAnalyticsEngine:
                 "free_flow_bodies_s": round(free_flow, 2) if free_flow else None,
                 "stopped_vehicles": current_frame_stopped,
                 "congestion_index": congestion_index,
-                "congestion_label": self.get_congestion_label(congestion_index),
+                "congestion_label": congestion_label(congestion_index),
                 "unique_window_volume": len(win["seen_tracks"]),
                 "window_volume": win["crossings"] if basis == "crossings" else len(win["seen_tracks"]),
                 "volume_basis": basis,
@@ -1231,18 +1233,6 @@ class TrafficAnalyticsEngine:
             return None
         self._persist(pending)
         return pending.metrics
-
-    @staticmethod
-    def get_congestion_label(index: float) -> str:
-        """Classify congestion index into traffic engineering level of service."""
-        if index < 0.25:
-            return "Smooth"
-        elif index < 0.55:
-            return "Moderate"
-        elif index < 0.80:
-            return "Heavy"
-        else:
-            return "Congested"
 
     def _close_window_locked(
         self,
@@ -1437,7 +1427,7 @@ class TrafficAnalyticsEngine:
             "recent_avg_flow_rate_vpm": avg_vpm,
             "recent_avg_speed_px_s": avg_speed,
             "recent_avg_congestion_index": avg_cong,
-            "recent_congestion_label": self.get_congestion_label(avg_cong),
+            "recent_congestion_label": congestion_label(avg_cong),
             "last_updated": cumul.get("last_updated", 0),
         }
 

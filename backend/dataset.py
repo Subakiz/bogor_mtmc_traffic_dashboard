@@ -31,7 +31,7 @@ Public API
     write_dataset(rows, fmt, out)    iter_text(rows, fmt)    build_sequences(rows, ...)
     export_raw(table, start, end, camera_ids, fmt, out)      iter_raw(...)
     data_dictionary(name)            build_provenance(...)   export_bundle(...)
-Needs only the standard library (+ numpy for ``build_sequences``); Parquet needs ``pyarrow``.
+Needs only the standard library (+ numpy for ``build_sequences``; the congestion labels come from ``car_tracker.congestion``); Parquet needs ``pyarrow``.
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, TextIO, Tuple, Union
 
+from car_tracker.congestion import congestion_label
 from backend.bucketing import (
     LOCAL_TZ, LOCAL_TZ_NAME, LOCAL_UTC_OFFSET_S, bucket_range, bucket_seconds, spread,
 )
@@ -123,19 +124,6 @@ def _iso_to_local(text: Any) -> Optional[str]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(LOCAL_TZ).isoformat()
-
-
-def congestion_label(index: Optional[float]) -> Optional[str]:
-    """Same thresholds as ``TrafficAnalyticsEngine.get_congestion_label`` (pinned by a test)."""
-    if index is None:
-        return None
-    if index < 0.25:
-        return "Smooth"
-    if index < 0.55:
-        return "Moderate"
-    if index < 0.80:
-        return "Heavy"
-    return "Congested"
 
 
 # ── Data dictionary ─────────────────────────────────────────────────────────────
@@ -841,6 +829,7 @@ def flow_series(camera_id: int, minutes: float, bucket_minutes: Union[int, float
         "windows": r["n_windows"], "observed_s": round(r["observed_s"], 1),
         "vehicles": round(r["crossings"] or 0.0, 1), "vph": None if r["vph"] is None else round(r["vph"], 1),
         "low_sample": r["low_sample"], "congestion": r["congestion_index"],
+        "congestion_label": r["congestion_label"],
     } for r in stream]
 
 

@@ -883,17 +883,16 @@ function initWebSocket() {
 }
 
 // 8. Per-camera analytics
-// The backend's get_congestion_label levels (Smooth < 0.25 <= Moderate < 0.55 <= Heavy < 0.8 <= Congested).
-// The label itself comes from the API when it is there; these thresholds are only the fallback.
-const CONGESTION_LEVELS = [
-    { min: 0.8, label: "Congested", cls: "sev--severe", color: "var(--bad)" },
-    { min: 0.55, label: "Heavy", cls: "sev--heavy", color: "var(--bad)" },
-    { min: 0.25, label: "Moderate", cls: "sev--moderate", color: "var(--warn)" },
-    { min: -Infinity, label: "Smooth", cls: "sev--free", color: "var(--ok)" },
-];
-function congestionLevel(index, label) {
-    return CONGESTION_LEVELS.find(l => l.label === label)
-        || CONGESTION_LEVELS.find(l => index >= l.min);
+// The backend decides the level (car_tracker/congestion.py) and sends its label; this only styles it.
+const CONGESTION_STYLES = {
+    Congested: { cls: "sev--severe", color: "var(--bad)" },
+    Heavy: { cls: "sev--heavy", color: "var(--bad)" },
+    Moderate: { cls: "sev--moderate", color: "var(--warn)" },
+    Smooth: { cls: "sev--free", color: "var(--ok)" },
+};
+function congestionLevel(label) {
+    const known = label in CONGESTION_STYLES ? label : "Smooth";
+    return { label: known, ...CONGESTION_STYLES[known] };
 }
 
 function fmtAgo(seconds) {
@@ -1045,7 +1044,7 @@ async function loadTimeSeriesMetrics(cameraId) {
             setText("tsOccupancyPct", `${((measured.occupancy_ratio || 0) * 100).toFixed(1)}% of frame (learning lanes)${ago}`);
         }
 
-        const level = congestionLevel(cong, measured.congestion_label);
+        const level = congestionLevel(measured.congestion_label);
         const barEl = document.getElementById("tsCongestionBar");
         if (barEl) {
             barEl.style.width = hasReading ? `${Math.min(Math.max(cong * 100, 5), 100)}%` : "0%";

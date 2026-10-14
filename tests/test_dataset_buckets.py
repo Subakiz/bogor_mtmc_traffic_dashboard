@@ -8,6 +8,7 @@ import sqlite3
 import unittest
 
 from backend import dataset
+from car_tracker.congestion import congestion_label
 from tests.test_dataset_fixtures import CAMERAS, DatasetTestCase, make_analytics_db, make_main_db, wib
 
 
@@ -308,12 +309,12 @@ class TestAnalyticsMetrics(DatasetTestCase):
         (r,), _ = self.dataset("2026-10-11T08:00", "2026-10-11T08:15")
         self.assertAlmostEqual(r["avg_speed_px_s"], 60.0, places=2)
 
-    def test_labels_match_the_engine_thresholds(self):
-        from car_tracker.analytics import TrafficAnalyticsEngine
-
-        for v in (0.0, 0.1, 0.249, 0.25, 0.4, 0.549, 0.55, 0.79, 0.8, 1.0):
-            self.assertEqual(dataset.congestion_label(v), TrafficAnalyticsEngine.get_congestion_label(v), v)
-        self.assertIsNone(dataset.congestion_label(None))
+    def test_labels_follow_the_single_set_of_thresholds(self):
+        expected = {0.0: "Smooth", 0.249: "Smooth", 0.25: "Moderate", 0.549: "Moderate", 0.55: "Heavy",
+                    0.799: "Heavy", 0.8: "Congested", 1.0: "Congested"}
+        for v, label in expected.items():
+            self.assertEqual(congestion_label(v), label, v)
+        self.assertIsNone(congestion_label(None))
 
     def test_works_without_an_analytics_database(self):
         make_main_db(self.main, CAMERAS, [{"camera_id": 167, "start": wib("2026-10-11T08:01:00"),
