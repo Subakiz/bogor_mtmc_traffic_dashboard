@@ -179,39 +179,6 @@ class TestTrafficAnalyticsEngine(unittest.TestCase):
         self.assertIn("sin_hour", rec)
         self.assertIn("cos_hour", rec)
 
-    def test_csv_export(self):
-        """Verify CSV export contains correct headers and values."""
-        insert_fixture_windows(self.engine)
-        csv_str = self.engine.export_csv_str(camera_id=167, window_seconds=60)
-        lines = csv_str.strip().splitlines()
-        self.assertGreater(len(lines), 2)
-
-        headers = lines[0].split(",")
-        self.assertIn("timestamp_iso", headers)
-        self.assertIn("total_volume", headers)
-        self.assertIn("car_volume", headers)
-        self.assertIn("motorcycle_volume", headers)
-        self.assertIn("flow_rate_vpm", headers)
-        self.assertIn("congestion_index", headers)
-        self.assertIn("sin_hour", headers)
-
-    def test_lstm_sequence_creation(self):
-        """Verify transformation of time-series into 3D LSTM tensor arrays (X, y)."""
-        insert_fixture_windows(self.engine)
-        records = self.engine.export_timeseries_dataset(camera_id=167, window_seconds=60)
-        seq_len = 10
-        horizon = 1
-
-        seq_dict = self.engine.create_lstm_sequences(records, seq_len=seq_len, horizon=horizon)
-        X = seq_dict["X"]
-        y = seq_dict["y"]
-
-        self.assertEqual(len(X.shape), 3)  # (N, seq_len, features)
-        self.assertEqual(X.shape[1], seq_len)
-        self.assertEqual(y.shape[1], horizon)
-        self.assertEqual(X.shape[0], len(records) - seq_len - horizon + 1)
-        self.assertGreater(X.shape[2], 5)  # Multiple ML features
-
 
 class TestCongestionModel(unittest.TestCase):
     """Congestion must reflect the moving stream: parked cars and busy-but-flowing roads are not jams."""
@@ -415,12 +382,6 @@ class TestCrossingVolume(unittest.TestCase):
         never = engine.get_live_metrics(4242, now=1000.0)
         self.assertEqual((never["live"], never["last_measured"], never["live_age_s"]), ({}, {}, None))
         self.assertNotIn(4242, engine._history_60s)   # an unknown camera leaves no state behind
-
-    def test_csv_export_carries_the_volume_basis(self):
-        self.feed({2: "car"})
-        csv_text = self.engine.export_csv_str(camera_id=self.CAM)
-        self.assertIn("volume_basis", csv_text.splitlines()[0])
-        self.assertIn("crossings", csv_text)
 
     def test_existing_database_is_migrated_and_old_rows_are_marked_as_track_based(self):
         path = str(Path(self.temp_dir.name) / "old.db")
@@ -663,7 +624,6 @@ class TestWindowQueries(unittest.TestCase):
         rows = self.engine.db.query_timeseries(camera_id=self.CAM)
         self.assertEqual([r["window_seconds"] for r in rows], [2, 12, 37, 60, 62])
         self.assertEqual(len(self.engine.export_timeseries_dataset(camera_id=self.CAM)), 5)
-        self.assertEqual(len(self.engine.export_csv_str(camera_id=self.CAM).strip().splitlines()), 6)
         newest = self.engine.db.query_timeseries(camera_id=self.CAM, limit=2, order_asc=False)
         self.assertEqual([r["window_seconds"] for r in newest], [62, 60])
 

@@ -363,62 +363,6 @@ async def websocket_endpoint(websocket: WebSocket):
         pass   # client went away (RuntimeError: send on a socket that already closed)
 
 
-# ── Per-Camera Traffic Analytics & Time-Series Endpoints (LSTM / ML Ready) ────
-@app.get("/api/stats/time-series")
-def get_traffic_time_series(
-    camera_id: Optional[int] = None,
-    window_seconds: int = 60,
-    limit: int = 100,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None,
-):
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    target_cam = None if camera_id in (-1, None) else camera_id
-    return _analytics_engine.export_timeseries_dataset(
-        camera_id=target_cam,
-        window_seconds=window_seconds,
-        start_ts=start_time,
-        end_ts=end_time,
-        limit=limit,
-    )
-
-
-@app.get("/api/stats/export")
-def export_traffic_dataset(
-    format: str = "csv",
-    camera_id: Optional[int] = None,
-    window_seconds: int = 60,
-    limit: int = 5000,
-):
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    target_cam = None if camera_id in (-1, None) else camera_id
-
-    fmt = format.lower()
-    if fmt == "csv":
-        csv_text = _analytics_engine.export_csv_str(
-            camera_id=target_cam,
-            window_seconds=window_seconds,
-            limit=limit,
-        )
-        cam_suffix = str(target_cam) if target_cam is not None else "all"
-        filename = f"cctv_camera_{cam_suffix}_traffic_timeseries.csv"
-        return Response(
-            content=csv_text,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-    elif fmt == "json":
-        return _analytics_engine.export_timeseries_dataset(
-            camera_id=target_cam,
-            window_seconds=window_seconds,
-            limit=limit,
-        )
-    else:
-        raise HTTPException(400, detail=f"Unsupported format '{format}'. Supported: 'csv', 'json'.")
-
-
 FLOW_MAX_MINUTES = 30 * 24 * 60.0   # the Analytics chart's longest timeframe (30 days)
 FLOW_MAX_BUCKETS = 720               # bucket size is raised so a series never has more points
 
@@ -471,13 +415,6 @@ def get_camera_traffic_metrics(camera_id: int, minutes: float = 60.0, bucket_min
         "endpoints": line.endpoints(), "direction_labels": line.labels(),
     }
     return metrics
-
-
-@app.get("/api/stats/summary")
-def get_traffic_summary():
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    return _analytics_engine.get_all_camera_summaries()
 
 
 # Shared ANE detector (independent ByteTrack per camera). Only the rolling tracker's worker

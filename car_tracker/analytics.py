@@ -26,8 +26,6 @@ Time conventions of ``camera_traffic_timeseries``
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 import math
 import os
@@ -1468,10 +1466,6 @@ class TrafficAnalyticsEngine:
     def get_first_timestamp(self, camera_id: int) -> Optional[float]:
         return self.db.first_timestamp(camera_id)
 
-    def get_all_camera_summaries(self) -> List[Dict[str, Any]]:
-        """List summaries across all cameras."""
-        return self.db.get_cumulative_summary()
-
     # ── Time-Series & LSTM Data Extraction ────────────────────────────────────
 
     def export_timeseries_dataset(
@@ -1497,109 +1491,3 @@ class TrafficAnalyticsEngine:
             limit=limit,
             order_asc=True
         )
-
-    def export_csv_str(
-        self,
-        camera_id: Optional[int] = None,
-        window_seconds: Optional[int] = None,
-        limit: int = 5000,
-    ) -> str:
-        """Export time-series records formatted as standard CSV with headers."""
-        records = self.export_timeseries_dataset(camera_id=camera_id, window_seconds=window_seconds, limit=limit)
-        if not records:
-            # Return empty template with standard column headers
-            fieldnames = [
-                "timestamp_iso", "timestamp", "camera_id", "camera_name", "window_seconds",
-                "total_volume", "car_volume", "motorcycle_volume", "truck_volume", "bus_volume",
-                "avg_active_vehicles", "peak_active_vehicles", "occupancy_ratio",
-                "avg_speed_px_s", "stopped_vehicles", "congestion_index",
-                "avg_flow_dx", "avg_flow_dy", "flow_rate_vpm", "flow_rate_vph",
-                "hour", "minute", "day_of_week", "is_weekend",
-                "sin_hour", "cos_hour", "sin_dow", "cos_dow", "volume_basis",
-                "timestamp_local_iso", "median_speed_bps", "mean_speed_bps", "queue_share", "avg_traffic_vehicles",
-            ]
-            buf = io.StringIO()
-            writer = csv.DictWriter(buf, fieldnames=fieldnames)
-            writer.writeheader()
-            return buf.getvalue()
-
-        fieldnames = list(records[0].keys())
-        if "id" in fieldnames:
-            fieldnames.remove("id")
-
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=fieldnames)
-        writer.writeheader()
-        for r in records:
-            row = dict(r)
-            if "id" in row:
-                del row["id"]
-            writer.writerow(row)
-        return buf.getvalue()
-
-    def create_lstm_sequences(
-        self,
-        records: List[Dict[str, Any]],
-        seq_len: int = 12,
-        horizon: int = 1,
-        feature_cols: Optional[List[str]] = None,
-        target_col: str = "total_volume",
-    ) -> Dict[str, Any]:
-        """
-        Convert time-series records into 3D sliding-window tensor arrays (X, y)
-        for recurrent neural networks (LSTM, GRU, RNN):
-        
-        X shape: (num_samples, seq_len, num_features)
-        y shape: (num_samples, horizon)
-        """
-        if not records or len(records) < (seq_len + horizon):
-            return {
-                "X": np.empty((0, seq_len, len(feature_cols or [])), dtype=np.float32),
-                "y": np.empty((0, horizon), dtype=np.float32),
-                "feature_names": feature_cols or [],
-                "timestamps": [],
-                "sample_count": 0,
-            }
-
-        if feature_cols is None:
-            feature_cols = [
-                "total_volume", "car_volume", "motorcycle_volume", "truck_volume", "bus_volume",
-                "avg_active_vehicles", "occupancy_ratio", "avg_speed_px_s",
-                "congestion_index", "flow_rate_vpm",
-                "sin_hour", "cos_hour", "sin_dow", "cos_dow", "is_weekend"
-            ]
-
-        # Extract numeric array
-        matrix = []
-        target_vals = []
-        timestamps = []
-
-        for r in records:
-            row_features = [float(r.get(c) or 0.0) for c in feature_cols]
-            matrix.append(row_features)
-            target_vals.append(float(r.get(target_col) or 0.0))
-            timestamps.append(r.get("timestamp_iso", ""))
-
-        matrix_np = np.array(matrix, dtype=np.float32)
-        target_np = np.array(target_vals, dtype=np.float32)
-
-        X_samples = []
-        y_samples = []
-        target_timestamps = []
-
-        num_possible = len(matrix_np) - seq_len - horizon + 1
-        for i in range(num_possible):
-            X_seq = matrix_np[i : i + seq_len]
-            y_seq = target_np[i + seq_len : i + seq_len + horizon]
-            X_samples.append(X_seq)
-            y_samples.append(y_seq)
-            target_timestamps.append(timestamps[i + seq_len + horizon - 1])
-
-        return {
-            "X": np.array(X_samples, dtype=np.float32),
-            "y": np.array(y_samples, dtype=np.float32),
-            "feature_names": feature_cols,
-            "target_name": target_col,
-            "timestamps": target_timestamps,
-            "sample_count": len(X_samples),
-        }
