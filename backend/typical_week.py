@@ -78,8 +78,9 @@ def typical_slots(rows: Iterable[Dict[str, Any]], clusters: Iterable[Sequence[in
     for (cam, dow, hour), v in cameras.items():
         groups[(member_of.get(cam, (cam,)), dow, hour)].append(v)
     for (members, dow, hour), vs in groups.items():
+        busiest = max(vs, key=lambda v: v["value"])      # n_days must describe the camera that set the value
         out.append({"scope": "cluster", "ref_id": members[0], "day_of_week": dow, "hour": hour,
-                    "value": max(v["value"] for v in vs), "n_days": max(v["n_days"] for v in vs),
+                    "value": busiest["value"], "n_days": busiest["n_days"],
                     "analytics_s": sum(v["analytics_s"] for v in vs)})
     for s in out:
         s["value"] = round(s["value"], 4)

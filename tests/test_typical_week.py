@@ -47,6 +47,11 @@ class TestTypicalSlots(unittest.TestCase):
         self.assertEqual(slot(slots, "cluster", 1, 0, 8)["value"], .9)     # keyed by the lowest camera id
         self.assertEqual(slot(slots, "cluster", 1, 0, 8)["n_days"], 2)
 
+    def test_cluster_thinness_follows_the_camera_that_set_the_value(self):
+        rows = [row(1, d, 8, .2) for d in ("2026-09-14", "2026-09-21", "2026-09-28")] + [row(2, "2026-09-14", 8, .9)]
+        s = slot(tw.typical_slots(rows, [(1, 2)]), "cluster", 1, 0, 8)
+        self.assertEqual((s["value"], s["n_days"], s["low_data"]), (.9, 1, 1))
+
     def test_weekdays_are_kept_apart(self):
         rows = [row(1, "2026-09-14", 8, .1, dow=0), row(1, "2026-09-15", 8, .9, dow=1)]
         slots = tw.typical_slots(rows, [(1,)])
