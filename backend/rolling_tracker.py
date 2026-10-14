@@ -51,12 +51,11 @@ from urllib.parse import urlparse
 import numpy as np
 
 from backend.config import (
-    DWELL_TIER1_S, DWELL_TIER2_S, DWELL_TIER3_S, FOCUS_FPS, FOCUS_TTL_S, MAX_FOCUS_CAMERAS,
+    DEFAULT_ARTERIAL_HUBS, DWELL_TIER1_S, DWELL_TIER2_S, DWELL_TIER3_S, FOCUS_FPS, FOCUS_TTL_S, MAX_FOCUS_CAMERAS,
     MAX_OPEN_STREAMS, MAX_STREAMS_PER_HOST, ROLLING_ENABLED, ROLLING_FPS, TIER1_REVISIT_S,
     TIER2_REVISIT_S,
 )
 from backend.counting import CountingLines, TrackCounter, ground_point
-from backend.indexing_daemon import DEFAULT_ARTERIAL_HUBS
 
 logger = logging.getLogger("rolling_tracker")
 

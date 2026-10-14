@@ -28,7 +28,7 @@ Always use the project venv (Python 3.11, macOS/Apple Silicon required for CoreM
 
 ## Architecture
 
-**Request/inference flow.** `backend/server.py` (FastAPI, ~840 lines) is a thin layer: REST + `/ws/live` + frame endpoints. All inference is done by `backend/rolling_tracker.py` (`RollingTracker`, a single inference worker thread) — the server only renders annotated frames (`_render_annotated_frame`) from what the tracker hands back. `backend/indexing_daemon.py` (`IndexingDaemon`) is **not used by the server any more** (class and tests kept); `/api/daemon/*` controls the rolling tracker.
+**Request/inference flow.** `backend/server.py` (FastAPI, ~840 lines) is a thin layer: REST + `/ws/live` + frame endpoints. All inference is done by `backend/rolling_tracker.py` (`RollingTracker`, a single inference worker thread) — the server only renders annotated frames (`_render_annotated_frame`) from what the tracker hands back. The old `IndexingDaemon` was removed; `/api/daemon/*` controls the rolling tracker.
 
 **Rolling tracker model.**
 - *Focus cameras*: cameras currently being viewed (`set_focus` is called on every frame-endpoint poll; lapses after `FOCUS_TTL_S`), up to `MAX_FOCUS_CAMERAS`, run at `FOCUS_FPS`. A slot is only reclaimed from a viewer idle for `FOCUS_EVICT_IDLE_S`; otherwise `set_focus` refuses (returns False → "viewer limit" frame) — evicting on every poll made N+1 viewers thrash each other forever. `tick()` serves due focus cameras between rolling-visit frames (most overdue visit first).

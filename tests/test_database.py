@@ -24,11 +24,6 @@ from backend.database import (
     Database,
     get_db_connection,
     seed_cameras_from_topology,
-    init_db,
-    insert_vehicle_sighting,
-    get_recent_sightings,
-    search_vehicles,
-    get_traffic_stats,
 )
 
 

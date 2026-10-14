@@ -204,23 +204,7 @@ class TestFGEO03ArrivalWindowModel(unittest.TestCase):
                     f"Edge {edge['source_id']}->{edge['target_id']} margin {t_max - t_min} too tight for traffic signal",
                 )
 
-    def test_f_geo_03_is_valid_transition_within_window(self):
-        """Test 4: is_valid_transition returns True with high score when elapsed time is in [t_min, t_max]."""
-        # Test edge 79 -> 87 (Otista)
-        is_valid, score = self.topo.is_valid_transition(79, 87, 80.0)
-        self.assertTrue(is_valid)
-        self.assertGreaterEqual(score, 0.5)
 
-    def test_f_geo_03_is_valid_transition_outside_window(self):
-        """Test 5: is_valid_transition rejects impossible arrival times (too fast or excessive delay)."""
-        # 1 second for 430m is physically impossible (1548 km/h)
-        is_valid_fast, score_fast = self.topo.is_valid_transition(79, 87, 1.0)
-        self.assertFalse(is_valid_fast)
-
-        # 3600 seconds (1 hour) is far beyond max arrival window
-        is_valid_slow, score_slow = self.topo.is_valid_transition(79, 87, 3600.0)
-        self.assertFalse(is_valid_slow)
-        self.assertEqual(score_slow, 0.0)
 
 
 class TestFGEO04OneWayDirectionalEnforcer(unittest.TestCase):
@@ -254,25 +238,8 @@ class TestFGEO04OneWayDirectionalEnforcer(unittest.TestCase):
         violations = [pair for pair in forbidden_surken if pair in edge_pairs]
         self.assertEqual(len(violations), 0, f"Found forbidden northbound Surken edges: {violations}")
 
-    def test_f_geo_04_downstream_candidates_prunes_reverse_direction(self):
-        """Test 3: Querying reverse exit direction on SSA produces no downstream candidates."""
-        # At Simpang BTM (81), traffic can only proceed North along Juanda (to 85/88). Heading East (back down Otista) is forbidden.
-        candidates_east = self.topo.get_downstream_candidates(81, "EAST")
-        candidate_ids = [c["target_camera_id"] for c in candidates_east]
-        self.assertNotIn(83, candidate_ids)
-        self.assertNotIn(87, candidate_ids)
 
-    def test_f_geo_04_invalid_transition_returns_false_for_one_way_violation(self):
-        """Test 4: is_valid_transition explicitly fails for reverse one-way traversal."""
-        is_valid, _ = self.topo.is_valid_transition(81, 83, 60.0)
-        self.assertFalse(is_valid)
 
-    def test_f_geo_04_valid_forward_flow_succeeds(self):
-        """Test 5: Valid counter-clockwise flow along Otista -> BTM succeeds."""
-        # Pasar Bogor (83) -> Simpang BTM (81) is the legal one-way route
-        candidates = self.topo.get_downstream_candidates(83, "WEST")
-        candidate_ids = [c["target_camera_id"] for c in candidates]
-        self.assertIn(81, candidate_ids)
 
 
 class TestFGEO05IntraJunctionClustering(unittest.TestCase):
@@ -322,14 +289,6 @@ class TestFGEO05IntraJunctionClustering(unittest.TestCase):
         if 79 in self.nodes and 199 in self.nodes:
             self.assertIn("FIXED", [self.nodes[79].get("camera_type"), self.nodes[199].get("camera_type")])
 
-    def test_f_geo_05_intra_junction_rapid_transition_validation(self):
-        """Test 5: is_valid_transition validates rapid handoffs in under 15 seconds."""
-        internal_edges = [e for e in self.edges if e.get("exit_direction") == "INTERNAL"]
-        if internal_edges:
-            e = internal_edges[0]
-            is_valid, score = self.topo.is_valid_transition(e["source_id"], e["target_id"], 10.0)
-            self.assertTrue(is_valid)
-            self.assertGreaterEqual(score, 0.5)
 
 
 class TestFGEO06AdjacencyByExitIndexService(unittest.TestCase):
@@ -347,27 +306,9 @@ class TestFGEO06AdjacencyByExitIndexService(unittest.TestCase):
         """Test 1: Adjacency lookup table has at least 150 directional exit mappings."""
         self.assertGreaterEqual(len(self.adj), 150)
 
-    def test_f_geo_06_tugu_kujang_exit_query(self):
-        """Test 2: Querying Tugu Kujang (79) with WEST returns Otista downstream camera (87)."""
-        candidates = self.topo.get_downstream_candidates(79, "WEST")
-        target_ids = [c["target_camera_id"] for c in candidates]
-        self.assertIn(87, target_ids)
 
-    def test_f_geo_06_simpang_btm_north_query(self):
-        """Test 3: Querying Simpang BTM (81) with NORTH returns Juanda downstream camera (85)."""
-        candidates = self.topo.get_downstream_candidates(81, "NORTH")
-        target_ids = [c["target_camera_id"] for c in candidates]
-        self.assertIn(85, target_ids)
 
-    def test_f_geo_06_invalid_camera_id_raises_keyerror(self):
-        """Test 4: Querying an invalid or non-existent camera ID raises KeyError."""
-        with self.assertRaises(KeyError):
-            self.topo.get_downstream_candidates(999999, "NORTH")
 
-    def test_f_geo_06_unreachable_exit_returns_empty_list(self):
-        """Test 5: Querying a valid camera with an impossible exit heading returns empty candidate list."""
-        candidates = self.topo.get_downstream_candidates(79, "NORTHWEST")
-        self.assertEqual(len(candidates), 0)
 
 
 if __name__ == "__main__":

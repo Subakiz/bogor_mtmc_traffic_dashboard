@@ -89,8 +89,6 @@ class FakeDetector:
 class FakeTopology:
     """Three cameras in a line: 1 -> 2 -> 3."""
 
-    score_transition_window = staticmethod(TopologyEngine.score_transition_window)
-
     def __init__(self, ids=(1, 2, 3)):
         self.cameras = {
             cid: {"id": cid, "name": f"CAM {cid}", "stream_url": f"https://example.test/{cid}.m3u8",
@@ -98,11 +96,6 @@ class FakeTopology:
             for cid in ids
         }
         self.edges = [{"source_id": a, "target_id": b} for a, b in zip(ids, ids[1:])]
-
-    def calculate_arrival_window(self, src, dst):
-        if (src, dst) not in {(e["source_id"], e["target_id"]) for e in self.edges}:
-            raise KeyError((src, dst))
-        return 0.0, 60.0
 
 
 class StubAnalytics:

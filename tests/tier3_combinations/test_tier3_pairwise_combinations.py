@@ -34,35 +34,8 @@ class TestTier3PairwiseCombinations(unittest.TestCase):
         if hasattr(self, "db") and self.db and self.db.conn:
             self.db.conn.close()
 
-    def test_p01_topology_routing_plus_arrival_window(self):
-        """Pair 1 (F-GEO-02 + F-GEO-03): Topology routing query outputs valid arrival window [t_min, t_max]."""
-        candidates = self.topo.get_downstream_candidates(79, "WEST")
-        self.assertGreaterEqual(len(candidates), 1)
-        for cand in candidates:
-            self.assertGreater(cand["distance_m"], 0.0)
-            self.assertGreater(cand["t_min_s"], 0.0)
-            self.assertGreater(cand["t_max_s"], cand["t_min_s"])
 
-    def test_p02_one_way_enforcer_plus_adjacency_index(self):
-        """Pair 2 (F-GEO-04 + F-GEO-06): Adjacency lookup strictly filters out illegal reverse flow."""
-        # Querying exit from Pasar Bogor (83) towards East (back up Otista) must be empty
-        candidates_east = self.topo.get_downstream_candidates(83, "EAST")
-        cand_ids = [c["target_camera_id"] for c in candidates_east]
-        self.assertNotIn(79, cand_ids)
-        self.assertNotIn(87, cand_ids)
 
-    def test_p03_intra_junction_clustering_plus_priority_scheduling(self):
-        """Pair 3 (F-GEO-05 + F-HAND-02): Intra-junction link triggers immediate short-window priority scheduling."""
-        internal_edges = [e for e in self.topo.edges if e.get("exit_direction") == "INTERNAL"]
-        self.assertGreater(len(internal_edges), 0)
-        e = internal_edges[0]
-        src, tgt = e["source_id"], e["target_id"]
-        # Fast transition window
-        t_win = e.get("travel_time_window_s", [5, 50])
-        self.assertLessEqual(t_win[0], 10.0)
-        # Verify valid transition
-        is_valid, score = self.topo.is_valid_transition(src, tgt, elapsed_time_s=8.0)
-        self.assertTrue(is_valid)
 
     def test_p09_priority_scheduler_plus_scheduling_daemon(self):
         """Pair 9 (F-HAND-02 + FEAT-M5): Elevated priority elevates candidate stream from Tier 3 to Tier 1."""
@@ -109,34 +82,8 @@ class TestTier3PairwiseCombinations(unittest.TestCase):
         self.assertEqual(len(t1_buffer), 3)
         self.assertEqual(len(t3_buffer), 1)
 
-    def test_p17_adjacency_lookup_plus_mtmc_candidate_pruning(self):
-        """Pair 17 (F-GEO-06 + FEAT-M7): Adjacency lookup filters candidates before MTMC scoring."""
-        downstream_candidates = self.topo.get_downstream_candidates(79, "WEST")
-        valid_cids = {c["target_camera_id"] for c in downstream_candidates}
 
-        # 3 candidate sightings across the city
-        sightings = [
-            {"camera_id": 87, "sighting_id": 1},  # downstream
-            {"camera_id": 169, "sighting_id": 2}, # unrelated peripheral cam
-        ]
-        pruned_sightings = [s for s in sightings if s["camera_id"] in valid_cids]
-        self.assertEqual(len(pruned_sightings), 1)
-        self.assertEqual(pruned_sightings[0]["camera_id"], 87)
 
-    def test_p20_arrival_window_expiration_plus_lost_target(self):
-        """Pair 20 (F-GEO-03 + F-HAND-04): Elapsed time exceeding t_max + slack flags transition expired."""
-        # Transition 79 -> 87 has max travel time ~140s
-        is_valid, score = self.topo.is_valid_transition(79, 87, elapsed_time_s=500.0)
-        self.assertFalse(is_valid)
-
-    def test_p21_hud_radar_countdown_plus_dynamic_arrival_window(self):
-        """Pair 21 (F-DASH-02 + F-GEO-03): HUD radar derives arrival countdown from candidate edge window."""
-        candidates = self.topo.get_downstream_candidates(79, "WEST")
-        c = candidates[0]
-        t_exit = 100.0
-        current_time = 120.0
-        remaining_s = max(0.0, (t_exit + c["t_max_s"]) - current_time)
-        self.assertGreater(remaining_s, 0.0)
 
     def test_p23_fastapi_rest_topology_plus_edge_database(self):
         """Pair 23 (F-API-01 + F-GEO-02): REST topology structure serves full 220 edge network."""

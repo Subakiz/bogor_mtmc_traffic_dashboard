@@ -15,8 +15,6 @@ from .config import (
 )
 from .tracking import CameraTrackerPool, VehicleDetector, rows_to_detections
 from .pipeline import count_by_class, default_label, draw_detections, update_trails
-from .hud import draw_hud
-from .streams import load_cctv_streams
 from .analytics import (
     TrafficAnalyticsEngine,
     TrafficAnalyticsDatabase,
@@ -24,4 +22,3 @@ from .analytics import (
     TrackKinematics,
     DEFAULT_DB_PATH,
 )
-from .cli import track_stream, main

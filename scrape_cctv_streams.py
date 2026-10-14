@@ -4,7 +4,7 @@ Scrapes every CCTV camera and its live HLS (.m3u8) stream from BSW Kota Bogor
 (https://bsw.kotabogor.go.id/cctv) and keeps the project's copies in sync.
 
 Writes (paths relative to this file, not the working directory):
-  cctv_streams.json            engine stream list (car_tracker.load_cctv_streams)
+  cctv_streams.json            engine stream list (scraper output; the dashboard does not read it)
   data/cctv_streams.json/.csv  same list for the dashboard data folder
 
 and, unless --no-sync is given, updates the dashboard's view of each camera:

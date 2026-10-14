@@ -80,3 +80,21 @@ SIGHTING_RETENTION_DAYS = _env_float("SIGHTING_RETENTION_DAYS", 0.0)
 # Cap on the WAL file kept after a checkpoint (PRAGMA journal_size_limit), so one large write
 # burst or a long reader cannot leave a multi-hundred-MB WAL on disk.
 DB_JOURNAL_SIZE_LIMIT_BYTES = _env_int("DB_JOURNAL_SIZE_LIMIT_BYTES", 32 * 1024 * 1024)
+
+# ── Rolling-tracker scheduling ──────────────────────────────────────────────────
+# Core Arterial Junction Hub Camera IDs in Kota Bogor
+DEFAULT_ARTERIAL_HUBS = {
+    79,   # Tugu Kujang (Pajajaran - Otista)
+    80,   # Ciheleut (Pajajaran)
+    81,   # Pajajaran Baranangsiang
+    82,   # Sambu / Terminal Baranangsiang
+    83,   # Pasar Bogor
+    84,   # Suryakencana
+    85,   # Empang
+    86,   # Simpang Pahlawan / Bondongan
+    87,   # Otista
+    88,   # Balai Kota
+    92,   # Djuanda
+    161,  # Warung Jambu (Sholeh Iskandar)
+    167,  # Sukasari
+}

@@ -59,9 +59,8 @@ bogor_mtmc_traffic_dashboard/
 │   ├── server.py              # FastAPI server, frame endpoint, WebSocket & REST APIs
 │   ├── detector.py            # CoreML YOLOv8 + ByteTrack ANE inference wrapper
 │   ├── stream_capture.py      # Threaded low-latency HLS stream reader & packet flusher
-│   ├── topology_engine.py     # 94-camera road graph, arrival windows, SSA one-way logic
+│   ├── topology_engine.py     # camera road graph, junction clusters, SSA one-way logic
 │   ├── database.py            # SQLite WAL vehicle registry, counting windows & totals
-│   └── indexing_daemon.py     # Background multi-camera ingestion & tracking daemon
 ├── frontend/
 │   ├── index.html             # Dark-mode dashboard (Leaflet + HUD)
 │   ├── styles.css             # Dashboard styles
