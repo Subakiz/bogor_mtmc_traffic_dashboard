@@ -47,13 +47,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, TextIO, Tuple, Union
 
-try:  # IANA zone when the system has tzdata, otherwise the same fixed offset (WIB has no DST)
-    from zoneinfo import ZoneInfo
-    LOCAL_TZ = ZoneInfo("Asia/Jakarta")
-except Exception:  # noqa: BLE001  (ZoneInfoNotFoundError, ImportError)
-    LOCAL_TZ = timezone(timedelta(hours=7), "WIB")
-LOCAL_TZ_NAME = "Asia/Jakarta"
-LOCAL_UTC_OFFSET_S = int(datetime(2026, 1, 1, tzinfo=LOCAL_TZ).utcoffset().total_seconds())   # 25200
+from backend.bucketing import (
+    LOCAL_TZ, LOCAL_TZ_NAME, LOCAL_UTC_OFFSET_S, bucket_range, bucket_seconds, spread,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_VERSION = 1
@@ -127,26 +123,6 @@ def _iso_to_local(text: Any) -> Optional[str]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(LOCAL_TZ).isoformat()
-
-
-def bucket_seconds(bucket_minutes: Union[int, float]) -> int:
-    """Bucket length in seconds. Must be whole minutes dividing a day (1, 5, 10, 15, 30, 60, 120, ... 1440)."""
-    try:
-        bs = int(round(float(bucket_minutes) * 60))
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"bucket_minutes must be a number, got {bucket_minutes!r}") from exc
-    if bs < 60 or 86400 % bs != 0:
-        raise ValueError("bucket_minutes must be a whole number of minutes that divides a day "
-                         f"(1, 5, 15, 30, 60, 120, 1440 ...), got {bucket_minutes!r}")
-    return bs
-
-
-def _bucket_range(start_ts: float, end_ts: float, bs: int) -> Tuple[int, int]:
-    """Indices ``[k0, k1)`` of the buckets lying completely inside ``[start_ts, end_ts)``; bucket
-    ``k`` covers UTC ``[k*bs - off, (k+1)*bs - off)``, i.e. it is aligned to local wall-clock time."""
-    k0 = math.ceil((start_ts + LOCAL_UTC_OFFSET_S) / bs)
-    k1 = math.floor((end_ts + LOCAL_UTC_OFFSET_S) / bs)
-    return k0, max(k0, k1)
 
 
 def congestion_label(index: Optional[float]) -> Optional[str]:
@@ -520,25 +496,6 @@ class _An:
         self.name: Optional[str] = None
 
 
-def _spread(s_ts: float, e_ts: float, k0: int, k1: int, bs: int) -> Iterator[Tuple[int, float, float]]:
-    """(bucket, fraction of the interval, overlap seconds) for each bucket in ``[k0, k1)`` that the
-    interval ``[s_ts, e_ts]`` overlaps. A zero-length interval falls entirely in its bucket."""
-    off = LOCAL_UTC_OFFSET_S
-    length = e_ts - s_ts
-    if length <= 0:
-        k = math.floor((e_ts + off) / bs)
-        if k0 <= k < k1:
-            yield k, 1.0, 0.0
-        return
-    ka = max(k0, math.floor((s_ts + off) / bs))
-    kb = min(k1 - 1, math.ceil((e_ts + off) / bs) - 1)
-    for k in range(ka, kb + 1):
-        lo = max(s_ts, k * bs - off)
-        hi = min(e_ts, (k + 1) * bs - off)
-        if hi > lo:
-            yield k, (hi - lo) / length, hi - lo
-
-
 def _aggregate(src: _Sources, camera_ids: Optional[Sequence[int]], k0: int, k1: int, bs: int
                ) -> Tuple[Dict[int, Dict[int, _Obs]], Dict[int, Dict[int, _An]]]:
     """Prorates the observation and analytics windows of ``camera_ids`` (None: all) into the buckets
@@ -556,7 +513,7 @@ def _aggregate(src: _Sources, camera_ids: Optional[Sequence[int]], k0: int, k1: 
             continue
         by_k = obs.setdefault(cam, {})
         observed = float(observed or 0.0)
-        for k, frac, _ in _spread(w_s, w_e, k0, k1, bs):
+        for k, frac, _ in spread(w_s, w_e, k0, k1, bs):
             a = by_k.get(k)
             if a is None:
                 a = by_k[k] = _Obs()
@@ -588,7 +545,7 @@ def _aggregate(src: _Sources, camera_ids: Optional[Sequence[int]], k0: int, k1: 
                 speed_px = None            # no moving-stream vehicle in the window: speed undefined, not 0
             metrics = (congestion, occupancy, speed_px, avg_active, med_bps, mean_bps, queue, traffic, lane_occ)
             by_k = an.setdefault(cam, {})
-            for k, _, overlap in _spread(ts - ws, ts, k0, k1, bs):
+            for k, _, overlap in spread(ts - ws, ts, k0, k1, bs):
                 if overlap <= 0:
                     continue
                 a = by_k.get(k)
@@ -723,7 +680,7 @@ class DatasetStream:
         self.order = order or ("time" if layout == "wide" else "camera")
         if self.order not in ("camera", "time"):
             raise ValueError("order must be 'camera' or 'time'")
-        self.k0, self.k1 = _bucket_range(self.start_ts, self.end_ts, self.bs)
+        self.k0, self.k1 = bucket_range(self.start_ts, self.end_ts, self.bs)
         self.first_bucket_ts = self.k0 * self.bs - LOCAL_UTC_OFFSET_S
         self.end_bucket_ts = self.k1 * self.bs - LOCAL_UTC_OFFSET_S
         self.stats = {"rows": 0, "rows_observed": 0, "observed_s": 0.0, "crossings": 0.0, "cameras_with_data": 0}
