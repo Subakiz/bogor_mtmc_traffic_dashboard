@@ -15,7 +15,8 @@ class BucketingRuleTest(unittest.TestCase):
                 bucket_seconds(bad)
 
     def test_any_requested_length_snaps_up_to_a_valid_bucket(self):
-        self.assertEqual([snap_bucket_minutes(m) for m in (0, 1, 5, 7, 11, 45.5, 1000)], [1, 1, 5, 8, 12, 48, 1440])
+        self.assertEqual([snap_bucket_minutes(m) for m in (0, 1, 5, 7, 11, 45.5, 1000, 1441, 2000, 43200)],
+                         [1, 1, 5, 8, 12, 48, 1440, 1440, 1440, 1440])   # above a day: capped, never loops
         for m in range(1, 1441, 37):
             bucket_seconds(snap_bucket_minutes(m))     # never raises
 

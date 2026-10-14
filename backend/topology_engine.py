@@ -79,7 +79,7 @@ class TopologyEngine:
             data = json.load(f)
 
         self.metadata = data.get("metadata", {})
-        # Totals the file declares; validate_invariants checks the loaded graph against them.
+        # Totals the file declares (tests check the loaded graph against them).
         self.expected_cameras = int(self.metadata.get("total_cameras", len(data.get("nodes", []))))
         self.expected_edges = int(self.metadata.get("total_directed_edges", len(data.get("edges", []))))
         

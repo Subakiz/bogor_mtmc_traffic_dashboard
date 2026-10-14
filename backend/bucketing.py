@@ -37,7 +37,7 @@ def bucket_seconds(bucket_minutes: Union[int, float]) -> int:
 
 def snap_bucket_minutes(bucket_minutes: Union[int, float]) -> int:
     """The smallest valid bucket length (whole minutes dividing a day) that is at least ``bucket_minutes``."""
-    m = max(1, math.ceil(float(bucket_minutes) - 1e-9))
+    m = min(1440, max(1, math.ceil(float(bucket_minutes) - 1e-9)))
     while 1440 % m:
         m += 1
     return m
