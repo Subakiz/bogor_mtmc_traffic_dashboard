@@ -17,6 +17,7 @@ for _var, _name in (("TRAFFIC_DB_PATH", "traffic_db.sqlite"),
                     ("FREE_FLOW_PATH", "free_flow_speeds.json"),
                     ("TRAFFIC_LANES_PATH", "traffic_lanes.npz")):
     os.environ[_var] = os.path.join(_TMP, _name)
+os.environ["ALLOWED_HOSTS"] = "testserver"   # the host name of FastAPI's TestClient
 
 
 def pytest_unconfigure(config):

@@ -333,8 +333,14 @@ class CountingLines:
                 with open(path, "r", encoding="utf-8") as f:
                     for cid, d in json.load(f).items():
                         self._models[int(cid)] = MotionModel.from_dict(d)
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError, TypeError, AttributeError) as exc:
+                # Move it aside: the next save() would overwrite it and lose every learned line.
+                logger.error(f"Counting lines {path} unreadable ({exc}); moved to {path}.bad, starting empty")
                 self._models = {}
+                try:
+                    os.replace(path, path + ".bad")
+                except OSError:
+                    pass
         for cid, o in self._overrides.items():
             m = self._models.setdefault(cid, MotionModel())
             m.manual, m.excluded = o.get("line"), bool(o.get("exclude"))
@@ -386,6 +392,10 @@ class CountingLines:
             data = {str(cid): m.to_dict() for cid, m in self._models.items() if m.tracks}
             self._dirty = False
         tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-        os.replace(tmp, self.path)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp, self.path)
+        except BaseException:
+            self._dirty = True   # retry on the next save
+            raise
