@@ -1,174 +1,246 @@
-# 🚦 BSW Kota Bogor — Multi-Camera Traffic Intelligence & Vehicle Tracking (MTMC)
-
-[![Apple Neural Engine](https://img.shields.io/badge/Hardware-Apple%20Neural%20Engine%20(ANE)-555555?logo=apple&logoColor=white)](https://apple.com)
-[![YOLOv8](https://img.shields.io/badge/AI%20Model-YOLOv8%20%7C%20CoreML-00FFFF)](https://ultralytics.com)
-[![ByteTrack](https://img.shields.io/badge/Tracker-ByteTrack%20(MOT)-00FF66)](https://github.com/ifzhang/ByteTrack)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%2B%20SQLite%20WAL-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Leaflet](https://img.shields.io/badge/Frontend-Leaflet%20%2B%20plain%20JS-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
-[![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)](tests/)
-
-An enterprise-grade, end-to-end intelligent transportation surveillance platform that scrapes all **94 municipal CCTV cameras** from the Kota Bogor government (`bsw.kotabogor.go.id/cctv`), executes real-time vehicle detection and multi-object tracking accelerated locally on the **Apple Neural Engine (ANE)**, and turns them into citywide traffic volume and congestion analytics.
-
----
-
-## 📸 System Previews
-
 <div align="center">
-  <img src="assets/live_tracking_cctv167.jpg" width="85%" alt="Live Tracking with IDs and ANE Latency on Camera 167" />
-  <p><i>Live detection and ByteTrack ID assignment running on ANE (~11.8ms inference) at Simpang Pahlawan during nighttime rain.</i></p>
-</div>
 
-<br/>
+# 🚦 Kota Bogor Traffic Intelligence
 
-<div align="center">
-  <img src="assets/tracked_cars_trajectories.jpg" width="48%" alt="Multi-Camera Vehicle Trajectories" />
-  <img src="assets/cctv_snapshot_detected.jpg" width="48%" alt="Vehicle Counting and Detection" />
-  <p><i>Left: Dynamic trajectory tracking & motion vectors. Right: Multi-class vehicle classification (cars, motorcycles, angkot, trucks).</i></p>
+**96 municipal CCTV feeds → YOLOv8 on the Apple Neural Engine → live vehicle counts and congestion for a whole city.**
+
+![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-CoreML%20%2B%20ANE-000000?logo=apple&logoColor=white)
+![YOLOv8](https://img.shields.io/badge/YOLOv8-ByteTrack-00B3B3)
+![FastAPI](https://img.shields.io/badge/FastAPI-SQLite%20WAL-009688?logo=fastapi&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-no%20build%20step-199900?logo=leaflet&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.jpg">
+  <img src="docs/images/dashboard-light.jpg" width="100%" alt="Dashboard: Leaflet map of Bogor with per-camera flow badges, and the live annotated feed of the selected camera">
+</picture>
+
+<sub>Map of per-camera flow (veh/h) on the left, live YOLOv8 + ByteTrack feed on the right. Every box is drawn on the Neural Engine.</sub>
+
 </div>
 
 ---
 
-## ⚡ Key Architecture & Features
+## ✨ What you get
 
-### 1. Apple Neural Engine (ANE) Acceleration
-- **Zero-Cloud, Ultra-Low Power**: Inference runs directly on Apple Silicon Neural Engine (`ComputeUnit.CPU_AND_NE`) via CoreML.
-- **Sub-12ms Latency**: `YOLOv8m` runs in **~11.7ms – 18.5ms** (~60–85 FPS), enabling real-time multi-camera processing with negligible CPU/GPU thermal impact.
-- **Strict COCO Vehicle Filtering**: Detects and classifies `car` (2), `motorcycle` (3), `bus / angkot` (5), and `truck` (7).
-
-### 2. 94-Camera Geocoded Road Network Topology Graph
-- **Complete Citywide Master Database**: All 94 cameras geocoded with precise GPS coordinates, compass azimuths, and corridor groupings.
-- **220 Directed Transitions**: Modeled road adjacency graph reflecting real-world road physical constraints.
-- **Strict One-Way Directional Enforcer**: Prevents impossible upstream reverse matches along Bogor's famous **Sistem Satu Arah (SSA Kebun Raya)** and **Jl. Suryakencana**.
-- **Dynamic Arrival Windows $[t_{min}, t_{max}]$**: Computes spatiotemporal transit feasibility windows based on road distances, speed limits, and traffic congestion factors.
-
-### 3. Resilient Streaming Architecture (Engineered for Safari & WebKit)
-- **Decoupled Threaded Capture**: Ingests remote HLS `.m3u8` feeds using a background reader (`ThreadedStreamCapture`) with packet ring-buffering and a 5-second FFmpeg network timeout (`timeout;5000000`), completely shielding the server from remote restreamer stalls.
-- **Long-Polled Frame Streaming**: The frontend requests `/api/stream/{id}/frame?after=<X-Frame-No>` one at a time (no MJPEG, which stalls in Safari/WebKit); the server holds each request until a newer frame exists, so there is strictly 1 in-flight request per tab and no frame is sent twice.
-- **Standby Placeholder HUD**: Automatically renders a modern standby graphic (`[CCTV OFFLINE / CONNECTING STREAM...]`) with `200 OK` for buffering feeds, preventing broken image icons or 503 error storms.
-
-### 4. Persistent SQLite WAL Vehicle Registry
-- Logs intra-camera sightings, speed estimates, and exit angles, plus counting-line observation windows.
+| 🗺️ **Live map** | 📈 **Counting lines** | 🚥 **Congestion index** | 🏙️ **City patterns** |
+| :--- | :--- | :--- | :--- |
+| Every camera on a Leaflet map, coloured by flow | Vehicles counted as they cross a learned line, in veh/h per class | Smooth → Congested, judged on the moving stream only | When Bogor slows down, where, and who is on the road |
 
 ---
 
-## 📂 Project Structure
+## 📸 Tour
 
+<table>
+<tr>
+<td width="50%" align="center">
+<b>Analytics</b> · flow, congestion, export<br/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/analytics-dark.jpg">
+  <img src="docs/images/analytics-light.jpg" alt="Analytics tab: hourly flow, congestion index with lane occupancy, vehicle classes">
+</picture>
+</td>
+<td width="50%" align="center">
+<b>City</b> · citywide rhythm of a day<br/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/city-dark.jpg">
+  <img src="docs/images/city-light.jpg" alt="City tab: afternoon-rush headline, a day on Bogor's roads, corridor heatmap">
+</picture>
+</td>
+</tr>
+</table>
+
+<div align="center">
+  <img src="docs/images/city-tab.gif" width="320" alt="Animated scroll through the City tab: corridor heatmap, hotspots ranking, vehicle mix">
+  <br/><sub>The City tab: slow-down heatmap by corridor and hour, hotspot ranking, vehicle mix.</sub>
+</div>
+
+---
+
+## 🧠 How it works
+
+```mermaid
+flowchart TD
+    CAM["🎥 HLS restreamers<br/>6 hosts · 96 cameras"] --> POOL["StreamPool<br/>ThreadedStreamCapture"]
+    POOL --> RT["RollingTracker<br/>one inference thread"]
+    subgraph ANE["Apple Neural Engine"]
+        DET["CoreML YOLOv8m"] --> BT["ByteTrack<br/>per-camera state"]
+    end
+    RT --> DET
+    BT --> RT
+    RT --> CNT["Counting lines<br/>veh/h per class"]
+    RT --> ANA["Analytics<br/>congestion index"]
+    CNT --> DB[("SQLite WAL")]
+    ANA --> DB
+    DB --> API["FastAPI<br/>REST · /ws/live · frames"]
+    RT -. annotated frames .-> API
+    API --> UI["🗺️ Leaflet dashboard"]
 ```
-bogor_mtmc_traffic_dashboard/
-├── backend/
-│   ├── server.py              # FastAPI server, frame endpoint, WebSocket & REST APIs
-│   ├── detector.py            # CoreML YOLOv8 + ByteTrack ANE inference wrapper
-│   ├── stream_capture.py      # Threaded low-latency HLS stream reader & packet flusher
-│   ├── topology_engine.py     # camera road graph, junction clusters, SSA one-way logic
-│   ├── database.py            # SQLite WAL vehicle registry, counting windows & totals
-├── frontend/
-│   ├── index.html             # Dark-mode dashboard (Leaflet + HUD)
-│   ├── styles.css             # Dashboard styles
-│   └── app.js                 # Map controller, frame long-poll, analytics, data export
-├── data/
-│   ├── bogor_camera_topology.json  # 94 geocoded nodes, corridors, and directed edges
-│   ├── cctv_streams.json      # Master stream URLs, embed URLs, and metadata
-│   ├── cctv_streams.csv       # Tabular camera directory
-│   └── traffic_db.sqlite      # SQLite WAL database for vehicle sightings & counts
-├── scrape_cctv_streams.py     # Scraper for all BSW CCTV stream endpoints (syncs topology + DB)
-├── scripts/                   # start_daemon.sh / stop_daemon.sh, export_dataset.py (dataset export CLI)
-├── assets/                    # Screenshots, trajectory visualizers, and diagrams
-├── tests/                     # pytest verification suite (tiers 1 to 5 plus unit tests)
-├── requirements.txt           # Python dependencies
-└── README.md
+
+All inference lives in one worker thread. The server is a thin layer: it serves REST, a `/ws/live` heartbeat, and long-polled annotated frames.
+
+### 👀 Who gets watched when
+
+There are only **12 stream slots** (max 3 per restreamer host) for 96 cameras. So the tracker watches the cameras you are looking at closely, and rotates through the rest.
+
+```mermaid
+flowchart TD
+    V(["👤 Viewer opens a camera"]) --> F["Focus camera<br/>15 fps · up to 3 at once"]
+    F -->|"downstream cameras"| T1["Tier 1 visit"]
+    S["12 stream slots<br/>max 3 per host"] --> R{"Rolling visits<br/>8 fps · dwell by tier"}
+    R --> T1
+    R --> T2["Tier 2 visit<br/>arterial hubs"]
+    R --> T3["Tier 3 visit<br/>least recently seen"]
+    T1 --> C["Counted at the camera's line"]
+    T2 --> C
+    T3 --> C
+    F --> C
+```
+
+Result: every camera still gets counted. Rates are computed over the time a camera was actually observed, so a camera seen 12 s at a time is not read as quiet the rest of the hour.
+
+---
+
+## ⚡ Numbers
+
+| | |
+| :--- | :--- |
+| 📹 Cameras | **96** across 6 restreamer hosts |
+| ⏱️ Detection | **~3.7 ms** per 720p frame on the ANE |
+| 🚀 Throughput | **~75 fps** total, 11 rolling visits observing |
+| 🪟 Stream slots | **12** open at once, ≤ 3 per host |
+| 🎯 Focus / rolling rate | **15 fps** / **8 fps** |
+| 🚦 Congestion labels | <0.25 **Smooth** · <0.55 **Moderate** · <0.8 **Heavy** · else **Congested** |
+
+```mermaid
+pie showData title Congestion index weights
+    "Queue (share of stream standing still)" : 40
+    "Slowness (vs the camera's own free flow)" : 45
+    "Density x slowness (lane occupancy)" : 15
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quickstart
 
-### 1. Clone & Set Up Environment
-
-```bash
-# Clone the repository
-git clone https://github.com/Subakiz/bogor_mtmc_traffic_dashboard.git
-cd bogor_mtmc_traffic_dashboard
-
-# Create and activate virtual environment (Python 3.11+ recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 2. Prepare CoreML Model (Apple Neural Engine)
-
-Export the YOLOv8 model to CoreML format targeting the Apple Neural Engine:
+macOS on Apple Silicon, Python 3.11.
 
 ```bash
-# Export YOLOv8m to CoreML format (.mlpackage)
-yolo export model=yolov8m.pt format=coreml
+python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/yolo export model=yolov8m.pt format=coreml nms=True   # → yolov8m.mlpackage
+./start.sh                                                       # dashboard at http://127.0.0.1:8000
+.venv/bin/python3.11 -m pytest -q                                # offline test suite
+.venv/bin/python3.11 scripts/export_dataset.py --start 2026-10-11 --end 2026-10-12 --bucket 15 --format csv --raw all
 ```
 
-*Note: The system automatically looks for `yolov8m.mlpackage` in the project root or `/Users/nabils/cctv_yolo_ane/yolov8m.mlpackage`.*
-
-### 3. Launch the Dashboard
-
-To run the server in the background persistently:
-
-```bash
-# Start FastAPI server with Uvicorn
-nohup uvicorn backend.server:app --host 127.0.0.1 --port 8000 > server.log 2>&1 &
-
-# Or run interactively in the terminal
-uvicorn backend.server:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Open your browser and navigate to:
-👉 **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
+> [!WARNING]
+> **The dashboard has no authentication.** `./start.sh` binds `0.0.0.0` so anyone on your LAN can open it. For local-only use run `HOST=127.0.0.1 ./start.sh`.
 
 ---
 
-## 📡 REST API Reference
+## 📚 Details
 
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/` | `GET` | Serves the interactive MTMC Traffic Dashboard web application |
-| `/api/cameras` | `GET` | Lists all 94 BSW CCTV cameras with GPS coordinates, corridor, and stream URLs |
-| `/api/cameras/{id}` | `GET` | Retrieves detailed metadata and junction info for a specific camera |
-| `/api/topology` | `GET` | Returns camera nodes, directed road graph edges, and corridor groupings |
-| `/api/stream/{id}/frame`| `GET` | Latest annotated JPEG frame; pass `?after=<X-Frame-No>` to long-poll for a newer one (204 if none within ~1 s) |
-| `/api/recent` | `GET` | Fetches recent verified vehicle sightings across Kota Bogor |
-| `/api/stats` | `GET` | Returns citywide traffic stats (sighting totals, classification breakdown) |
-| `/api/export/dataset` | `GET` | Downloads a bucketed per-camera dataset: `start`, `end`, `bucket_minutes` (1/5/15/60), `camera_ids`, `format` (csv/jsonl/parquet), `layout` (long/wide), `fill_gaps` |
-| `/api/export/raw` | `GET` | Downloads a raw table: `table` (observation_windows/sightings/cameras/analytics), `start`, `end`, `camera_ids`, `format` (csv/jsonl) |
-| `/ws/live` | `WebSocket` | Heartbeat every 2 s carrying the citywide counts and the latest sightings |
+<details>
+<summary><b>Congestion index: how a jam is told from a car park</b></summary>
 
----
+Only the *traffic stream* is judged. Each track is one of:
 
-## 🧪 Comprehensive Verification Suite
+| State | Meaning |
+| :--- | :--- |
+| **traffic** | moved ≥ 0.6 body sizes since first seen |
+| **queued** | still, but standing where moving traffic drives (after 2 s) |
+| **parked** | still ≥ 6 s and *not* in a lane |
+| **undetermined** | young and still |
 
-The repository includes a tiered test suite plus unit tests, run with pytest:
+"Where traffic drives" is a per-camera **lane map**: a decaying heat map of the ground footprints of moving vehicles (`data/traffic_lanes.npz`). Speeds and distances are in *body sizes per second*, so near and far vehicles, and different cameras, compare. Slowness is measured against each camera's own free-flow speed (p85 of its traffic speeds).
+
+Known limits: red-light stops read as queueing, and a vehicle parked inside a lane reads as queued.
+</details>
+
+<details>
+<summary><b>Counting lines and volume</b></summary>
+
+- Each camera has a **learned counting line** (`data/counting_lines.json`), in "passage" mode until it has seen 12 trajectories. A track counts when its start and current points are on opposite sides of the line and it moved ≥ 3% of the frame.
+- Crossings are stored in `observation_windows` together with the seconds observed; rates come from `crossings ÷ observed time`. Rates from < 60 s of observation are flagged `low_sample`.
+- Hand-placed lines (and `exclude` for cameras with no road, such as parks) live in `data/counting_line_overrides.json` and win over learned ones.
+- `line_quality`: `manual` · `learned` · `low` · `passage`.
+- *Sightings* (a track seen for a few frames) feed the Recent tab and raw exports, not volume.
+</details>
+
+<details>
+<summary><b>Throughput: why it is fast</b></summary>
+
+- `CoreMLDetector` calls the CoreML NMS-pipeline export directly instead of going through Ultralytics' predictor, which cost 4–7 ms of GIL-holding CPU per frame.
+- 16:9 frames use `yolov8m_384x640.mlpackage` (same detections, ~40% less ANE time); 704×576 cameras keep the 640×640 model.
+- Stream capture plays HLS out in real time against the stream clock and converts only the frames due at the target fps.
+- Rejected after measuring: `yolov8n` (finds ~33% fewer vehicles), batched/dynamic exports (fall off the ANE), a second inference thread (the ANE serialises requests).
+
+Second model export, for 16:9 cameras:
 
 ```bash
-# Run the complete test suite
-.venv/bin/python3.11 -m pytest -q
+.venv/bin/yolo export model=yolov8m.pt format=coreml imgsz=384,640 nms=True   # rename to yolov8m_384x640.mlpackage
+```
+</details>
+
+<details>
+<summary><b>REST / WebSocket API</b></summary>
+
+| Endpoint | Description |
+| :--- | :--- |
+| `GET /api/cameras` · `/api/cameras/{id}` | Camera metadata, GPS, corridor, stream URL |
+| `GET /api/cameras/counts` | Counts, per-camera rates, `citywide_vph` |
+| `GET /api/cameras/{id}/metrics` | Flow series and congestion for the Analytics tab |
+| `GET /api/cameras/{id}/typical-week` | Typical congestion per weekday and hour |
+| `GET /api/insights/citywide?days=7` | Data behind the City tab |
+| `GET /api/topology` | Camera nodes, directed edges, corridors |
+| `GET /api/stream/{id}/frame?after=<X-Frame-No>` | Annotated JPEG; long-polls ≤ 1 s, `204` if no newer frame |
+| `GET /api/stats` · `/api/recent` | Sighting totals and the latest sightings |
+| `GET /api/daemon/status` | Rolling tracker status: visits, coverage, `model_loaded` |
+| `GET /api/export/dataset` · `/raw` · `/dictionary` | CSV/JSONL export, ≤ 31 days |
+| `WS /ws/live` | Heartbeat with citywide counts and recent sightings |
+
+Video is a long-poll rather than MJPEG or WebSocket because MJPEG stalls in Safari/WebKit.
+</details>
+
+<details>
+<summary><b>Exporting data for analysis</b></summary>
+
+`scripts/export_dataset.py` (and the Export panel in the Analytics tab) writes a tidy per-camera time series: fixed WIB-aligned buckets, crossings and observed seconds prorated by overlap, veh/h overall / per class / per direction, `coverage_ratio`, length-weighted congestion and speed, and local time features with sin/cos encodings. `--seq-len/--horizon/--target` emit npz sequence tensors; Parquet needs `pyarrow`.
+
+Each camera is watched only during visits (mean coverage ~12% of a 15-minute bucket when observed), so weight or filter by `observed_s`.
+</details>
+
+<details>
+<summary><b>Project layout</b></summary>
+
+```
+backend/        server.py (FastAPI) · rolling_tracker.py · stream_capture.py · counting.py
+                database.py · dataset.py · insights.py · topology_engine.py · maintenance.py
+car_tracker/    CoreMLDetector + ByteTrack · analytics.py · congestion.py
+frontend/       index.html · app.js · city.js · styles.css   (no build step)
+data/           bogor_camera_topology.json · counting_line_overrides.json · runtime DBs
+scripts/        export_dataset.py · start_daemon.sh · stop_daemon.sh
+tests/          pytest suite (offline, writable data redirected to a temp dir)
+scrape_cctv_streams.py   re-scrape bsw.kotabogor.go.id; syncs topology JSON + DB
 ```
 
-- **Tier 1 (Core Features)**: Camera geocoding, ANE model inference, ByteTrack ID assignment, SQLite WAL persistence, FastAPI endpoints.
-- **Tier 2 (Boundary Conditions)**: Zero-detection frames, missing stream URLs, edge road topologies, arrival window bounds $[t_{min}, t_{max}]$.
-- **Tier 3 (Pairwise Combinations)**: Multi-camera transitions across various vehicle classes and weather/lighting conditions.
-- **Tier 5 (Adversarial Stress)**: Graph traversal resilience, spatiotemporal jitter, network stream dropouts, and rapid camera switching.
-
----
-
-## 🛠️ Standalone CLI Utilities
+Run under `caffeinate` with `scripts/start_daemon.sh` / `stop_daemon.sh`. Refresh the camera list with:
 
 ```bash
-# Re-scrape the latest live CCTV stream URLs from BSW Kota Bogor (also syncs topology JSON + DB)
 .venv/bin/python3.11 scrape_cctv_streams.py
 ```
+</details>
+
+<details>
+<summary><b>Troubleshooting</b></summary>
+
+- **No detections / empty roads:** `/api/daemon/status` → `model_loaded`. Without a loadable model the detector returns nothing and frames are skipped, so an outage never reads as "0 veh/h"; loading is retried every 60 s.
+- **`Errno 24` (too many open files):** `start.sh` raises `ulimit -n`; do the same if you launch uvicorn yourself.
+- **Noisy FFmpeg logs:** `OPENCV_LOG_LEVEL=ERROR` and `OPENCV_FFMPEG_LOGLEVEL=8` (set by `start.sh`).
+- **Cameras stuck on "connecting":** the municipal restreamers limit connections and some cameras are flaky; dead cameras and hosts back off with jitter.
+</details>
 
 ---
 
-## 📜 License & Credits
-
-- **Data Source**: CCTV Feeds and infrastructure provided by **Bina Sarana Wilayah (BSW) Pemerintah Kota Bogor** (`bsw.kotabogor.go.id`).
-- **AI Frameworks**: [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics), [Apple CoreML Tools](https://github.com/apple/coremltools), [ByteTrack](https://github.com/ifzhang/ByteTrack).
-- **License**: MIT License. Built for municipal traffic intelligence research and edge AI benchmarking.
+<sub>Data: CCTV feeds from **Bina Sarana Wilayah (BSW) Pemerintah Kota Bogor** (`bsw.kotabogor.go.id`). Built with [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics), [Core ML Tools](https://github.com/apple/coremltools) and [ByteTrack](https://github.com/ifzhang/ByteTrack).</sub>
