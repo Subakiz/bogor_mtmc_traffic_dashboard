@@ -1,0 +1,21 @@
+{
+  "_doc": "Hand-placed counting lines; they win over the learned line in data/counting_lines.json (backend/counting.py load_overrides). Per camera id: {\"line\": [x1, y1, x2, y2], \"segment\": true|false} in 0..1 frame coordinates (x = left->right, y = top->bottom); segment=true counts only crossings between the two endpoints, false extends the line across the frame. Direction +1 is the right-hand side of p1->p2 as seen on screen (a line drawn left to right: + = towards the camera). Or {\"exclude\": true}: no road in view, the camera records no volume. Lines placed on frames of 2026-10-15 ~13:00 WIB (.scratch/lines audit).",
+  "version": 1,
+  "193": {"line": [0.25, 0.62, 1.0, 0.62], "segment": true, "note": "Simpang Yasmin 1: junction under the flyover, learned axis is noise (coherence ~0.1, 1377 vph vs 753 at 194). Across the straight-through and right-hand flows below the barrier arc."},
+  "192": {"line": [0.0, 0.6, 0.95, 0.6], "segment": true, "note": "Simpang Manunggal: open 4-way junction (coherence ~0.25); horizontal across the junction mouth."},
+  "107": {"line": [0.05, 0.62, 0.51, 0.62], "segment": true, "note": "Djuanda arah Empang: roundabout, learned line ran through the island and buildings. Across the left carriageway, from the angkot row to the island curb (the audit's vertical x=0.45 suggestion ran along this lane)."},
+  "136": {"line": [0.05, 0.43, 0.5, 0.43], "segment": true, "note": "Pertiga Jl. Mawar arah Merdeka: learned line ran almost parallel to the road; across the left road, curb to island."},
+  "132": {"line": [0.28, 0.3, 0.6, 0.3], "segment": true, "note": "Taman Pangrango: roundabout, learned line through the central planter. Across the north arm, curb to curb."},
+  "86": {"line": [0.22, 0.62, 0.66, 0.62], "segment": true, "note": "Seketeng Surken: learned line left the frame at the bottom, missing the left lane. Curb to curb, below the parked van (at y=0.55 its box sat inside the jitter band)."},
+  "181": {"line": [0.54, 0.55, 0.98, 0.55], "segment": true, "note": "Simpang Katulampa 1: learned line ran through the food stalls. Across the road only, starting right of the stall row."},
+  "118": {"line": [0.35, 0.52, 1.0, 0.52], "segment": true, "note": "Taman Corat Coret: roundabout at a signal, learned line through the island and signal pole. Across the approach lanes right of the island."},
+  "147": {"line": [0.25, 0.88, 0.65, 0.88], "segment": true, "note": "Pasar Gunung Batu 2: hazy, the road is a small patch at the bottom centre; across it."},
+  "159": {"exclude": true, "note": "Taman Sempur Belakang: plaza with food stalls, not a road."},
+  "120": {"exclude": true, "note": "Taman Ekspresi 1: park plaza, no road."},
+  "121": {"exclude": true, "note": "Taman Heulang 4: park footpath, no road."},
+  "124": {"exclude": true, "note": "Taman Heulang 1: park lawn, no road."},
+  "126": {"exclude": true, "note": "Taman Heulang 2: playground, no road."},
+  "127": {"exclude": true, "note": "Taman Heulang 3: park, no road."},
+  "128": {"exclude": true, "note": "Taman Kencana 1: park path, no road."},
+  "129": {"exclude": true, "note": "Taman Kencana 2: park path, no road."}
+}

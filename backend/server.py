@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.config import (
     PROJECT_ROOT, DATA_DIR, FRONTEND_DIR, ENGINE_ROOT, ANALYTICS_DB_PATH, DEFAULT_MODEL_PATH,
-    COUNTING_LINES_PATH, FREE_FLOW_PATH, TRAFFIC_LANES_PATH,
+    COUNTING_LINES_PATH, COUNTING_LINE_OVERRIDES_PATH, FREE_FLOW_PATH, TRAFFIC_LANES_PATH,
     MAINTENANCE_INTERVAL_S, STATS_CACHE_TTL_S, ensure_engine_importable,
 )
 from backend.database import Database, DEFAULT_DB_PATH
@@ -211,14 +211,19 @@ def _citywide_vph(rates: Dict[int, Dict[str, Any]]) -> float:
     """Sum of vehicles/hour over Kota Bogor's junctions, counting each junction once (its busiest
     camera): cameras at one junction watch the same vehicles, so adding them would double count.
     Low-sample rates only stand in for a junction with no well-sampled camera: one crossing in a
-    6 s look reads as 600 vph and would otherwise win the max."""
+    6 s look reads as 600 vph and would otherwise win the max. Likewise rates counted without a usable
+    line (``line_quality`` passage: still learning, or flows too mixed for one line -- 193 read 1377
+    vph against 753 at 194). ``low`` lines (coherence 0.25-0.5) still count: the audit rated them
+    usable, and demoting them let a quiet camera's odd hour stand for a busy junction."""
     best: Dict[Tuple[int, ...], float] = {}
     best_low: Dict[Tuple[int, ...], float] = {}
     for cid, r in rates.items():
         if cid not in topology.cameras:      # removed camera (e.g. the dropped Tasikmalaya ones): history only
             continue
         cluster = tuple(topology.get_intra_junction_cluster(cid))
-        target = best_low if r.get("low_sample") else best
+        if r.get("line_quality") == "excluded":
+            continue
+        target = best_low if r.get("low_sample") or r.get("line_quality") == "passage" else best
         target[cluster] = max(target.get(cluster, 0.0), r["vph"])
     return round(sum(best.values()) + sum(v for c, v in best_low.items() if c not in best), 1)
 
@@ -252,6 +257,10 @@ def _compute_camera_counts(window_minutes: Optional[float], rate_window_minutes:
     top_cameras = [c for c in counts if c["total_sightings"] > 0][:10]
 
     rates = db.get_camera_rates(window_s=max(1.0, rate_window_minutes) * 60.0)
+    counting = rolling_tracker.counting
+    rates = {cid: r for cid, r in rates.items() if not counting.excluded(cid)}   # older windows
+    for cid, r in rates.items():
+        r["line_quality"] = counting.quality(cid)   # low/passage: treat the rate as low confidence
     for c in counts:
         c["rate"] = rates.get(c["camera_id"])
 
@@ -401,10 +410,13 @@ def get_camera_traffic_metrics(camera_id: int, minutes: float = 60.0, bucket_min
     metrics["camera_id"] = camera_id
     metrics["flow"] = _flow_summary(camera_id, minutes, bucket_minutes)
     metrics["rate"] = metrics["flow"]["rate"] if minutes == 60.0 else db.get_camera_rates(window_s=3600.0, camera_ids=[camera_id]).get(camera_id)
-    line = rolling_tracker.counting.line(camera_id)
+    counting = rolling_tracker.counting
+    line = counting.line(camera_id)
     metrics["counting_line"] = None if line is None else {
         "endpoints": line.endpoints(), "direction_labels": line.labels(),
     }
+    metrics["line_quality"] = counting.quality(camera_id)
+    metrics["line_coherence"] = counting.coherence(camera_id)
     return metrics
 
 
@@ -442,7 +454,8 @@ def _compute_citywide_insights(days: int) -> Dict[str, Any]:
                                      clusters={c: topology.get_intra_junction_cluster(c) for c in ids},
                                      main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH)
     rates = db.get_camera_rates(window_s=3600.0, camera_ids=ids)
-    vph = [r["vph"] for r in rates.values() if not r["low_sample"]]
+    vph = [r["vph"] for cid, r in rates.items()
+           if not r["low_sample"] and not rolling_tracker.counting.excluded(cid)]
     out["now"] = {"vph": round(statistics.median(vph), 1) if vph else None, "cameras": len(vph),
                   "typical_vph": out["hours"][out["now_hour"]]["vph"]}
     return out
@@ -472,7 +485,7 @@ def get_detector() -> ANEVehicleDetector:
 
 rolling_tracker = RollingTracker(
     db=db, topology=topology, analytics=_analytics_engine, detector_factory=get_detector,
-    counting=CountingLines(COUNTING_LINES_PATH),
+    counting=CountingLines(COUNTING_LINES_PATH, COUNTING_LINE_OVERRIDES_PATH),
 )
 
 def _draw_counting_overlay(img: np.ndarray, latest: Dict[str, Any]) -> None:
@@ -486,7 +499,7 @@ def _draw_counting_overlay(img: np.ndarray, latest: Dict[str, Any]) -> None:
     if labels:
         rows.append(f"{labels[0]}: {latest.get('counted_pos', 0)}   {labels[1]}: {latest.get('counted_neg', 0)}")
     else:
-        rows.append("learning counting line...")
+        rows.append("not counted: no road in view" if latest.get("excluded") else "learning counting line...")
     bw, bh = 330, 18 * len(rows) + 12
     cv2.rectangle(img, (15, h - bh - 15), (15 + bw, h - 15), (15, 15, 18), -1)
     cv2.rectangle(img, (15, h - bh - 15), (15 + bw, h - 15), (0, 230, 255), 1)

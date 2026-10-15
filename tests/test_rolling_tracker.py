@@ -7,6 +7,9 @@ detector that finds a red "vehicle" patch in each frame, so scheduling, counting
 deduplication and focus handling are tested without CoreML or the network.
 """
 
+import json
+import os
+import tempfile
 import threading
 import time
 import unittest
@@ -530,6 +533,28 @@ class VolumeCountingTest(TrackerTestBase):
         self.assertAlmostEqual(rates[1]["vph"], round(vehicles / obs * 3600, 1), places=1)
         self.assertEqual(rates[2]["vph"], 0.0)
         self.assertNotIn(3, rates)
+
+    def test_excluded_camera_records_no_volume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "overrides.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"1": {"exclude": True}}, f)
+            self.make({1: passing_traffic, 2: passing_traffic, 3: None}, max_open_streams=1,
+                      dwell_s={1: 12.0, 2: 12.0, 3: 12.0}, counting=counting.CountingLines(None, path))
+            self.run_for(30.0, step=0.1)
+        self.assertEqual(self.windows(1), [], "no observation windows: not counted, rather than 0 vph")
+        self.assertEqual(self.tracker._counted.get(1, 0), 0)
+        self.assertGreater(len(self.windows(2)), 0)
+        self.assertGreater(self.tracker._counted.get(2, 0), 0)
+        self.assertEqual(self.analytics.crossings.get(1, 0), 0)
+
+    def test_counting_learns_the_frame_aspect(self):
+        self.make({1: passing_traffic}, rolling_enabled=False, focus_ttl_s=1e9)
+        for t in range(20):
+            self.tracker.set_focus(1)
+            self.tracker.tick(self.t0 + t * 0.1)
+        frame = self.streams[1].get_new_frame()[2]
+        self.assertAlmostEqual(self.tracker.counting.model(1).aspect, frame.shape[1] / frame.shape[0])
 
     def test_analytics_is_told_about_every_counting_line_crossing(self):
         self.make({1: passing_traffic, 2: static_car, 3: None}, max_open_streams=1,

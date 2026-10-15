@@ -133,9 +133,10 @@ def _col(description: str, dtype: str, unit: Optional[str] = None, nullable: boo
     return {"description": description, "unit": unit, "dtype": dtype, "nullable": nullable, "group": group}
 
 
-_DIRECTION_NOTE = ("Direction is relative to each camera's learned counting line (+ = along the line's "
-                   "unit normal, the dominant direction of travel in image terms), so it is comparable "
-                   "within one camera, not across cameras.")
+_DIRECTION_NOTE = ("Direction is relative to each camera's counting line (learned, or placed by hand for "
+                   "junctions in data/counting_line_overrides.json): + is the side the learned dominant "
+                   "direction of travel points to (kept fixed as the line refits), so it is comparable within "
+                   "one camera, not across cameras, and says nothing fixed about 'towards camera'.")
 
 # Column order of the long layout (one row per camera x bucket).
 DATASET_COLUMNS: Dict[str, Dict[str, Any]] = {
@@ -1221,6 +1222,9 @@ CAVEATS = [
     "the bucket or the metric was not recorded (speed in body sizes/s and queue share exist only for windows "
     "recorded after they were introduced).",
     "Counting direction (vph_dir_pos/neg) is relative to each camera's own counting line.",
+    "Methodology break at the October 2026 counting-line rework for some cameras only: junction cameras got "
+    "hand-placed lines (data/counting_line_overrides.json), cameras whose traffic has no dominant axis count in "
+    "passage mode, and non-road cameras (parks, 159) stopped recording volume. Other cameras keep their lines.",
     "Buckets are aligned to local wall-clock time (Asia/Jakarta, WIB, UTC+7, no DST); time-of-day features use "
     "that clock. Only buckets lying completely inside [start, end) are produced.",
     _BLOB_NOTE,

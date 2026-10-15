@@ -13,6 +13,7 @@ _TMP = tempfile.mkdtemp(prefix="cctv-tests-")
 for _var, _name in (("TRAFFIC_DB_PATH", "traffic_db.sqlite"),
                     ("ANALYTICS_DB_PATH", "traffic_timeseries.db"),
                     ("COUNTING_LINES_PATH", "counting_lines.json"),
+                    ("COUNTING_LINE_OVERRIDES_PATH", "counting_line_overrides.json"),   # absent: no overrides
                     ("FREE_FLOW_PATH", "free_flow_speeds.json"),
                     ("TRAFFIC_LANES_PATH", "traffic_lanes.npz")):
     os.environ[_var] = os.path.join(_TMP, _name)
