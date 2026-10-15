@@ -1024,6 +1024,7 @@ class RollingTracker:
                     "detections": detections, "ane_ms": ane_ms, "timestamp": now,
                     "line": line.endpoints() if line else None,
                     "line_labels": line.labels() if line else None,
+                    "excluded": self.counting.excluded(session.camera_id),
                     "counted_total": session.counted_total,
                     "counted_pos": session.counted_pos, "counted_neg": session.counted_neg,
                 }
@@ -1032,6 +1033,7 @@ class RollingTracker:
     def _update_tracks(self, session: _Session, frame: np.ndarray,
                        detections: List[Dict[str, Any]], now: float) -> None:
         height, width = frame.shape[:2]
+        self.counting.set_aspect(session.camera_id, width / max(1, height))
         model = self.counting.model(session.camera_id)
         for det in detections:
             tid = int(det["track_id"])
@@ -1092,7 +1094,8 @@ class RollingTracker:
         if not session.win_start:
             return
         observed = session.last_frame_ts - session.win_start
-        if observed >= MIN_WINDOW_S:
+        # An excluded camera (no road in view) records no volume at all, not "0 vph".
+        if observed >= MIN_WINDOW_S and not self.counting.excluded(session.camera_id):
             row = dict(session.win)
             row.update(camera_id=session.camera_id, start_ts=session.win_start, end_ts=session.last_frame_ts,
                        start_iso=_iso(session.win_start), observed_s=round(observed, 2), kind=session.kind)

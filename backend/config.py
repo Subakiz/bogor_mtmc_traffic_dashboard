@@ -25,6 +25,9 @@ WIDE_MODEL_PATH = os.environ.get("WIDE_MODEL", str(ENGINE_ROOT / "yolov8m_384x64
 # touches the live databases while the server runs).
 ANALYTICS_DB_PATH = os.environ.get("ANALYTICS_DB_PATH") or str(DATA_DIR / "traffic_timeseries.db")
 COUNTING_LINES_PATH = os.environ.get("COUNTING_LINES_PATH") or str(DATA_DIR / "counting_lines.json")
+# Hand-placed counting lines / excluded cameras (git-tracked, read-only); win over learned lines.
+COUNTING_LINE_OVERRIDES_PATH = (os.environ.get("COUNTING_LINE_OVERRIDES_PATH")
+                                or str(DATA_DIR / "counting_line_overrides.json"))
 FREE_FLOW_PATH = os.environ.get("FREE_FLOW_PATH") or str(DATA_DIR / "free_flow_speeds.json")
 TRAFFIC_LANES_PATH = os.environ.get("TRAFFIC_LANES_PATH") or str(DATA_DIR / "traffic_lanes.npz")
 

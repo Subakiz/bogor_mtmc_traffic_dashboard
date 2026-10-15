@@ -12,6 +12,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 import backend.server as server
+from backend.counting import CountingLine
 from backend.database import Database
 from backend.dataset import DatasetStream, flow_series
 
@@ -67,6 +68,34 @@ class CitywideRateTest(unittest.TestCase):
     def test_removed_cameras_are_not_citywide(self):
         self.assertNotIn(1001, server.topology.cameras)            # a dropped Tasikmalaya camera
         self.assertEqual(server._citywide_vph({167: {"vph": 300.0}, 1001: {"vph": 500.0}}), 300.0)
+
+    def test_lineless_rates_only_stand_in_and_excluded_cameras_are_skipped(self):
+        cluster = server.topology.get_intra_junction_cluster(193)
+        self.assertIn(194, cluster)                            # Simpang Yasmin
+        rates = {193: {"vph": 1377.0, "line_quality": "passage"}, 194: {"vph": 753.0, "line_quality": "learned"}}
+        self.assertEqual(server._citywide_vph(rates), 753.0)
+        self.assertEqual(server._citywide_vph({193: {"vph": 1377.0, "line_quality": "passage"}}), 1377.0)
+        rates[193]["line_quality"] = "low"                     # flagged, but still counts
+        self.assertEqual(server._citywide_vph(rates), 1377.0)
+        self.assertEqual(server._citywide_vph({159: {"vph": 46.0, "line_quality": "excluded"}}), 0.0)
+
+    def test_counts_endpoint_flags_line_quality_and_drops_excluded_cameras(self):
+        now = time.time()
+        server.db.insert_observation_window(window(193, now - 30, 120.0, 40, line=40))
+        server.db.insert_observation_window(window(159, now - 30, 120.0, 2, line=2))
+        counting = server.rolling_tracker.counting
+        try:
+            counting._overrides[159] = {"exclude": True}
+            counting.model(193).manual = CountingLine.through((0.25, 0.62), (1.0, 0.62), True)
+            server._stats_cache.clear()
+            data = TestClient(server.app).get("/api/cameras/counts").json()
+        finally:
+            counting._overrides.pop(159, None)
+            counting.model(193).manual = None
+            server._stats_cache.clear()
+        rates = data["camera_rates"]
+        self.assertEqual(rates["193"]["line_quality"], "manual")
+        self.assertNotIn("159", rates)
 
     def test_recent_limit_is_clamped(self):
         client = TestClient(server.app)
