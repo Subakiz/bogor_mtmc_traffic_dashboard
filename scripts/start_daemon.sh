@@ -26,6 +26,14 @@ fi
 # Only the process LISTENING on the port: a plain `lsof -ti :8000` also lists every client
 # connected to it (e.g. a browser tab), which made the kill fail -- or hit the browser instead.
 PIDS=$(lsof -ti tcp:8000 -sTCP:LISTEN 2>/dev/null || true)
+# Never signal an unrelated program that happens to hold the port.
+for pid in $PIDS; do
+    case "$(ps -o command= -p "$pid" 2>/dev/null)" in
+        *backend/server.py*|*backend.server*) ;;
+        *) echo "Port 8000 is held by another program (PID $pid: $(ps -o comm= -p "$pid" 2>/dev/null)), not this server. Not touching it; free the port first." >&2
+           exit 1 ;;
+    esac
+done
 if [ -n "$PIDS" ]; then
     echo "Stopping the server on port 8000 (PID: $PIDS)..."
     kill -TERM $PIDS 2>/dev/null || true

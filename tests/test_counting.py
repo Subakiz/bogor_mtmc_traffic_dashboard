@@ -184,6 +184,26 @@ class CountingLinesPersistenceTest(unittest.TestCase):
             self.assertAlmostEqual(restored.nx, lines.line(167).nx)
             self.assertIsNone(CountingLines(path).line(79))
 
+    def test_corrupt_file_is_moved_aside_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "lines.json")
+            with open(path, "wb") as f:
+                f.write(b"{not json")
+            lines = CountingLines(path)
+            self.assertEqual(lines._models, {})
+            with open(path + ".bad", "rb") as f:
+                self.assertEqual(f.read(), b"{not json")
+            self.assertFalse(os.path.exists(path))
+
+    def test_failed_save_stays_dirty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = CountingLines(os.path.join(tmp, "missing-dir", "lines.json"))
+            for start, end in HORIZONTAL:
+                lines.learn(167, start, end)
+            with self.assertRaises(OSError):
+                lines.save()
+            self.assertTrue(lines._dirty)
+
     def test_ground_point_is_bottom_centre(self):
         self.assertEqual(ground_point((100, 50, 300, 250), 400, 500), (0.5, 0.5))
 

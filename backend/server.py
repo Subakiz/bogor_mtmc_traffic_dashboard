@@ -16,8 +16,10 @@ import time
 import asyncio
 import statistics
 import functools
+import socket
 import threading
-from typing import Optional, List, Dict, Any, Tuple
+from urllib.parse import urlsplit
+from typing import Annotated, Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
 # Maximize file descriptor limit to avoid Errno 24 with CoreML / OpenCV / HLS sockets
@@ -30,10 +32,11 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, Response
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 import cv2
 import numpy as np
 
@@ -86,6 +89,28 @@ app.add_middleware(_RevalidatePageAssets)
 # JSON (topology, cameras, counts) compresses ~8x; JPEG frames and the MJPEG stream are left alone.
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5,
                    exclude_content_types=DEFAULT_EXCLUDED_CONTENT_TYPES + ("multipart/x-mixed-replace",))
+
+
+
+def _allowed_hosts() -> List[str]:
+    """Host names this machine answers to. The server has no auth and can listen on the LAN, so a
+    page on another site (DNS rebinding) must not be able to read it under its own host name."""
+    hosts = {"localhost", "127.0.0.1", "[::1]", socket.gethostname()}
+    addrs = []
+    try:
+        addrs += [info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None)]
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:   # no packet is sent: picks the default-route IP
+            sock.connect(("10.255.255.255", 1))
+            addrs.append(sock.getsockname()[0])
+    except OSError:
+        pass
+    hosts.update(f"[{a}]" if ":" in a else a for a in addrs)   # IPv6 literals are bracketed in a Host header
+    hosts.update(h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip())
+    return sorted(h.lower() for h in hosts)   # Host and Origin arrive lower-case
+
+
+ALLOWED_HOSTS = _allowed_hosts()   # computed once: restart after the LAN address changes
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)   # added last = outermost
 
 # Mount frontend static directory
 FRONTEND_DIR.mkdir(exist_ok=True)
@@ -229,12 +254,14 @@ def _citywide_vph(rates: Dict[int, Dict[str, Any]]) -> float:
 
 
 @app.get("/api/cameras/counts")
-def get_camera_counts(window_minutes: Optional[float] = None, rate_window_minutes: float = 60.0):
+def get_camera_counts(window_minutes: Annotated[Optional[float], Query(ge=0, le=1440)] = None,
+                      rate_window_minutes: Annotated[float, Query(ge=0, le=1440)] = 60.0):
     """
     Returns live vehicle counts across all BSW CCTV cameras in Kota Bogor.
     Supports optional temporal filtering via window_minutes (e.g. 5, 15, 60 min).
     Traffic volume comes as rates (``camera_rates``): vehicles/hour from counting-line crossings
     over the time each camera was actually observed in the last ``rate_window_minutes``.
+    Both windows are limited to one day (422 beyond, also for NaN): each distinct value is a cache key.
     Cached for a few seconds (STATS_CACHE_TTL_S) and shared by all clients.
     """
     return _stats_cache.get(("counts", window_minutes, rate_window_minutes),
@@ -361,6 +388,11 @@ def _heartbeat_text() -> str:
 
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
+    origin = websocket.headers.get("origin")   # browsers always send it; a page on another site must not listen in
+    host = (urlsplit(origin).hostname or "") if origin is not None else None
+    if host is not None and host not in ALLOWED_HOSTS and f"[{host}]" not in ALLOWED_HOSTS:
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     try:
         while True:
@@ -630,6 +662,8 @@ async def get_single_annotated_frame(camera_id: int, after: Optional[int] = None
 
 # ── Data export for further analysis (backend/dataset.py; CLI: scripts/export_dataset.py) ──────
 EXPORT_MAX_DAYS = 31
+EXPORT_MAX_ROWS = 2_000_000                    # cameras x buckets; 1-min buckets over 31 days would be ~4.3M
+_export_slots = threading.Semaphore(2)         # exports are full scans: at most two at once
 _EXPORT_MEDIA = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson"}
 
 
@@ -657,6 +691,28 @@ def _export_cameras(camera_ids: Optional[str]) -> Optional[List[int]]:
         raise HTTPException(status_code=400, detail="camera_ids must be comma-separated integers")
 
 
+def _export_slot_or_429() -> None:
+    if not _export_slots.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="an export is already running; try again when it has finished")
+
+
+def _export_error(exc: BaseException) -> BaseException:
+    """The HTTP error for a failed export setup (anything unexpected passes through as it is)."""
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, FileNotFoundError):
+        return HTTPException(status_code=503, detail=str(exc))
+    return exc
+
+
+def _release_after(chunks):
+    """Hand the export slot back when the stream ends, fails or the client disconnects."""
+    try:
+        yield from chunks
+    finally:
+        _export_slots.release()
+
+
 def _export_response(chunks, fmt: str, name: str, start_ts: float, end_ts: float) -> StreamingResponse:
     from backend import dataset
     stamp = lambda ts: dataset.to_local_iso(ts)[:16].replace(":", "")   # noqa: E731
@@ -677,15 +733,21 @@ def export_dataset(start: Optional[str] = None, end: Optional[str] = None, bucke
     if format not in _EXPORT_MEDIA:
         raise HTTPException(status_code=400, detail="format must be csv or jsonl (Parquet: scripts/export_dataset.py)")
     start_ts, end_ts = _export_range(start, end)
+    cameras = _export_cameras(camera_ids)
+    if bucket_minutes > 0:
+        rows = (len(cameras) if cameras else len(topology.cameras)) * (end_ts - start_ts) / (bucket_minutes * 60.0)
+        if rows > EXPORT_MAX_ROWS:
+            raise HTTPException(status_code=413, detail=f"about {rows:,.0f} rows requested (limit {EXPORT_MAX_ROWS:,}); "
+                                                        "use a shorter range, fewer cameras or larger buckets")
+    _export_slot_or_429()
     try:
-        stream = dataset.build_dataset(start_ts, end_ts, bucket_minutes, camera_ids=_export_cameras(camera_ids),
+        stream = dataset.build_dataset(start_ts, end_ts, bucket_minutes, camera_ids=cameras,
                                        fill_gaps=fill_gaps, main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH,
                                        layout=layout, value=value)
-        chunks = dataset.iter_text(stream, format)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        chunks = _release_after(dataset.iter_text(stream, format))
+    except BaseException as exc:
+        _export_slots.release()
+        raise _export_error(exc)
     return _export_response(chunks, format, f"traffic_{layout}_{int(bucket_minutes)}min", start_ts, end_ts)
 
 
@@ -697,14 +759,14 @@ def export_raw_table(table: str, start: Optional[str] = None, end: Optional[str]
     if format not in _EXPORT_MEDIA:
         raise HTTPException(status_code=400, detail="format must be csv or jsonl")
     start_ts, end_ts = _export_range(start, end)
+    _export_slot_or_429()
     try:
         stream = dataset.iter_raw(table, start_ts, end_ts, camera_ids=_export_cameras(camera_ids),
                                   main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH)
-        chunks = dataset.iter_text(stream, format)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        chunks = _release_after(dataset.iter_text(stream, format))
+    except BaseException as exc:
+        _export_slots.release()
+        raise _export_error(exc)
     return _export_response(chunks, format, table, start_ts, end_ts)
 
 
