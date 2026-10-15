@@ -30,7 +30,12 @@ data/*.sqlite
 data/*.sqlite-*
 data/counting_lines.json
 data/free_flow_speeds.json
+data/traffic_lanes.npz
 data/*.jpg
 data/*.png
 scratch_*
 test_cctv_frame.jpg
+
+# Database backups and analysis exports (scripts/export_dataset.py, /api/export/*)
+data/backups/
+data/exports/

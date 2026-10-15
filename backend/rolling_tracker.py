@@ -51,12 +51,11 @@ from urllib.parse import urlparse
 import numpy as np
 
 from backend.config import (
-    DWELL_TIER1_S, DWELL_TIER2_S, DWELL_TIER3_S, FOCUS_FPS, FOCUS_TTL_S, MAX_FOCUS_CAMERAS,
+    DEFAULT_ARTERIAL_HUBS, DWELL_TIER1_S, DWELL_TIER2_S, DWELL_TIER3_S, FOCUS_FPS, FOCUS_TTL_S, MAX_FOCUS_CAMERAS,
     MAX_OPEN_STREAMS, MAX_STREAMS_PER_HOST, ROLLING_ENABLED, ROLLING_FPS, TIER1_REVISIT_S,
     TIER2_REVISIT_S,
 )
 from backend.counting import CountingLines, TrackCounter, ground_point
-from backend.indexing_daemon import DEFAULT_ARTERIAL_HUBS
 
 logger = logging.getLogger("rolling_tracker")
 
@@ -358,6 +357,7 @@ class _Session:
     last_probe: float = 0.0
     promoted_at: float = 0.0     # when a standby became an active visit
     active_since: float = 0.0    # when the session took its active slot (trim / ordering)
+    undetected_ts: float = 0.0   # last frame the stream delivered but the detector could not process
 
 
 class RollingTracker:
@@ -750,7 +750,8 @@ class RollingTracker:
         """Backs a camera off for longer after each consecutive failure, with jitter so cameras
         that failed together (e.g. a restreamer outage) don't all retry at the same moment."""
         streak = self._fail_streak[camera_id] = self._fail_streak.get(camera_id, 0) + 1
-        backoff = min(FAILED_BACKOFF_S * 2 ** (streak - 1), MAX_FAILED_BACKOFF_S) * random.uniform(0.8, 1.2)
+        # Exponent capped: 2.0 ** n overflows (OverflowError) once a dead camera fails ~1025 times.
+        backoff = min(FAILED_BACKOFF_S * 2 ** min(streak - 1, 16), MAX_FAILED_BACKOFF_S) * random.uniform(0.8, 1.2)
         self._failed_until[camera_id] = max(self._failed_until.get(camera_id, 0.0), now + backoff)
         if streak == 1:
             logger.warning(f"Camera {camera_id} unreachable ({reason}); backing off, retries get less frequent.")
@@ -947,7 +948,10 @@ class RollingTracker:
                 waited = now - since
                 limit = FIRST_FRAME_TIMEOUT_S if opened is not None else REQUEST_TIMEOUT_S
                 if waited > limit:
-                    self._mark_failed(cid, now, "no video within the timeout")
+                    if not s.undetected_ts:
+                        self._mark_failed(cid, now, "no video within the timeout")
+                    # else: the stream delivered frames and the model is down; backing the camera
+                    # off would keep it dark long after the model recovers.
                     done = True
             elif now - s.started >= s.dwell_s or now - s.last_frame_ts > STALL_TIMEOUT_S:
                 done = True
@@ -963,6 +967,15 @@ class RollingTracker:
             return 0
         ok, seq, frame = cap.get_new_frame(session.last_seq, timeout=0.0)
         if not ok or frame is None:
+            return 0
+        detector = self.detector
+        detections = detector.detect(frame, camera_azimuth_deg=session.azimuth, timestamp=now,
+                                     camera_id=session.camera_id)
+        if detections is None:
+            # Model not loaded or inference failed: the frame was not observed, so it must not
+            # credit the window (it read as 0 vph and an empty, Smooth road).
+            session.last_seq = seq
+            session.undetected_ts = now
             return 0
         if session.started and session.win_start and now - session.last_frame_ts > STALL_TIMEOUT_S:
             # The stream stalled: close the window at the last frame before the gap, so an outage
@@ -980,9 +993,6 @@ class RollingTracker:
         session.frames += 1
         self._frames_processed += 1
 
-        detector = self.detector
-        detections = detector.detect(frame, camera_azimuth_deg=session.azimuth, timestamp=now,
-                                     camera_id=session.camera_id)
         ane_ms = float(getattr(detector, "last_inference_ms", 0.0))
         self._update_tracks(session, frame, detections, now)
 

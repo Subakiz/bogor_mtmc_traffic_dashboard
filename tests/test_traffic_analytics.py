@@ -168,7 +168,7 @@ class TestTrafficAnalyticsEngine(unittest.TestCase):
             self.engine.record_frame(cam_id, cam_name, t + i, {"car": 1, "motorcycle": 1}, dets, (720, 1280))
 
         # Query time-series from DB
-        records = self.engine.export_timeseries_dataset(camera_id=cam_id, window_seconds=10)
+        records = self.engine.db.query_timeseries(camera_id=cam_id)
         self.assertGreaterEqual(len(records), 1)
 
         rec = records[0]
@@ -178,39 +178,6 @@ class TestTrafficAnalyticsEngine(unittest.TestCase):
         self.assertGreater(rec["flow_rate_vpm"], 0.0)
         self.assertIn("sin_hour", rec)
         self.assertIn("cos_hour", rec)
-
-    def test_csv_export(self):
-        """Verify CSV export contains correct headers and values."""
-        insert_fixture_windows(self.engine)
-        csv_str = self.engine.export_csv_str(camera_id=167, window_seconds=60)
-        lines = csv_str.strip().splitlines()
-        self.assertGreater(len(lines), 2)
-
-        headers = lines[0].split(",")
-        self.assertIn("timestamp_iso", headers)
-        self.assertIn("total_volume", headers)
-        self.assertIn("car_volume", headers)
-        self.assertIn("motorcycle_volume", headers)
-        self.assertIn("flow_rate_vpm", headers)
-        self.assertIn("congestion_index", headers)
-        self.assertIn("sin_hour", headers)
-
-    def test_lstm_sequence_creation(self):
-        """Verify transformation of time-series into 3D LSTM tensor arrays (X, y)."""
-        insert_fixture_windows(self.engine)
-        records = self.engine.export_timeseries_dataset(camera_id=167, window_seconds=60)
-        seq_len = 10
-        horizon = 1
-
-        seq_dict = self.engine.create_lstm_sequences(records, seq_len=seq_len, horizon=horizon)
-        X = seq_dict["X"]
-        y = seq_dict["y"]
-
-        self.assertEqual(len(X.shape), 3)  # (N, seq_len, features)
-        self.assertEqual(X.shape[1], seq_len)
-        self.assertEqual(y.shape[1], horizon)
-        self.assertEqual(X.shape[0], len(records) - seq_len - horizon + 1)
-        self.assertGreater(X.shape[2], 5)  # Multiple ML features
 
 
 class TestCongestionModel(unittest.TestCase):
@@ -339,7 +306,7 @@ class TestCongestionModel(unittest.TestCase):
         self.run_scene(70, flowing, range(1, 11))
         self.assertIn(self.CAM, self.engine._free_flow_bps)
         self.assertGreater(self.engine._free_flow_bps[self.CAM], 0.5)
-        rows = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=60)
+        rows = self.engine.db.query_timeseries(camera_id=self.CAM)
         self.assertTrue(rows)
         self.assertLess(rows[-1]["congestion_index"], 0.15)
 
@@ -416,12 +383,6 @@ class TestCrossingVolume(unittest.TestCase):
         self.assertEqual((never["live"], never["last_measured"], never["live_age_s"]), ({}, {}, None))
         self.assertNotIn(4242, engine._history_60s)   # an unknown camera leaves no state behind
 
-    def test_csv_export_carries_the_volume_basis(self):
-        self.feed({2: "car"})
-        csv_text = self.engine.export_csv_str(camera_id=self.CAM)
-        self.assertIn("volume_basis", csv_text.splitlines()[0])
-        self.assertIn("crossings", csv_text)
-
     def test_existing_database_is_migrated_and_old_rows_are_marked_as_track_based(self):
         path = str(Path(self.temp_dir.name) / "old.db")
         conn = sqlite3.connect(path)
@@ -439,22 +400,6 @@ class TestCrossingVolume(unittest.TestCase):
         db = TrafficAnalyticsEngine(db_path=path).db
         row = db.query_timeseries(camera_id=5)[0]
         self.assertEqual((row["total_volume"], row["volume_basis"]), (99, "tracks"))
-
-    def test_congestion_series_buckets_weight_windows_by_length(self):
-        for ts, win, cong in ((1000.0, 10, 0.2), (1100.0, 30, 0.6), (1400.0, 60, 0.1)):
-            self.engine.db.insert_metrics(TimeWindowMetrics(
-                camera_id=7, camera_name="C", timestamp=ts, timestamp_iso="x", window_seconds=win,
-                total_volume=1, car_volume=1, motorcycle_volume=0, truck_volume=0, bus_volume=0,
-                avg_active_vehicles=1.0, peak_active_vehicles=1, occupancy_ratio=0.1, avg_speed_px_s=1.0,
-                stopped_vehicles=0, congestion_index=cong, avg_flow_dx=0.0, avg_flow_dy=0.0,
-                flow_rate_vpm=1.0, flow_rate_vph=60.0, hour=0, minute=0, day_of_week=0, is_weekend=0,
-                sin_hour=0.0, cos_hour=1.0, sin_dow=0.0, cos_dow=1.0, volume_basis="crossings"))
-        series = self.engine.get_congestion_series(7, minutes=60, bucket_minutes=5, now=1500.0)
-        self.assertEqual([p["t"] for p in series], [900.0, 1200.0])
-        self.assertAlmostEqual(series[0]["congestion"], round((0.2 * 10 + 0.6 * 30) / 40, 3), places=3)
-        self.assertAlmostEqual(series[1]["congestion"], 0.1, places=3)
-        self.assertEqual(self.engine.get_first_timestamp(7), 1000.0)
-        self.assertIsNone(self.engine.get_first_timestamp(8))
 
 
 def window(camera_id, end, seconds, volume=0, congestion=0.1, basis="crossings", **kw):
@@ -530,7 +475,6 @@ class TestPersistentConnection(unittest.TestCase):
             try:
                 for _ in range(60):
                     self.db.query_timeseries(limit=50)
-                    self.db.congestion_series(1, 0.0, 60.0)
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
@@ -541,8 +485,6 @@ class TestPersistentConnection(unittest.TestCase):
             t.join(20)
         self.assertEqual(errors, [])
         self.assertEqual(len(self.db.query_timeseries(limit=1000)), 180)
-        self.assertEqual({r["camera_id"]: r["cumulative_volume"] for r in self.db.get_cumulative_summary()},
-                         {1: 60, 2: 60, 3: 60})
 
 
 class TestLockDiscipline(unittest.TestCase):
@@ -662,43 +604,8 @@ class TestWindowQueries(unittest.TestCase):
             self.put(100 * (i + 1), secs, 1, 0.1)
         rows = self.engine.db.query_timeseries(camera_id=self.CAM)
         self.assertEqual([r["window_seconds"] for r in rows], [2, 12, 37, 60, 62])
-        self.assertEqual(len(self.engine.export_timeseries_dataset(camera_id=self.CAM)), 5)
-        self.assertEqual(len(self.engine.export_csv_str(camera_id=self.CAM).strip().splitlines()), 6)
         newest = self.engine.db.query_timeseries(camera_id=self.CAM, limit=2, order_asc=False)
         self.assertEqual([r["window_seconds"] for r in newest], [62, 60])
-
-    def test_bucketed_query_weights_windows_by_length(self):
-        self.put(10, 10, 2, 0.2, speed=20.0)
-        self.put(40, 30, 4, 0.6, speed=40.0)
-        self.put(100, 20, 1, 0.1, speed=30.0)
-        rows = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=60)
-        self.assertEqual(len(rows), 2)
-        a, b = rows
-        self.assertEqual((a["timestamp"], a["window_seconds"], a["observed_seconds"], a["n_windows"]), (self.t0 + 60, 60, 40.0, 2))
-        self.assertEqual(a["total_volume"], 6)
-        self.assertAlmostEqual(a["congestion_index"], (0.2 * 10 + 0.6 * 30) / 40, places=3)
-        self.assertAlmostEqual(a["avg_speed_px_s"], (20 * 10 + 40 * 30) / 40, places=2)
-        self.assertAlmostEqual(a["flow_rate_vpm"], 6 / 40 * 60, places=2)        # per OBSERVED second, not per bucket second
-        self.assertAlmostEqual(a["flow_rate_vph"], 6 / 40 * 3600, places=1)
-        self.assertEqual((a["volume_basis"], a["hour"], a["minute"]), ("crossings", 8, 0))     # local time of the bucket start
-        self.assertEqual(a["timestamp_local_iso"], datetime.fromtimestamp(self.t0 + 60, WIB).isoformat())
-        self.assertEqual((b["timestamp"], b["total_volume"], b["observed_seconds"]), (self.t0 + 120, 1, 20.0))
-
-    def test_bucketed_query_marks_mixed_volume_bases_and_ignores_zero_speed(self):
-        self.put(10, 10, 2, 0.2, speed=0.0, occupancy=0.0)
-        self.put(20, 10, 3, 0.2, speed=50.0, basis="tracks")
-        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=60)
-        self.assertEqual(row["volume_basis"], "mixed")
-        self.assertAlmostEqual(row["avg_speed_px_s"], 50.0, places=2, msg="a window without moving traffic has no speed")
-
-    def test_bucket_edges_are_local_midnight_aligned(self):
-        self.put(30, 10, 1, 0.1)
-        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=3600)
-        self.assertEqual(row["timestamp"], wib("2026-10-11T09:00:00"))
-        (row,) = self.engine.export_timeseries_dataset(camera_id=self.CAM, window_seconds=86400)
-        self.assertEqual(row["timestamp"], wib("2026-10-12T00:00:00"))
-        with self.assertRaises(ValueError):
-            self.engine.db.query_timeseries(window_seconds=0)
 
     def test_time_filters_and_camera_filter(self):
         self.put(10, 10, 1, 0.1)
@@ -707,17 +614,6 @@ class TestWindowQueries(unittest.TestCase):
         self.assertEqual(len(self.engine.db.query_timeseries(start_ts=self.t0 + 100)), 1)
         self.assertEqual(len(self.engine.db.query_timeseries(end_ts=self.t0 + 100)), 2)
         self.assertEqual(len(self.engine.db.query_timeseries()), 3)
-
-    def test_camera_summary_uses_windows_of_any_length(self):
-        for i in range(10):
-            self.put(20 * (i + 1), 12, 3, 0.4, speed=45.0)
-        summary = self.engine.get_camera_summary(self.CAM)
-        self.assertAlmostEqual(summary["recent_avg_flow_rate_vpm"], 30 / 120 * 60, places=2)
-        self.assertAlmostEqual(summary["recent_avg_speed_px_s"], 45.0, places=2)
-        self.assertAlmostEqual(summary["recent_avg_congestion_index"], 0.4, places=3)
-        self.assertEqual(summary["recent_congestion_label"], "Moderate")
-        self.assertEqual(self.engine.get_camera_summary(404)["recent_avg_flow_rate_vpm"], 0.0)
-
 
 class TestVolumeBasisFollowsTheCaller(unittest.TestCase):
     """An empty window carries the basis of the caller that reports crossings, not of its contents."""

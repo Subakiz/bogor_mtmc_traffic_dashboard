@@ -4,7 +4,7 @@ Scrapes every CCTV camera and its live HLS (.m3u8) stream from BSW Kota Bogor
 (https://bsw.kotabogor.go.id/cctv) and keeps the project's copies in sync.
 
 Writes (paths relative to this file, not the working directory):
-  cctv_streams.json            engine stream list (car_tracker.load_cctv_streams)
+  cctv_streams.json            engine stream list (scraper output; the dashboard does not read it)
   data/cctv_streams.json/.csv  same list for the dashboard data folder
 
 and, unless --no-sync is given, updates the dashboard's view of each camera:
@@ -115,6 +115,12 @@ def write_lists(results: List[Dict]) -> None:
         writer.writerows(results)
 
 
+def _fetch_failed(r: Dict) -> bool:
+    """The detail page could not be fetched: the result says nothing about the stream, so a
+    transient error must not wipe a working stream URL."""
+    return str(r.get("status", "")).startswith("error")
+
+
 def sync_topology(results: List[Dict]) -> Dict[str, List[int]]:
     with open(TOPOLOGY_JSON, "r", encoding="utf-8") as f:
         topo = json.load(f)
@@ -128,8 +134,11 @@ def sync_topology(results: List[Dict]) -> Dict[str, List[int]]:
                 removed.append(node["id"])
             continue
         before = (node.get("stream_url"), node.get("name"), node.get("status"))
-        node.update({"stream_url": r["stream_url"], "embed_url": r["embed_url"],
-                     "detail_url": r["detail_url"], "name": r["name"], "status": r["status"]})
+        if _fetch_failed(r):
+            node.update({"detail_url": r["detail_url"], "name": r["name"]})
+        else:
+            node.update({"stream_url": r["stream_url"], "embed_url": r["embed_url"],
+                         "detail_url": r["detail_url"], "name": r["name"], "status": r["status"]})
         if (node["stream_url"], node["name"], node["status"]) != before:
             changed.append(node["id"])
     topo.setdefault("metadata", {})["streams_scraped_at"] = datetime.now(timezone.utc).isoformat()
@@ -149,6 +158,9 @@ def sync_database(results: List[Dict], removed: List[int]) -> int:
         with conn:  # commits, or rolls back on error
             n = 0
             for r in results:
+                if _fetch_failed(r):
+                    n += conn.execute("UPDATE cameras SET name = ? WHERE id = ?", (r["name"], r["id"])).rowcount
+                    continue
                 n += conn.execute("UPDATE cameras SET stream_url = ?, name = ?, status = ? WHERE id = ?",
                                   (r["stream_url"] or "", r["name"], r["status"], r["id"])).rowcount
             for cid in removed:

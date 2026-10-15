@@ -89,8 +89,6 @@ class FakeDetector:
 class FakeTopology:
     """Three cameras in a line: 1 -> 2 -> 3."""
 
-    score_transition_window = staticmethod(TopologyEngine.score_transition_window)
-
     def __init__(self, ids=(1, 2, 3)):
         self.cameras = {
             cid: {"id": cid, "name": f"CAM {cid}", "stream_url": f"https://example.test/{cid}.m3u8",
@@ -98,11 +96,6 @@ class FakeTopology:
             for cid in ids
         }
         self.edges = [{"source_id": a, "target_id": b} for a, b in zip(ids, ids[1:])]
-
-    def calculate_arrival_window(self, src, dst):
-        if (src, dst) not in {(e["source_id"], e["target_id"]) for e in self.edges}:
-            raise KeyError((src, dst))
-        return 0.0, 60.0
 
 
 class StubAnalytics:
@@ -450,6 +443,61 @@ class RollingTrackerTest(TrackerTestBase):
         self.run_for(4.0)
         self.assertNotIn(2, self.tracker.cameras)
         self.assertEqual(set(self.counts()), {1, 3})
+
+
+class DownDetector(FakeDetector):
+    """The production detector with no loadable model: every frame is unobserved."""
+
+    def detect(self, *args, **kwargs):
+        return None
+
+
+class DetectorOutageTest(TrackerTestBase):
+    def test_frames_the_detector_could_not_process_are_not_observed_time(self):
+        self.make({1: passing_traffic, 2: passing_traffic, 3: passing_traffic}, detector=DownDetector())
+        self.tracker.set_focus(1)
+        self.run_for(6.0)
+        self.assertEqual(self.analytics.frames, {}, "no frame may reach analytics as an empty road")
+        credited = self.db.conn.execute(
+            "SELECT COUNT(*) FROM observation_windows WHERE observed_s > 0").fetchone()[0]
+        self.assertEqual(credited, 0, "an outage must not be stored as observed time with 0 crossings")
+        self.assertEqual(self.tracker.get_status()["frames_processed"], 0)
+        self.assertIsNone(self.tracker.get_focus_frame(1))
+
+
+class SwitchableDetector(FakeDetector):
+    """The production detector whose model is down until ``down`` is cleared."""
+
+    def __init__(self):
+        super().__init__()
+        self.down = True
+
+    def detect(self, *args, **kwargs):
+        return None if self.down else super().detect(*args, **kwargs)
+
+
+class ModelRecoveryTest(TrackerTestBase):
+    def test_model_outage_does_not_back_off_cameras_whose_streams_work(self):
+        detector = SwitchableDetector()
+        self.make({}, detector=detector)
+        t = self.run_for(rolling_tracker.FIRST_FRAME_TIMEOUT_S + 6.0)    # visits time out while the model is down
+        self.assertEqual(self.tracker._fail_streak, {}, "the streams were fine; the model was not")
+        self.assertEqual(self.tracker.get_status()["cameras_unreachable"], {})
+        self.assertEqual(self.analytics.frames, {})
+        detector.down = False
+        self.run_for(5.0, start=t)                                       # far less than FAILED_BACKOFF_S
+        self.assertEqual(set(self.analytics.frames), {1, 2, 3}, "every camera visited again promptly")
+        self.assertEqual(set(self.counts()), {1, 2, 3})
+        self.assertEqual(self.tracker._fail_streak, {})
+
+
+class BackoffOverflowTest(TrackerTestBase):
+    def test_a_camera_that_fails_thousands_of_times_does_not_overflow_the_backoff(self):
+        self.make({})
+        self.tracker._fail_streak[1] = 5000      # a dead focus camera retried every ~5 s for days
+        now = self.t0
+        self.tracker._mark_failed(1, now, "stream did not open")   # raised OverflowError at streak ~1025
+        self.assertLessEqual(self.tracker._failed_until[1], now + rolling_tracker.MAX_FAILED_BACKOFF_S * 1.2)
 
 
 if __name__ == "__main__":

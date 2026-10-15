@@ -12,6 +12,8 @@ Tests:
 
 import math
 import unittest
+from unittest import mock
+
 import numpy as np
 
 from backend.detector import ANEVehicleDetector, ALLOWED_CLASS_NAMES
@@ -144,6 +146,39 @@ class TestDetectorUnit(unittest.TestCase):
             timestamp=2.0,
         )[0]
         self.assertEqual(det2["track_id"], 1)
+
+
+class TestDetectorFailureIsNotAnEmptyRoad(unittest.TestCase):
+    """A missing model or a failed inference must be distinguishable from a frame with no vehicles,
+    or the tracker credits the frame as observed (0 vph, an empty "Smooth" road)."""
+
+    def test_returns_none_when_the_model_is_not_loaded(self):
+        with mock.patch("backend.detector.get_shared_detector", return_value=None):
+            detector = ANEVehicleDetector(test_mode=False)
+            self.assertIsNone(detector.detect(np.zeros((360, 640, 3), dtype=np.uint8), camera_id=1))
+
+    def test_returns_none_when_the_engine_returns_none(self):
+        # Must not fall through to the synthetic (test-mode) extractor on a real frame.
+        class Empty:
+            last_inference_ms = 0.0
+
+            def track(self, camera_id, frame):
+                return None
+        frame = np.full((360, 640, 3), 60, dtype=np.uint8)
+        frame[90:270, 160:480] = np.random.default_rng(0).integers(0, 255, (180, 320, 3))  # "busy" centre
+        with mock.patch("backend.detector.get_shared_detector", return_value=Empty()):
+            detector = ANEVehicleDetector(test_mode=False)
+            self.assertIsNone(detector.detect(frame, camera_id=1))
+
+    def test_returns_none_when_inference_raises(self):
+        class Broken:
+            last_inference_ms = 0.0
+
+            def track(self, camera_id, frame):
+                raise RuntimeError("ANE request failed")
+        with mock.patch("backend.detector.get_shared_detector", return_value=Broken()):
+            detector = ANEVehicleDetector(test_mode=False)
+            self.assertIsNone(detector.detect(np.zeros((360, 640, 3), dtype=np.uint8), camera_id=1))
 
 
 if __name__ == "__main__":

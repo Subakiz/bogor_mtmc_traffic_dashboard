@@ -23,15 +23,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from backend.config import DEFAULT_MODEL_PATH, WIDE_MODEL_PATH, ensure_engine_importable
+from car_tracker.config import CLASS_NAMES as ALLOWED_VEHICLE_CLASSES   # COCO ids 2, 3, 5, 7
 
-# COCO Vehicle classes: 2: car, 3: motorcycle, 5: bus, 7: truck
-ALLOWED_VEHICLE_CLASSES = {
-    2: "car",
-    3: "motorcycle",
-    5: "bus",
-    7: "truck",
-}
-ALLOWED_CLASS_NAMES = {"car", "motorcycle", "bus", "truck"}
+ALLOWED_CLASS_NAMES = set(ALLOWED_VEHICLE_CLASSES.values())
 
 _HISTORY_TTL_S = 60.0   # drop heading history of tracks not seen for this long
 
@@ -169,10 +163,12 @@ class ANEVehicleDetector:
         timestamp: Optional[float] = None,
         synthetic_objects: Optional[List[Dict[str, Any]]] = None,
         camera_id: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Runs vehicle detection and tracking for ``camera_id`` on a BGR frame.
         Each camera has its own tracker state; track ids are unique across cameras.
+        Returns None when the model is not loaded or inference failed (the frame was not
+        observed), so callers can tell that from an empty road.
         """
         curr_time = timestamp or time.time()
         h, w = frame.shape[:2]
@@ -183,39 +179,40 @@ class ANEVehicleDetector:
             if self._engine is None:
                 self._load_coreml_model()   # retried at most every _LOAD_RETRY_S
                 if self._engine is None:
-                    return []
+                    return None
             try:
                 raw = self._engine.track(camera_id, frame)
                 self.last_inference_ms = self._engine.last_inference_ms
             except Exception as exc:  # noqa: BLE001
                 self._log_error(f"inference failed on camera {camera_id}: {exc}")
-                return []
+                return None
 
-            if raw is not None:
-                detections = []
-                for det in raw:
-                    if det["class_id"] not in ALLOWED_VEHICLE_CLASSES or det["conf"] < self.conf_threshold:
-                        continue
-                    x1 = max(0, min(det["box"][0], w - 1))
-                    y1 = max(0, min(det["box"][1], h - 1))
-                    x2 = max(x1 + 1, min(det["box"][2], w))
-                    y2 = max(y1 + 1, min(det["box"][3], h))
-                    cx = int((x1 + x2) / 2)
-                    cy = int((y1 + y2) / 2)
-                    heading, speed = self.compute_heading_and_speed(
-                        det["track_id"], (cx, cy), curr_time, camera_azimuth_deg
-                    )
-                    detections.append({
-                        "track_id": det["track_id"],
-                        "class_name": det["class_name"],
-                        "class_id": det["class_id"],
-                        "confidence": float(det["conf"]),
-                        "bbox": (x1, y1, x2, y2),
-                        "centroid": (cx, cy),
-                        "heading_deg": float(heading),
-                        "speed_px_s": float(speed),
-                    })
-                return detections
+            if raw is None:
+                return None   # never fall through to the synthetic extractor on a real frame
+            detections = []
+            for det in raw:
+                if det["class_id"] not in ALLOWED_VEHICLE_CLASSES or det["conf"] < self.conf_threshold:
+                    continue
+                x1 = max(0, min(det["box"][0], w - 1))
+                y1 = max(0, min(det["box"][1], h - 1))
+                x2 = max(x1 + 1, min(det["box"][2], w))
+                y2 = max(y1 + 1, min(det["box"][3], h))
+                cx = int((x1 + x2) / 2)
+                cy = int((y1 + y2) / 2)
+                heading, speed = self.compute_heading_and_speed(
+                    det["track_id"], (cx, cy), curr_time, camera_azimuth_deg
+                )
+                detections.append({
+                    "track_id": det["track_id"],
+                    "class_name": det["class_name"],
+                    "class_id": det["class_id"],
+                    "confidence": float(det["conf"]),
+                    "bbox": (x1, y1, x2, y2),
+                    "centroid": (cx, cy),
+                    "heading_deg": float(heading),
+                    "speed_px_s": float(speed),
+                })
+            return detections
 
         # 2. Resilient test / synthetic tracker mode
         raw_objects = synthetic_objects or self._extract_synthetic_objects(frame)

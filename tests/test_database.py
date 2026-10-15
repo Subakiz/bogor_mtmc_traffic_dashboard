@@ -24,11 +24,6 @@ from backend.database import (
     Database,
     get_db_connection,
     seed_cameras_from_topology,
-    init_db,
-    insert_vehicle_sighting,
-    get_recent_sightings,
-    search_vehicles,
-    get_traffic_stats,
 )
 
 
@@ -62,8 +57,8 @@ class TestDatabaseUnit(unittest.TestCase):
         # come from trigger-maintained tables (tests/test_db_totals.py)
         self.assertNotIn("idx_sightings_agg", indices)
         self.assertNotIn("idx_sightings_local_track", indices)
-        for t in ("sighting_totals", "sighting_tracks", "camera_track_totals", "sighting_counters"):
-            self.assertIn(t, tables, f"Missing totals table: {t}")
+        self.assertIn("sighting_totals", tables)
+        self.assertFalse(tables & {"sighting_tracks", "camera_track_totals", "sighting_counters"})
         cur.execute("SELECT name FROM sqlite_master WHERE type='trigger';")
         self.assertEqual({row[0] for row in cur.fetchall()}, {"trg_sightings_totals"})
 
@@ -187,19 +182,6 @@ class TestDatabaseUnit(unittest.TestCase):
         local_ids = {r["local_track_id"] for r in recent}
         self.assertEqual(local_ids, {2, 3})
 
-    def test_search_vehicles_with_filters(self):
-        """Verify search_vehicles by class, camera_id, time range."""
-        self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:00:00Z")
-        self.db.insert_vehicle_sighting(79, 2, "truck", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:05:00Z")
-        self.db.insert_vehicle_sighting(87, 3, "bus", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T01:10:00Z")
-
-        trucks = self.db.search_vehicles(vehicle_class="truck")
-        self.assertEqual(len(trucks), 1)
-        self.assertEqual(trucks[0]["vehicle_class"], "truck")
-
-        cam79_results = self.db.search_vehicles(camera_id=79)
-        self.assertEqual(len(cam79_results), 2)
-
     def test_traffic_stats_aggregation(self):
         """Verify get_traffic_stats returns correct aggregated metrics."""
         self.db.insert_vehicle_sighting(79, 1, "car", 0.9, (0, 0, 10, 10), 0, 0, "2026-09-23T03:00:00Z")
@@ -208,7 +190,6 @@ class TestDatabaseUnit(unittest.TestCase):
 
         stats = self.db.get_traffic_stats()
         self.assertEqual(stats["total_sightings"], 3)
-        self.assertEqual(stats["total_unique_vehicles"], 3)
         self.assertEqual(stats["class_breakdown"]["car"], 2)
         self.assertEqual(stats["class_breakdown"]["motorcycle"], 1)
 
@@ -237,7 +218,6 @@ class TestDatabaseUnit(unittest.TestCase):
         # Find camera 79
         cam79 = next(c for c in counts if c["camera_id"] == 79)
         self.assertEqual(cam79["total_sightings"], 3)
-        self.assertEqual(cam79["unique_vehicles"], 2)  # track 1 and track 2
         self.assertEqual(cam79["classes"]["car"], 2)
         self.assertEqual(cam79["classes"]["motorcycle"], 1)
         self.assertEqual(cam79["classes"]["truck"], 0)
@@ -245,13 +225,11 @@ class TestDatabaseUnit(unittest.TestCase):
         # Find camera 161
         cam161 = next(c for c in counts if c["camera_id"] == 161)
         self.assertEqual(cam161["total_sightings"], 1)
-        self.assertEqual(cam161["unique_vehicles"], 1)
         self.assertEqual(cam161["classes"]["truck"], 1)
 
         # Verify cameras without sightings have 0 counts
         cam80 = next(c for c in counts if c["camera_id"] == 80)
         self.assertEqual(cam80["total_sightings"], 0)
-        self.assertEqual(cam80["unique_vehicles"], 0)
         self.assertIsNone(cam80["last_seen_iso"])
 
         # Check traffic stats integration

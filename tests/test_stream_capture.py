@@ -3,37 +3,53 @@ tests/test_stream_capture.py
 Unit Test Suite for Threaded Low-Latency HLS Stream Ingestion (FEAT-M4).
 Tests:
 - ThreadedStreamCapture initialization and background grab thread
-- get_frame() freshest frame retrieval without queue accumulation
-- Continuous buffer flushing via cap.grab()
+- get_new_frame() freshest frame retrieval without queue accumulation
 - Resilient auto-reconnection with exponential backoff on simulated drop
 - Clean release and resource deallocation
-- Telemetry reporting through get_status()
+- Real-time playout against the stream clock
 """
 
 import time
 import unittest
+
+import cv2
 import numpy as np
 
-from backend.stream_capture import MockVideoCapture, ThreadedStreamCapture
+from backend.stream_capture import ThreadedStreamCapture
+
+
+class MockVideoCapture:
+    """Synthetic OpenCV-style capture: a gradient frame per grab, a stream clock at ``fps``."""
+
+    def __init__(self, width: int = 640, height: int = 480, fps: float = 25.0):
+        self.width, self.height, self.fps = width, height, fps
+        self._opened = True
+        self._frame_count = 0
+
+    def isOpened(self) -> bool:
+        return self._opened
+
+    def grab(self) -> bool:
+        if not self._opened:
+            return False
+        self._frame_count += 1
+        return True
+
+    def retrieve(self):
+        if not self._opened:
+            return False, None
+        frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        frame[:, :] = ((self._frame_count * 5) % 255, 128, 255 - (self._frame_count * 5) % 255)
+        return True, frame
+
+    def get(self, prop_id: int) -> float:
+        return self._frame_count * 1000.0 / self.fps if prop_id == cv2.CAP_PROP_POS_MSEC else 0.0
+
+    def release(self):
+        self._opened = False
 
 
 class TestStreamCaptureUnit(unittest.TestCase):
-    def test_mock_video_capture_direct_interface(self):
-        """Verify MockVideoCapture adheres to OpenCV VideoCapture contract."""
-        cap = MockVideoCapture(width=640, height=480, fps=30.0)
-        self.assertTrue(cap.isOpened())
-
-        grabbed = cap.grab()
-        self.assertTrue(grabbed)
-
-        ret, frame = cap.retrieve()
-        self.assertTrue(ret)
-        self.assertEqual(frame.shape, (480, 640, 3))
-        self.assertEqual(frame.dtype, np.uint8)
-
-        cap.release()
-        self.assertFalse(cap.isOpened())
-
     def test_threaded_stream_capture_frame_retrieval(self):
         """Verify ThreadedStreamCapture retrieves valid frames."""
         mock_cap = MockVideoCapture()
@@ -42,7 +58,7 @@ class TestStreamCaptureUnit(unittest.TestCase):
         try:
             # Allow background thread a moment to grab initial frames
             time.sleep(0.1)
-            ret, frame = sc.get_frame()
+            ret, _, frame = sc.get_new_frame(0)
             self.assertTrue(ret)
             self.assertIsNotNone(frame)
             self.assertEqual(frame.shape, (480, 640, 3))
@@ -50,26 +66,20 @@ class TestStreamCaptureUnit(unittest.TestCase):
             sc.release()
 
     def test_packet_flushing_returns_newest_frame(self):
-        """Verify get_frame() consumes freshest frame without queue delay."""
+        """Verify get_new_frame() hands out the newest frame, skipping the ones in between."""
         mock_cap = MockVideoCapture()
         sc = ThreadedStreamCapture(source=mock_cap, camera_id=79, max_fps=100.0, auto_start=True)
 
         try:
             # Let background grabber run for 100ms
             time.sleep(0.1)
-            ret1, frame1 = sc.get_frame()
+            ret1, seq1, _ = sc.get_new_frame(0)
             self.assertTrue(ret1)
 
-            # Wait another 100ms so grab count advances
             time.sleep(0.1)
-            ret2, frame2 = sc.get_frame()
+            ret2, seq2, _ = sc.get_new_frame(seq1)
             self.assertTrue(ret2)
-
-            status = sc.get_status()
-            self.assertGreater(status["frames_grabbed"], 5)
-            self.assertGreaterEqual(status["frames_retrieved"], 2)
-            # The background grabber has grabbed more frames than retrieved (flushing stale frames)
-            self.assertGreaterEqual(status["dropped_frames"], 0)
+            self.assertGreater(seq2, seq1 + 1)          # frames in between were skipped, not queued
         finally:
             sc.release()
 
@@ -85,25 +95,6 @@ class TestStreamCaptureUnit(unittest.TestCase):
         self.assertFalse(sc._thread is not None and sc._thread.is_alive())
         self.assertFalse(sc.is_opened())
         self.assertIsNone(sc._cap)
-
-    def test_status_telemetry_reporting(self):
-        """Verify get_status returns accurate camera_id, fps, and frame metrics."""
-        mock_cap = MockVideoCapture()
-        sc = ThreadedStreamCapture(source=mock_cap, camera_id=92, name="CCTV-92", auto_start=True)
-
-        try:
-            time.sleep(0.05)
-            sc.get_frame()
-            status = sc.get_status()
-
-            self.assertEqual(status["camera_id"], 92)
-            self.assertEqual(status["name"], "CCTV-92")
-            self.assertTrue(status["is_opened"])
-            self.assertIn("fps", status)
-            self.assertIn("frames_grabbed", status)
-            self.assertIn("uptime_s", status)
-        finally:
-            sc.release()
 
     def test_reconnection_exponential_backoff_on_drop(self):
         """Verify stream drop triggers exponential backoff."""
@@ -130,9 +121,7 @@ class TestStreamCaptureUnit(unittest.TestCase):
         try:
             # Wait for failure threshold (5 consecutive failures)
             time.sleep(0.3)
-            status = sc.get_status()
-            # Backoff must have increased
-            self.assertGreater(status["current_backoff_s"], 0.05)
+            self.assertGreater(sc.current_backoff, 0.05)   # backoff must have increased
         finally:
             sc.release()
 

@@ -14,6 +14,7 @@ import sys
 import json
 import time
 import asyncio
+import statistics
 import functools
 import threading
 from typing import Optional, List, Dict, Any, Tuple
@@ -46,10 +47,15 @@ from backend.config import (
 )
 from backend.database import Database, DEFAULT_DB_PATH
 from backend.topology_engine import get_default_engine
+from backend.bucketing import snap_bucket_minutes
 from backend.counting import CountingLines
+from backend.dataset import flow_series
+from backend import insights, typical_week
 from backend.maintenance import SightingMaintenance
 from backend.rolling_tracker import RollingTracker
-from backend.detector import ANEVehicleDetector, ALLOWED_VEHICLE_CLASSES
+from backend.detector import ANEVehicleDetector
+from car_tracker.config import CLASS_COLORS
+from car_tracker.congestion import congestion_label
 
 app = FastAPI(title="BSW Kota Bogor Traffic Intelligence Dashboard", version="1.0.0")
 
@@ -202,13 +208,19 @@ def list_cameras():
     }
 
 def _citywide_vph(rates: Dict[int, Dict[str, Any]]) -> float:
-    """Sum of vehicles/hour over junctions, counting each junction once (its busiest camera):
-    cameras at one junction watch the same vehicles, so adding them would double count."""
+    """Sum of vehicles/hour over Kota Bogor's junctions, counting each junction once (its busiest
+    camera): cameras at one junction watch the same vehicles, so adding them would double count.
+    Low-sample rates only stand in for a junction with no well-sampled camera: one crossing in a
+    6 s look reads as 600 vph and would otherwise win the max."""
     best: Dict[Tuple[int, ...], float] = {}
+    best_low: Dict[Tuple[int, ...], float] = {}
     for cid, r in rates.items():
-        cluster = tuple(topology.get_intra_junction_cluster(cid)) if cid in topology.cameras else (cid,)
-        best[cluster] = max(best.get(cluster, 0.0), r["vph"])
-    return round(sum(best.values()), 1)
+        if cid not in topology.cameras:      # removed camera (e.g. the dropped Tasikmalaya ones): history only
+            continue
+        cluster = tuple(topology.get_intra_junction_cluster(cid))
+        target = best_low if r.get("low_sample") else best
+        target[cluster] = max(target.get(cluster, 0.0), r["vph"])
+    return round(sum(best.values()) + sum(v for c, v in best_low.items() if c not in best), 1)
 
 
 @app.get("/api/cameras/counts")
@@ -228,7 +240,6 @@ def _compute_camera_counts(window_minutes: Optional[float], rate_window_minutes:
     window_s = (window_minutes * 60.0) if window_minutes and window_minutes > 0 else None
     counts = db.get_camera_vehicle_counts(window_s=window_s)
     total_vehicles = sum(c["total_sightings"] for c in counts)
-    total_unique = sum(c["unique_vehicles"] for c in counts)
     active_cameras_count = sum(1 for c in counts if c["total_sightings"] > 0)
 
     class_totals = {"car": 0, "motorcycle": 0, "truck": 0, "bus": 0}
@@ -248,14 +259,13 @@ def _compute_camera_counts(window_minutes: Optional[float], rate_window_minutes:
         "total_cameras": len(counts),
         "cameras_with_detections": active_cameras_count,
         "total_vehicles_counted": total_vehicles,
-        "total_unique_vehicles": total_unique,
         "class_breakdown": class_totals,
         "top_cameras": top_cameras,
         "camera_counts": counts,
         "camera_counts_map": camera_counts_map,
         "camera_rates": rates,
         "camera_vph_map": {cid: r["vph"] for cid, r in rates.items()},
-        "cameras_with_rates": len(rates),
+        "cameras_with_rates": sum(1 for cid in rates if cid in topology.cameras),
         "citywide_vph": _citywide_vph(rates),
         "rate_window_minutes": rate_window_minutes,
         "timestamp": time.time(),
@@ -292,9 +302,13 @@ def _latest_sightings_cached(limit: int) -> List[Dict[str, Any]]:
     return _stats_cache.get(("latest", limit), lambda: db.get_latest_sightings(limit=limit))
 
 
+RECENT_MAX_LIMIT = 500
+
+
 @app.get("/api/recent")
 def recent_sightings(limit: int = 50, camera_id: Optional[int] = None):
     """Returns recent vehicle sightings across all cameras or a specific camera."""
+    limit = min(max(1, limit), RECENT_MAX_LIMIT)   # SQLite reads LIMIT -1 as "every row"
     if camera_id is None:
         sightings = _latest_sightings_cached(limit)
     else:
@@ -314,21 +328,6 @@ def daemon_status():
         "device": "CPU_AND_NE",
     })
     return status
-
-@app.post("/api/daemon/start")
-def start_daemon():
-    """Enables rolling coverage of all cameras (the viewed camera is always tracked)."""
-    already = rolling_tracker.running and rolling_tracker.rolling_enabled
-    rolling_tracker.set_rolling_enabled(True)
-    if already:
-        return {"status": "already_running", "message": "Rolling tracker is already running"}
-    return {"status": "started", "message": "Rolling multi-camera tracking active"}
-
-@app.post("/api/daemon/stop")
-def stop_daemon():
-    """Stops rolling coverage; the viewed camera keeps being tracked."""
-    rolling_tracker.set_rolling_enabled(False)
-    return {"status": "stopped", "message": "Rolling coverage stopped"}
 
 def _heartbeat_payload() -> Dict[str, Any]:
     """What the dashboard refreshes on each tick: ``counts`` / ``recent``, which it would
@@ -363,62 +362,6 @@ async def websocket_endpoint(websocket: WebSocket):
         pass   # client went away (RuntimeError: send on a socket that already closed)
 
 
-# ── Per-Camera Traffic Analytics & Time-Series Endpoints (LSTM / ML Ready) ────
-@app.get("/api/stats/time-series")
-def get_traffic_time_series(
-    camera_id: Optional[int] = None,
-    window_seconds: int = 60,
-    limit: int = 100,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None,
-):
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    target_cam = None if camera_id in (-1, None) else camera_id
-    return _analytics_engine.export_timeseries_dataset(
-        camera_id=target_cam,
-        window_seconds=window_seconds,
-        start_ts=start_time,
-        end_ts=end_time,
-        limit=limit,
-    )
-
-
-@app.get("/api/stats/export")
-def export_traffic_dataset(
-    format: str = "csv",
-    camera_id: Optional[int] = None,
-    window_seconds: int = 60,
-    limit: int = 5000,
-):
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    target_cam = None if camera_id in (-1, None) else camera_id
-
-    fmt = format.lower()
-    if fmt == "csv":
-        csv_text = _analytics_engine.export_csv_str(
-            camera_id=target_cam,
-            window_seconds=window_seconds,
-            limit=limit,
-        )
-        cam_suffix = str(target_cam) if target_cam is not None else "all"
-        filename = f"cctv_camera_{cam_suffix}_traffic_timeseries.csv"
-        return Response(
-            content=csv_text,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-    elif fmt == "json":
-        return _analytics_engine.export_timeseries_dataset(
-            camera_id=target_cam,
-            window_seconds=window_seconds,
-            limit=limit,
-        )
-    else:
-        raise HTTPException(400, detail=f"Unsupported format '{format}'. Supported: 'csv', 'json'.")
-
-
 FLOW_MAX_MINUTES = 30 * 24 * 60.0   # the Analytics chart's longest timeframe (30 days)
 FLOW_MAX_BUCKETS = 720               # bucket size is raised so a series never has more points
 
@@ -429,18 +372,10 @@ def _flow_summary(camera_id: int, minutes: float, bucket_minutes: float) -> Dict
     ``history_start_ts`` is when the camera's stored data begins (None if it has none), so the
     dashboard can tell which timeframes the data actually covers."""
     minutes = min(max(1.0, minutes), FLOW_MAX_MINUTES)
-    bucket_minutes = min(max(1.0, bucket_minutes, minutes / FLOW_MAX_BUCKETS), minutes)
+    bucket_minutes = snap_bucket_minutes(min(max(1.0, bucket_minutes, minutes / FLOW_MAX_BUCKETS), minutes))
     rate = db.get_camera_rates(window_s=minutes * 60.0, camera_ids=[camera_id]).get(camera_id)
-    series = db.get_camera_flow_series(camera_id, minutes=minutes, bucket_minutes=bucket_minutes)
-    congestion = {c["t"]: c["congestion"] for c in
-                  (_analytics_engine.get_congestion_series(camera_id, minutes, bucket_minutes)
-                   if _analytics_engine else [])}
-    for point in series:
-        point["congestion"] = congestion.pop(point["t"], None)
-    # Buckets with a congestion reading but no counted observation still belong on the chart.
-    series.extend({"t": t, "t_end": t + bucket_minutes * 60.0, "windows": 0, "observed_s": 0.0,
-                   "vehicles": 0, "vph": None, "low_sample": True, "congestion": c} for t, c in congestion.items())
-    series.sort(key=lambda p: p["t"])
+    series = flow_series(camera_id, minutes, bucket_minutes, main_db=db.db_path,
+                         analytics_db=_analytics_engine.db.db_path if _analytics_engine else None)
     starts = [ts for ts in (db.get_camera_first_observed(camera_id),
                             _analytics_engine.get_first_timestamp(camera_id) if _analytics_engine else None)
               if ts is not None]
@@ -473,11 +408,54 @@ def get_camera_traffic_metrics(camera_id: int, minutes: float = 60.0, bucket_min
     return metrics
 
 
-@app.get("/api/stats/summary")
-def get_traffic_summary():
-    if _analytics_engine is None:
-        raise HTTPException(status_code=503, detail="Analytics engine not initialized")
-    return _analytics_engine.get_all_camera_summaries()
+TYPICAL_REFRESH_S = 3600.0          # the typical week is recomputed at most this often (~1 s each)
+_typical_refresh = _TTLCache(TYPICAL_REFRESH_S)
+
+
+def _refresh_typical_week() -> int:
+    clusters = {tuple(sorted(c)) for c in topology.intra_junction_clusters.values()}
+    return typical_week.refresh(db.db_path, ANALYTICS_DB_PATH, clusters)
+
+
+@app.get("/api/cameras/{camera_id}/typical-week")
+def get_typical_week(camera_id: int):
+    """When the camera's junction is usually busy: the typical congestion of each weekday (0 = Monday)
+    and hour (WIB) over the last 28 days, the busiest camera of the junction cluster setting each value.
+    Slots seen on fewer than ``MIN_DAYS`` days carry ``low_data``; unobserved slots are absent."""
+    _camera_or_404(camera_id)
+    _typical_refresh.get("all", _refresh_typical_week)
+    cluster = topology.get_intra_junction_cluster(camera_id)
+    slots = typical_week.load(db.conn, "cluster", cluster[0])
+    for s in slots:
+        s["congestion_label"] = congestion_label(s["value"])
+    return {"camera_id": camera_id, "cluster": cluster, "min_days": typical_week.MIN_DAYS,
+            "days": typical_week.DEFAULT_DAYS, "slots": slots}
+
+
+INSIGHTS_CACHE_TTL_S = 120.0        # the City tab's aggregate reads a week of windows (~1 s)
+_insights_cache = _TTLCache(INSIGHTS_CACHE_TTL_S)
+
+
+def _compute_citywide_insights(days: int) -> Dict[str, Any]:
+    ids = sorted(topology.cameras)
+    out = insights.citywide_insights(days, camera_ids=ids,
+                                     clusters={c: topology.get_intra_junction_cluster(c) for c in ids},
+                                     main_db=db.db_path, analytics_db=ANALYTICS_DB_PATH)
+    rates = db.get_camera_rates(window_s=3600.0, camera_ids=ids)
+    vph = [r["vph"] for r in rates.values() if not r["low_sample"]]
+    out["now"] = {"vph": round(statistics.median(vph), 1) if vph else None, "cameras": len(vph),
+                  "typical_vph": out["hours"][out["now_hour"]]["vph"]}
+    return out
+
+
+@app.get("/api/insights/citywide")
+async def get_citywide_insights(days: int = 7):
+    """Citywide patterns for the City tab (see backend/insights.py): hour-of-day flow and slow-junction
+    share (baseline days vs today), corridor x hour congestion, class mix, and junction rankings,
+    plus the median camera's flow over the last hour against its usual value at this hour (WIB)."""
+    days = max(1, min(28, int(days)))
+    return await asyncio.to_thread(_insights_cache.get, ("citywide", days),
+                                   lambda: _compute_citywide_insights(days))
 
 
 # Shared ANE detector (independent ByteTrack per camera). Only the rolling tracker's worker
@@ -529,15 +507,11 @@ def _render_annotated_frame(frame: Any, detections: List[Dict[str, Any]], ane_ms
         _draw_counting_overlay(annotated, latest)
 
     for det in detections or []:
-        cls_name = ALLOWED_VEHICLE_CLASSES.get(int(det["class_id"]), "vehicle")
+        cls_name = det.get("class_name", "vehicle")
         score = det["confidence"]
         x1, y1, x2, y2 = (int(v) for v in det["bbox"])
 
-        color = (
-            (0, 255, 0) if cls_name == "car"
-            else ((255, 170, 0) if cls_name == "motorcycle"
-            else ((0, 165, 255) if cls_name == "truck" else (255, 0, 230)))
-        )
+        color = CLASS_COLORS.get(cls_name, CLASS_COLORS["bus"])
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 4 if det.get("counted") else 2)
 
         badge_text = f" {cls_name.upper()} {score:.2f} "
@@ -743,4 +717,6 @@ if __name__ == "__main__":
     print(" Starting BSW Kota Bogor MTMC Dashboard Server")
     print(f" Listening on {host}:{port}")
     print("=" * 65 + "\n")
-    uvicorn.run("backend.server:app", host=host, port=port, reload=False)
+    # The app object, not "backend.server:app": an import string would import this module a
+    # second time (it runs as __main__) and build a second database, analytics engine and tracker.
+    uvicorn.run(app, host=host, port=port, reload=False)

@@ -59,9 +59,8 @@ bogor_mtmc_traffic_dashboard/
 │   ├── server.py              # FastAPI server, frame endpoint, WebSocket & REST APIs
 │   ├── detector.py            # CoreML YOLOv8 + ByteTrack ANE inference wrapper
 │   ├── stream_capture.py      # Threaded low-latency HLS stream reader & packet flusher
-│   ├── topology_engine.py     # 94-camera road graph, arrival windows, SSA one-way logic
+│   ├── topology_engine.py     # camera road graph, junction clusters, SSA one-way logic
 │   ├── database.py            # SQLite WAL vehicle registry, counting windows & totals
-│   └── indexing_daemon.py     # Background multi-camera ingestion & tracking daemon
 ├── frontend/
 │   ├── index.html             # Dark-mode dashboard (Leaflet + HUD)
 │   ├── styles.css             # Dashboard styles
@@ -136,7 +135,7 @@ Open your browser and navigate to:
 | `/api/topology` | `GET` | Returns camera nodes, directed road graph edges, and corridor groupings |
 | `/api/stream/{id}/frame`| `GET` | Latest annotated JPEG frame; pass `?after=<X-Frame-No>` to long-poll for a newer one (204 if none within ~1 s) |
 | `/api/recent` | `GET` | Fetches recent verified vehicle sightings across Kota Bogor |
-| `/api/stats` | `GET` | Returns citywide traffic stats (unique vehicle counts, classification breakdown) |
+| `/api/stats` | `GET` | Returns citywide traffic stats (sighting totals, classification breakdown) |
 | `/api/export/dataset` | `GET` | Downloads a bucketed per-camera dataset: `start`, `end`, `bucket_minutes` (1/5/15/60), `camera_ids`, `format` (csv/jsonl/parquet), `layout` (long/wide), `fill_gaps` |
 | `/api/export/raw` | `GET` | Downloads a raw table: `table` (observation_windows/sightings/cameras/analytics), `start`, `end`, `camera_ids`, `format` (csv/jsonl) |
 | `/ws/live` | `WebSocket` | Heartbeat every 2 s carrying the citywide counts and the latest sightings |
