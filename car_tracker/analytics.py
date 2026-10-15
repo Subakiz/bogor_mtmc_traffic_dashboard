@@ -5,14 +5,12 @@ Provides:
 - Real-time vehicle kinematics, displacement, speed proxy, and flow vector tracking.
 - Per-camera vehicle volume and class breakdown (cars, motorcycles, trucks, buses).
 - Traffic occupancy density (ratio of frame covered by vehicles) and congestion index.
-- Window records of any length (rolling visits close a window of 2-62 s); ``query_timeseries``
-  can aggregate them into fixed buckets weighted by window length.
+- Window records of any length (rolling visits close a window of 2-62 s).
 - Continuous cyclic temporal features (sin_hour, cos_hour, sin_dow, cos_dow, is_weekend), computed in
   LOCAL time (Asia/Jakarta, WIB, UTC+7, no DST) because the cameras are in Kota Bogor.
 - Persistent SQLite storage in WAL mode (data/traffic_timeseries.db).
-- Legacy exporters (CSV, JSON, numpy/LSTM sequences). The analysis-ready, regular per-camera dataset
-  (observed-time coverage, crossings prorated over buckets, wide pivots, raw exports) lives in
-  ``backend/dataset.py``.
+- The analysis-ready, regular per-camera dataset (observed-time coverage, crossings prorated over
+  buckets, wide pivots, raw exports) lives in ``backend/dataset.py``.
 
 Time conventions of ``camera_traffic_timeseries``
 -------------------------------------------------
@@ -77,7 +75,6 @@ MIN_FREE_FLOW_BPS = 0.25  # sanity floor for a learned free-flow speed
 MIN_TRAFFIC_FOR_FULL_CONFIDENCE = 6   # measurable vehicles for the index to count in full (quadratic ramp)
 LIVE_SPAN_S = 20.0        # the live index is the mean of the per-frame index over this many seconds
 LIVE_MAX_AGE_S = 15.0     # a snapshot older than this is no longer "live" (the camera is not being observed)
-RECENT_SUMMARY_WINDOWS = 60   # latest windows behind get_camera_summary()'s "recent" averages
 MIN_REF_SAMPLES = 30      # speed samples a window needs before it updates the free-flow reference
 REF_PERCENTILE = 85       # free-flow speed = this percentile of a camera's observed speeds
 # The reference rises quickly when a window shows faster traffic and sinks only slowly: following
@@ -93,6 +90,7 @@ LANE_MIN_OBS = 300.0      # (decayed) moving footprints before a camera's lane m
 LANE_MIN_SCORE = 0.35     # mean normalised lane heat under a still vehicle's footprint for "queued"
 LANE_CELL_MIN = 0.15      # normalised heat at which a grid cell counts as lane (road) area
 LANE_DENSITY_FULL = 0.45  # share of the lane area covered by vehicle footprints that counts as fully dense
+LANE_ADVANCE_BODIES = 0.05  # growth of a track's farthest distance (body sizes) that shows it is still advancing
 QUEUE_AFTER_S = 2.0       # a still vehicle in a lane is "queued" once seen this long (younger: undetermined)
 
 
@@ -124,6 +122,8 @@ class TrackKinematics:
     max_extent: float = 0.0           # farthest the track has been from where it was first seen (px)
     is_static: bool = False           # never moved since first seen -> parked, not traffic
     recent_bps: Optional[float] = None  # body sizes / s over the last LOOKBACK_S (None: too short)
+    advance_extent: float = 0.0       # max_extent when the track last advanced (px)
+    advance_ts: float = 0.0           # when it last advanced by LANE_ADVANCE_BODIES
     history: deque = field(default_factory=lambda: deque(maxlen=64))   # (t, cx, cy)
 
 
@@ -191,8 +191,6 @@ class TimeWindowMetrics:
 
 # ── SQLite Persistence Layer ──────────────────────────────────────────────────
 
-LOCAL_UTC_OFFSET_S = int(datetime(2026, 1, 1, tzinfo=LOCAL_TZ).utcoffset().total_seconds())   # 25200: WIB has no DST
-
 _FEATURE_COLUMNS = ("hour", "minute", "day_of_week", "is_weekend", "sin_hour", "cos_hour", "sin_dow", "cos_dow")
 
 # Columns added after the first release: (name, SQL type). NULL = not measured / not recorded.
@@ -219,13 +217,6 @@ _INSERT_COLUMNS = (
 )
 _INSERT_SQL = (f"INSERT INTO camera_traffic_timeseries ({', '.join(_INSERT_COLUMNS)}) "
                f"VALUES ({', '.join('?' * len(_INSERT_COLUMNS))});")
-
-
-def _wmean(col: str, where: str = "") -> str:
-    """SQL: mean of ``col`` weighted by window length over the windows where it is known (NULL if none)."""
-    cond = f"{col} IS NOT NULL" + (f" AND {where}" if where else "")
-    return (f"SUM(CASE WHEN {cond} THEN {col} * window_seconds END) * 1.0 / "
-            f"SUM(CASE WHEN {cond} THEN window_seconds END)")
 
 
 class TrafficAnalyticsDatabase:
@@ -367,18 +358,7 @@ class TrafficAnalyticsDatabase:
                     CREATE INDEX IF NOT EXISTS idx_cam_time
                     ON camera_traffic_timeseries (camera_id, timestamp);
                 """)
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS camera_cumulative_volume (
-                        camera_id INTEGER PRIMARY KEY,
-                        camera_name TEXT NOT NULL,
-                        cumulative_volume INTEGER NOT NULL DEFAULT 0,
-                        cumulative_cars INTEGER NOT NULL DEFAULT 0,
-                        cumulative_motorcycles INTEGER NOT NULL DEFAULT 0,
-                        cumulative_trucks INTEGER NOT NULL DEFAULT 0,
-                        cumulative_buses INTEGER NOT NULL DEFAULT 0,
-                        last_updated REAL NOT NULL
-                    );
-                """)
+                conn.execute("DROP TABLE IF EXISTS camera_cumulative_volume;")   # written, never read
                 conn.execute("CREATE TABLE IF NOT EXISTS analytics_meta "
                              "(key TEXT PRIMARY KEY, value TEXT NOT NULL);")
             try:
@@ -434,27 +414,6 @@ class TrafficAnalyticsDatabase:
             try:
                 with conn:      # commit on success, roll back on any error
                     rec_id = conn.execute(_INSERT_SQL, row).lastrowid
-
-                    # Upsert cumulative counts
-                    conn.execute("""
-                        INSERT INTO camera_cumulative_volume (
-                            camera_id, camera_name, cumulative_volume,
-                            cumulative_cars, cumulative_motorcycles, cumulative_trucks, cumulative_buses,
-                            last_updated
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(camera_id) DO UPDATE SET
-                            camera_name = excluded.camera_name,
-                            cumulative_volume = cumulative_volume + excluded.cumulative_volume,
-                            cumulative_cars = cumulative_cars + excluded.cumulative_cars,
-                            cumulative_motorcycles = cumulative_motorcycles + excluded.cumulative_motorcycles,
-                            cumulative_trucks = cumulative_trucks + excluded.cumulative_trucks,
-                            cumulative_buses = cumulative_buses + excluded.cumulative_buses,
-                            last_updated = excluded.last_updated;
-                    """, (
-                        m.camera_id, m.camera_name, m.total_volume,
-                        m.car_volume, m.motorcycle_volume, m.truck_volume, m.bus_volume,
-                        m.timestamp
-                    ))
                 return rec_id
             except sqlite3.Error:
                 self._drop_writer()     # never keep a possibly broken connection
@@ -471,25 +430,13 @@ class TrafficAnalyticsDatabase:
     def query_timeseries(
         self,
         camera_id: Optional[int] = None,
-        window_seconds: Optional[int] = None,
         start_ts: Optional[float] = None,
         end_ts: Optional[float] = None,
         limit: int = 500,
         order_asc: bool = True
     ) -> List[Dict[str, Any]]:
-        """
-        Query time-series records.
-
-        ``window_seconds=None`` returns the stored windows as they are (any length: focus windows
-        are ~60 s, rolling visits 2-62 s). Earlier versions filtered ``window_seconds = 60`` and so
-        returned about 1% of the rows.
-
-        ``window_seconds=N`` aggregates the windows into N-second buckets aligned to local (WIB)
-        midnight, bucketed by the window END (``timestamp`` of the result row = bucket end): volumes
-        are summed, means are weighted by window length, ``flow_rate_*`` = volume / observed seconds.
-        Windows are not split across bucket edges here; ``backend/dataset.py`` prorates them and
-        also reports observed-time coverage, which is what analysis should use.
-        """
+        """The stored windows as they are (any length: focus windows are ~60 s, rolling visits
+        2-62 s). For analysis use ``backend/dataset.py``: it prorates windows over fixed buckets."""
         clauses: List[str] = []
         params: List[Any] = []
         if camera_id is not None:
@@ -503,84 +450,8 @@ class TrafficAnalyticsDatabase:
             params.append(end_ts)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         direction = "ASC" if order_asc else "DESC"
-
-        if window_seconds is None:
-            rows = self._read(f"SELECT * FROM camera_traffic_timeseries {where} "
-                              f"ORDER BY timestamp {direction}, id {direction} LIMIT ?;", [*params, limit])
-            return [dict(row) for row in rows]
-
-        n = int(window_seconds)
-        if n <= 0:
-            raise ValueError("window_seconds must be positive (or None for the raw windows)")
-        off = LOCAL_UTC_OFFSET_S
-        sql = f"""
-            SELECT CAST((timestamp + {off}) / {n} AS INTEGER) AS bucket, camera_id,
-                   MAX(camera_name) AS camera_name, COUNT(*) AS n_windows,
-                   SUM(window_seconds) AS seconds,
-                   SUM(total_volume) AS total_volume, SUM(car_volume) AS car_volume,
-                   SUM(motorcycle_volume) AS motorcycle_volume, SUM(truck_volume) AS truck_volume,
-                   SUM(bus_volume) AS bus_volume, MAX(peak_active_vehicles) AS peak_active_vehicles,
-                   SUM(stopped_vehicles) AS stopped_vehicles,
-                   {_wmean('avg_active_vehicles')} AS avg_active_vehicles,
-                   {_wmean('occupancy_ratio')} AS occupancy_ratio,
-                   {_wmean('avg_speed_px_s', 'avg_speed_px_s > 0')} AS avg_speed_px_s,
-                   {_wmean('congestion_index')} AS congestion_index,
-                   {_wmean('avg_flow_dx')} AS avg_flow_dx, {_wmean('avg_flow_dy')} AS avg_flow_dy,
-                   {_wmean('median_speed_bps')} AS median_speed_bps,
-                   {_wmean('mean_speed_bps')} AS mean_speed_bps,
-                   {_wmean('queue_share')} AS queue_share,
-                   {_wmean('avg_traffic_vehicles')} AS avg_traffic_vehicles,
-                   SUM(volume_basis = 'crossings') AS n_crossings, SUM(volume_basis = 'tracks') AS n_tracks
-            FROM camera_traffic_timeseries {where}
-            GROUP BY bucket, camera_id
-            ORDER BY bucket {direction}, camera_id {direction}
-            LIMIT ?;
-        """
-        out: List[Dict[str, Any]] = []
-        for r in self._read(sql, [*params, limit]):
-            start = r["bucket"] * n - off
-            end = start + n
-            seconds = float(r["seconds"] or 0.0)
-            total = int(r["total_volume"] or 0)
-            hour, minute, dow, wknd, sin_h, cos_h, sin_d, cos_d = TrafficAnalyticsEngine.compute_temporal_features(start)
-            basis = ("crossings" if r["n_crossings"] == r["n_windows"] else
-                     "tracks" if r["n_tracks"] == r["n_windows"] else "mixed")
-
-            def num(key: str, nd: int) -> Optional[float]:
-                return None if r[key] is None else round(float(r[key]), nd)
-
-            out.append({
-                "camera_id": r["camera_id"], "camera_name": r["camera_name"],
-                "timestamp": float(end), "timestamp_iso": datetime.fromtimestamp(end, timezone.utc).isoformat(),
-                "timestamp_local_iso": local_iso(end),
-                "window_seconds": n, "observed_seconds": seconds, "n_windows": int(r["n_windows"]),
-                "total_volume": total, "car_volume": int(r["car_volume"] or 0),
-                "motorcycle_volume": int(r["motorcycle_volume"] or 0), "truck_volume": int(r["truck_volume"] or 0),
-                "bus_volume": int(r["bus_volume"] or 0),
-                "avg_active_vehicles": num("avg_active_vehicles", 2) or 0.0,
-                "peak_active_vehicles": int(r["peak_active_vehicles"] or 0),
-                "occupancy_ratio": num("occupancy_ratio", 4) or 0.0,
-                "avg_speed_px_s": num("avg_speed_px_s", 2) or 0.0,
-                "stopped_vehicles": int(r["stopped_vehicles"] or 0),
-                "congestion_index": num("congestion_index", 3) or 0.0,
-                "avg_flow_dx": num("avg_flow_dx", 2) or 0.0, "avg_flow_dy": num("avg_flow_dy", 2) or 0.0,
-                "flow_rate_vpm": round(total / seconds * 60.0, 2) if seconds > 0 else 0.0,
-                "flow_rate_vph": round(total / seconds * 3600.0, 1) if seconds > 0 else 0.0,
-                # local wall clock of the bucket START (raw rows carry that of the window end)
-                "hour": hour, "minute": minute, "day_of_week": dow, "is_weekend": wknd,
-                "sin_hour": sin_h, "cos_hour": cos_h, "sin_dow": sin_d, "cos_dow": cos_d,
-                "volume_basis": basis,
-                "median_speed_bps": num("median_speed_bps", 3), "mean_speed_bps": num("mean_speed_bps", 3),
-                "queue_share": num("queue_share", 4), "avg_traffic_vehicles": num("avg_traffic_vehicles", 2),
-            })
-        return out
-
-    def get_cumulative_summary(self, camera_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get cumulative statistics across one or all cameras."""
-        if camera_id is not None:
-            rows = self._read("SELECT * FROM camera_cumulative_volume WHERE camera_id = ?;", (camera_id,))
-        else:
-            rows = self._read("SELECT * FROM camera_cumulative_volume ORDER BY cumulative_volume DESC;")
+        rows = self._read(f"SELECT * FROM camera_traffic_timeseries {where} "
+                          f"ORDER BY timestamp {direction}, id {direction} LIMIT ?;", [*params, limit])
         return [dict(row) for row in rows]
 
 
@@ -705,8 +576,6 @@ class TrafficAnalyticsEngine:
         self,
         db_path: str = DEFAULT_DB_PATH,
         primary_window_seconds: int = 60,
-        micro_window_seconds: int = 10,
-        macro_window_seconds: int = 300,
         stop_bodies_per_s: float = 0.10,        # below this (body sizes/s) a moving-stream vehicle is stopped
         static_after_s: float = 6.0,            # unmoved this long since first seen -> parked
         moved_extent: float = 0.6,              # body sizes travelled that prove a track is moving traffic
@@ -720,8 +589,6 @@ class TrafficAnalyticsEngine:
         with detections but no ``counted_now`` are always track-based."""
         self.db = TrafficAnalyticsDatabase(db_path)
         self.primary_window_seconds = primary_window_seconds
-        self.micro_window_seconds = micro_window_seconds
-        self.macro_window_seconds = macro_window_seconds
         self.stop_bodies_per_s = stop_bodies_per_s
         self.static_after_s = static_after_s
         self.moved_extent = moved_extent
@@ -923,6 +790,8 @@ class TrafficAnalyticsEngine:
 
                 track.size = 0.8 * track.size + 0.2 * size
                 track.max_extent = max(track.max_extent, math.hypot(cx - track.first_cx, cy - track.first_cy))
+                if track.max_extent - track.advance_extent >= LANE_ADVANCE_BODIES * track.size:
+                    track.advance_extent, track.advance_ts = track.max_extent, timestamp
                 track.history.append((timestamp, cx, cy))
                 while track.history and timestamp - track.history[0][0] > LOOKBACK_S:
                     track.history.popleft()
@@ -966,10 +835,13 @@ class TrafficAnalyticsEngine:
                 current_frame_speeds.append(smooth_speed)
                 current_frame_dxs.append(track.dx_px_s)
                 current_frame_dys.append(track.dy_px_s)
-                if moved:
-                    moving_boxes.append((x1, y1, x2, y2))
-                else:
+                if not moved:
                     queued_in_frame += 1
+                elif timestamp - track.advance_ts < self.static_after_s:
+                    # Lane evidence only from vehicles still advancing: ``moved`` is a latch, so a car
+                    # that drove in and parked would otherwise heat its own bay into a "lane". Judged
+                    # by progress, not speed, so a crawling queue (< stop_bodies_per_s) keeps teaching.
+                    moving_boxes.append((x1, y1, x2, y2))
                 bps = track.recent_bps
                 if bps is None and queued:
                     bps = 0.0                   # still in its lane for >= QUEUE_AFTER_S
@@ -1394,68 +1266,5 @@ class TrafficAnalyticsEngine:
                 "recent_history": history[-30:],  # last 30 minutes / intervals
             }
 
-    def get_camera_summary(self, camera_id: int) -> Dict[str, Any]:
-        """Get cumulative totals and historical averages for a camera."""
-        cumul_list = self.db.get_cumulative_summary(camera_id)
-        cumul = cumul_list[0] if cumul_list else {}
-        # The latest windows of any length, weighted by their length: the flow rate is volume per
-        # OBSERVED second and speed/congestion are time-weighted (speed only over windows that had
-        # moving traffic: a window without any has no speed, not a speed of zero).
-        recent = self.db.query_timeseries(camera_id=camera_id, limit=RECENT_SUMMARY_WINDOWS, order_asc=False)
-
-        def weighted(key: str, only_positive: bool = False) -> float:
-            pairs = [(float(r[key]), float(r["window_seconds"])) for r in recent
-                     if r.get(key) is not None and r["window_seconds"] > 0 and (r[key] > 0 or not only_positive)]
-            weight = sum(w for _, w in pairs)
-            return sum(v * w for v, w in pairs) / weight if weight > 0 else 0.0
-
-        seconds = sum(float(r["window_seconds"]) for r in recent)
-        avg_vpm = round(sum(r["total_volume"] for r in recent) / seconds * 60.0, 2) if seconds > 0 else 0.0
-        avg_speed = round(weighted("avg_speed_px_s", only_positive=True), 2)
-        avg_cong = round(weighted("congestion_index"), 3)
-
-        return {
-            "camera_id": camera_id,
-            "camera_name": cumul.get("camera_name", f"Camera {camera_id}"),
-            "cumulative_volume": cumul.get("cumulative_volume", 0),
-            "cumulative_breakdown": {
-                "cars": cumul.get("cumulative_cars", 0),
-                "motorcycles": cumul.get("cumulative_motorcycles", 0),
-                "trucks": cumul.get("cumulative_trucks", 0),
-                "buses": cumul.get("cumulative_buses", 0),
-            },
-            "recent_avg_flow_rate_vpm": avg_vpm,
-            "recent_avg_speed_px_s": avg_speed,
-            "recent_avg_congestion_index": avg_cong,
-            "recent_congestion_label": congestion_label(avg_cong),
-            "last_updated": cumul.get("last_updated", 0),
-        }
-
     def get_first_timestamp(self, camera_id: int) -> Optional[float]:
         return self.db.first_timestamp(camera_id)
-
-    # ── Time-Series & LSTM Data Extraction ────────────────────────────────────
-
-    def export_timeseries_dataset(
-        self,
-        camera_id: Optional[int] = None,
-        window_seconds: Optional[int] = None,
-        start_ts: Optional[float] = None,
-        end_ts: Optional[float] = None,
-        limit: int = 5000,
-    ) -> List[Dict[str, Any]]:
-        """
-        Time-series rows of the stored windows (``window_seconds=None``) or aggregated into
-        ``window_seconds`` buckets (see :meth:`TrafficAnalyticsDatabase.query_timeseries`).
-
-        For analysis and model training prefer ``backend/dataset.py``: it prorates windows across
-        bucket edges, reports observed-time coverage, uses counting-line vph and local-time features.
-        """
-        return self.db.query_timeseries(
-            camera_id=camera_id,
-            window_seconds=window_seconds,
-            start_ts=start_ts,
-            end_ts=end_ts,
-            limit=limit,
-            order_asc=True
-        )

@@ -16,6 +16,7 @@ import unittest
 import math
 import os
 import json
+import tempfile
 from backend.topology_engine import TopologyEngine
 from tests import TOTAL_CAMERAS, TOTAL_EDGES
 
@@ -240,12 +241,14 @@ class TestSpatiotemporalArrivalWindow(unittest.TestCase):
         self.engine = TopologyEngine()
 
 
-
-
-
-
-
-
+class TestNullStreamUrl(unittest.TestCase):
+    def test_json_null_stream_url_is_empty_not_the_string_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "topology.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"nodes": [{"id": 7, "name": "X", "lat": -6.6, "lng": 106.8, "stream_url": None}],
+                           "edges": []}, f)
+            self.assertEqual(TopologyEngine(path).cameras[7]["stream_url"], "")
 
 
 if __name__ == "__main__":

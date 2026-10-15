@@ -8,11 +8,10 @@ Implements:
 - Thread-safe connection pooling and pragma optimizations.
 - Schema DDL for cameras, topology_edges, vehicle_sightings and observation_windows.
 - Automatic seeding of every BSW CCTV camera and topology edge from data/bogor_camera_topology.json.
-- Core querying API: vehicle sightings insertion, recent sighting retrieval, multi-filter search,
+- Core querying API: vehicle sightings insertion, recent sighting retrieval,
   counting-line observation windows and rates, and traffic statistics.
 - All-time dashboard aggregates are O(cameras), not O(sightings): AFTER INSERT triggers on
-  ``vehicle_sightings`` maintain ``sighting_totals`` / ``camera_track_totals`` / ``sighting_tracks`` /
-  ``sighting_counters`` (see ``TOTALS_DDL``). The counters count *inserts*, so
+  ``vehicle_sightings`` maintain ``sighting_totals`` (see ``TOTALS_TABLES_DDL``). It counts *inserts*, so
   deleting old sightings (retention) never lowers an all-time total.
 - Storage upkeep: ``compact()`` (one-off VACUUM into incremental auto-vacuum), ``incremental_vacuum()``,
   and opt-in retention (``prune_sightings``).
@@ -28,9 +27,8 @@ import threading
 import weakref
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from backend.camera_sources import load_extra_nodes
 
 try:  # tunables; the module stays importable on its own
     from backend.config import DB_JOURNAL_SIZE_LIMIT_BYTES
@@ -136,9 +134,8 @@ CREATE INDEX IF NOT EXISTS idx_obs_time ON observation_windows(end_ts);
 # SEMANTICS: they count *inserts*. Deleting sightings (retention, ``prune_sightings``) does not
 # lower them -- "all-time" means all time, not "what is still stored".
 #   sighting_totals(camera_id, vehicle_class)  rows + last timestamp per camera and class
-#   sighting_tracks(local_track_id, camera_id) set of distinct tracks seen (exact COUNT(DISTINCT))
-#   camera_track_totals(camera_id)             distinct local_track_id per camera
-#   sighting_counters(key)                     'tracks' (distinct local_track_id over all cameras)
+# (Distinct-track counters were dropped: the tracker numbers tracks from 1 again on every restart,
+# so they undercounted, and nothing read them. ``_drop_track_counters`` removes them.)
 TOTALS_MARKER = "totals_v1"
 COMPACT_MARKER = "compacted_v1"
 COMPACT_BUSY_TIMEOUT_MS = 10_000
@@ -151,22 +148,6 @@ CREATE TABLE IF NOT EXISTS sighting_totals (
     last_seen_iso TEXT,
     PRIMARY KEY (camera_id, vehicle_class)
 ) WITHOUT ROWID;
-
-CREATE TABLE IF NOT EXISTS sighting_tracks (
-    local_track_id INTEGER NOT NULL,
-    camera_id INTEGER NOT NULL,
-    PRIMARY KEY (local_track_id, camera_id)
-) WITHOUT ROWID;
-
-CREATE TABLE IF NOT EXISTS camera_track_totals (
-    camera_id INTEGER PRIMARY KEY,
-    tracks INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS sighting_counters (
-    key TEXT PRIMARY KEY,
-    value INTEGER NOT NULL
-) WITHOUT ROWID;
 """
 
 TOTALS_TRIGGERS_DDL = """
@@ -177,39 +158,15 @@ BEGIN
     ON CONFLICT(camera_id, vehicle_class) DO UPDATE SET
         n = n + 1,
         last_seen_iso = max(last_seen_iso, excluded.last_seen_iso);
-
-    -- distinct tracks: the global and per-camera counters move only when the pair is new
-    UPDATE sighting_counters SET value = value + 1
-    WHERE key = 'tracks'
-      AND NOT EXISTS (SELECT 1 FROM sighting_tracks WHERE local_track_id = NEW.local_track_id);
-    INSERT INTO camera_track_totals (camera_id, tracks)
-    SELECT NEW.camera_id, 1
-    WHERE NOT EXISTS (SELECT 1 FROM sighting_tracks
-                      WHERE local_track_id = NEW.local_track_id AND camera_id = NEW.camera_id)
-    ON CONFLICT(camera_id) DO UPDATE SET tracks = tracks + 1;
-    INSERT OR IGNORE INTO sighting_tracks (local_track_id, camera_id)
-    VALUES (NEW.local_track_id, NEW.camera_id);
 END;
 """
 
 # Rebuilds every totals table from the rows currently in vehicle_sightings.
 TOTALS_BACKFILL_SQL = (
     "DELETE FROM sighting_totals",
-    "DELETE FROM sighting_tracks",
-    "DELETE FROM camera_track_totals",
-    "DELETE FROM sighting_counters",
     """INSERT INTO sighting_totals (camera_id, vehicle_class, n, last_seen_iso)
        SELECT camera_id, vehicle_class, COUNT(*), MAX(timestamp_iso)
        FROM vehicle_sightings GROUP BY camera_id, vehicle_class""",
-    # sorted so the WITHOUT ROWID b-tree is built by appending
-    """INSERT INTO sighting_tracks (local_track_id, camera_id)
-       SELECT local_track_id, camera_id FROM
-           (SELECT DISTINCT local_track_id, camera_id FROM vehicle_sightings
-            ORDER BY local_track_id, camera_id)""",
-    """INSERT INTO camera_track_totals (camera_id, tracks)
-       SELECT camera_id, COUNT(*) FROM sighting_tracks GROUP BY camera_id""",
-    """INSERT INTO sighting_counters (key, value) VALUES
-           ('tracks', (SELECT COUNT(DISTINCT local_track_id) FROM sighting_tracks))""",
 )
 
 
@@ -287,14 +244,34 @@ def _drop_reid_schema(conn: sqlite3.Connection) -> bool:
         cur.execute("DROP INDEX IF EXISTS idx_active_targets_cam")
         for column in stale_columns:
             cur.execute(f"ALTER TABLE vehicle_sightings DROP COLUMN {column}")
-        if "sighting_counters" in tables:
-            cur.execute("DELETE FROM sighting_counters WHERE key IN ('global_vehicles', 'handoffs')")
         cur.execute("DELETE FROM maintenance_state WHERE key = 'embeddings_expired_upto'")
         if totals_done:
             for part in _split_statements(TOTALS_TRIGGERS_DDL):
                 cur.execute(part)
     logger.info(f"Removed re-identification tables/columns in {time.perf_counter() - t0:.1f}s "
                 f"(dropped columns: {stale_columns or 'none'})")
+    return True
+
+
+_TRACK_COUNTER_TABLES = ("sighting_tracks", "camera_track_totals", "sighting_counters")
+
+
+def _drop_track_counters(conn: sqlite3.Connection) -> bool:
+    """Drops the distinct-track counter tables and rewrites the totals trigger without them.
+    Returns True if it changed anything."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if not tables & set(_TRACK_COUNTER_TABLES):
+        return False
+    with _transaction(conn) as cur:
+        cur.execute("BEGIN IMMEDIATE")
+        had_trigger = cur.execute("SELECT 1 FROM sqlite_master WHERE type = 'trigger' "
+                                  "AND name = 'trg_sightings_totals'").fetchone()
+        cur.execute("DROP TRIGGER IF EXISTS trg_sightings_totals")
+        for table in _TRACK_COUNTER_TABLES:
+            cur.execute(f"DROP TABLE IF EXISTS {table}")
+        if had_trigger:
+            for part in _split_statements(TOTALS_TRIGGERS_DDL):
+                cur.execute(part)
     return True
 
 
@@ -309,7 +286,8 @@ def migrate_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
       then the two covering indexes they replace are dropped. Marker: ``maintenance_state.totals_v1``.
     """
     report: Dict[str, Any] = {"totals_backfilled": False, "backfill_s": 0.0, "dropped_indexes": [],
-                              "reid_schema_dropped": _drop_reid_schema(conn)}
+                              "reid_schema_dropped": _drop_reid_schema(conn),
+                              "track_counters_dropped": _drop_track_counters(conn)}
 
     def totals_done() -> bool:
         return conn.execute("SELECT 1 FROM maintenance_state WHERE key = ?", (TOTALS_MARKER,)).fetchone() is not None
@@ -337,11 +315,6 @@ def migrate_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
     logger.info(f"Totals tables created and backfilled in {report['backfill_s']}s; "
                 f"dropped indexes: {report['dropped_indexes'] or 'none'}")
     return report
-
-
-def _like_contains(value: str) -> str:
-    """LIKE pattern (use with ESCAPE '\\') matching ``value`` literally anywhere in a string."""
-    return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
 def _split_statements(script: str) -> List[str]:
@@ -377,7 +350,7 @@ def seed_cameras_from_topology(
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    nodes = data.get("nodes", []) + load_extra_nodes()
+    nodes = data.get("nodes", [])
     edges = data.get("edges", [])
 
     cur.execute("SELECT id FROM cameras;")
@@ -720,42 +693,6 @@ class Database:
         )
         return [dict(r) for r in cur.fetchall()]
 
-    def search_vehicles(
-        self,
-        vehicle_class: Optional[str] = None,
-        camera_id: Optional[int] = None,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        limit: int = 50,
-        conn: Optional[sqlite3.Connection] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Searches vehicle sightings with composite filters.
-        """
-        target_conn = conn or self.conn
-        query = ["SELECT s.*, c.name as camera_name FROM vehicle_sightings s JOIN cameras c ON s.camera_id = c.id WHERE 1=1"]
-        params: List[Any] = []
-
-        if vehicle_class:
-            query.append("AND s.vehicle_class = ?")
-            params.append(vehicle_class)
-        if camera_id is not None:
-            query.append("AND s.camera_id = ?")
-            params.append(camera_id)
-        if start_time:
-            query.append("AND s.timestamp_iso >= ?")
-            params.append(start_time)
-        if end_time:
-            query.append("AND s.timestamp_iso <= ?")
-            params.append(end_time)
-
-        query.append("ORDER BY s.timestamp_iso DESC LIMIT ?")
-        params.append(limit)
-
-        cur = target_conn.cursor()
-        cur.execute(" ".join(query), params)
-        return [dict(r) for r in cur.fetchall()]
-
     def get_latest_sightings(
         self, limit: int = 50, conn: Optional[sqlite3.Connection] = None
     ) -> List[Dict[str, Any]]:
@@ -774,75 +711,6 @@ class Database:
         )
         return [dict(r) for r in cur.fetchall()]
 
-    def search_sightings(self, query: str, limit: int = 50,
-                         conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-        """
-        Free-text sighting search for the dashboard, newest first, in the row shape of
-        ``get_latest_sightings`` (``s.*`` + ``camera_name`` + ``corridor``).
-
-        * numeric query ``"1234"`` / ``"#1234"``: sightings of camera 1234 (exact);
-        * text equal (case-insensitively) to a vehicle class that exists (car, motorcycle, bus,
-          truck, ...): sightings of that class;
-        * any text: sightings of every camera whose name or corridor contains it (case-insensitive
-          LIKE, ``%``/``_`` are literal; a space also matches the underscore of ``SSA_RING``); the
-          camera ids are resolved first from the 100-odd-row ``cameras`` table.
-        * empty query: the latest sightings.
-
-        Matches from the different rules are merged (de-duplicated, ordered by
-        ``timestamp_iso DESC, sighting_id DESC``). Each rule reads only the newest ``limit`` index
-        entries of its camera / class, so cost is independent of table size for all
-        common cases (a class so rare that it has no sighting among the newest rows is the one
-        exception and degrades to a scan of ``idx_sightings_time``).
-        """
-        target_conn = conn or self.conn
-        limit = min(max(0, int(limit)), 5000)
-        text = (query or "").strip()
-        if limit == 0:
-            return []
-        if not text:
-            return self.get_latest_sightings(limit=limit, conn=target_conn)
-
-        numeric = text.lstrip("#")
-        candidates: Dict[int, Tuple[str, int]] = {}       # sighting_id -> (timestamp_iso, sighting_id)
-
-        def collect(sql: str, params: Sequence[Any]) -> None:
-            for ts, sid in target_conn.execute(sql, params).fetchall():
-                candidates[sid] = (ts, sid)
-
-        if numeric.isascii() and numeric.isdigit():
-            n = int(numeric)
-            if n > 2 ** 63 - 1:             # cannot be a camera id (and would overflow SQLite's INTEGER)
-                return []
-            collect("SELECT timestamp_iso, sighting_id FROM vehicle_sightings WHERE camera_id = ? "
-                    "ORDER BY timestamp_iso DESC, sighting_id DESC LIMIT ?", (n, limit))
-        else:
-            lowered = text.lower()
-            known = target_conn.execute(
-                "SELECT vehicle_class FROM sighting_totals WHERE lower(vehicle_class) = ? GROUP BY vehicle_class",
-                (lowered,)).fetchall()
-            for (cls,) in known:
-                collect("SELECT timestamp_iso, sighting_id FROM vehicle_sightings WHERE vehicle_class = ? "
-                        "ORDER BY timestamp_iso DESC, sighting_id DESC LIMIT ?", (cls, limit))
-            # corridors are spelled SSA_RING: a space in the query matches that underscore too
-            cam_ids = [r[0] for r in target_conn.execute(
-                "SELECT id FROM cameras WHERE name LIKE ? ESCAPE '\\' OR corridor LIKE ? ESCAPE '\\' "
-                "OR replace(corridor, '_', ' ') LIKE ? ESCAPE '\\'",
-                (_like_contains(text), _like_contains(text), _like_contains(text.replace("_", " ")))).fetchall()]
-            for cid in cam_ids:
-                collect("SELECT timestamp_iso, sighting_id FROM vehicle_sightings WHERE camera_id = ? "
-                        "ORDER BY timestamp_iso DESC, sighting_id DESC LIMIT ?", (cid, limit))
-
-        if not candidates:
-            return []
-        top = sorted(candidates.values(), reverse=True)[:limit]
-        ids = [sid for _, sid in top]
-        rows = target_conn.execute(
-            "SELECT s.*, c.name AS camera_name, c.corridor "
-            "FROM vehicle_sightings s JOIN cameras c ON s.camera_id = c.id "
-            f"WHERE s.sighting_id IN ({','.join('?' * len(ids))})", ids).fetchall()
-        by_id = {r["sighting_id"]: dict(r) for r in rows}
-        return [by_id[sid] for sid in ids if sid in by_id]
-
     def prune_sightings(self, older_than_s: float, conn: Optional[sqlite3.Connection] = None,
                         batch: int = 2000, pause_s: float = 0.0,
                         should_stop: Optional[Any] = None) -> int:
@@ -851,7 +719,7 @@ class Database:
         transaction with ``pause_s`` between batches (the tracker keeps writing in between).
         Returns the number of sightings removed.
 
-        * All-time totals (``sighting_totals``, ``sighting_counters``, ...) are unchanged: they count
+        * All-time totals (``sighting_totals``) are unchanged: they count
           inserts. ``observation_windows`` (volume history) is not touched.
         * Free pages go back to the file via ``incremental_vacuum`` (see ``SightingMaintenance``).
         """
@@ -878,13 +746,11 @@ class Database:
     ) -> List[Dict[str, Any]]:
         """
         Returns real-time vehicle counts across all 94 CCTV cameras.
-        Includes total sightings, unique tracked vehicles, class breakdowns,
-        and last seen timestamps.
+        Includes total sightings, class breakdowns and last seen timestamps.
 
         All-time (``window_s`` None) counts come from the trigger-maintained totals tables (O(cameras),
         and they include sightings that retention has since deleted); a window reads the sightings
-        of that window through ``idx_sightings_cam_time``. ``unique_vehicles`` is the number of
-        distinct ``local_track_id`` seen at the camera in both cases.
+        of that window through ``idx_sightings_cam_time``.
         """
         target_conn = conn or self.conn
         cur = target_conn.cursor()
@@ -904,7 +770,6 @@ class Database:
                 c.longitude,
                 c.status as camera_status,
                 COALESCE(s.total_sightings, 0) as total_sightings,
-                COALESCE(s.unique_vehicles, 0) as unique_vehicles,
                 s.last_seen_iso,
                 COALESCE(s.cars, 0) as cars,
                 COALESCE(s.motorcycles, 0) as motorcycles,
@@ -915,7 +780,6 @@ class Database:
                 SELECT
                     camera_id,
                     COUNT(*) as total_sightings,
-                    COUNT(DISTINCT local_track_id) as unique_vehicles,
                     MAX(timestamp_iso) as last_seen_iso,
                     SUM(CASE WHEN vehicle_class = 'car' THEN 1 ELSE 0 END) as cars,
                     SUM(CASE WHEN vehicle_class = 'motorcycle' THEN 1 ELSE 0 END) as motorcycles,
@@ -937,7 +801,6 @@ class Database:
                 c.longitude,
                 c.status as camera_status,
                 COALESCE(s.total_sightings, 0) as total_sightings,
-                COALESCE(k.tracks, 0) as unique_vehicles,
                 s.last_seen_iso,
                 COALESCE(s.cars, 0) as cars,
                 COALESCE(s.motorcycles, 0) as motorcycles,
@@ -956,7 +819,6 @@ class Database:
                 FROM sighting_totals
                 GROUP BY camera_id
             ) s ON c.id = s.camera_id
-            LEFT JOIN camera_track_totals k ON k.camera_id = c.id
             ORDER BY total_sightings DESC, c.id ASC
             """
         cur.execute(query, params)
@@ -972,7 +834,6 @@ class Database:
                 "longitude": r["longitude"],
                 "status": r["camera_status"],
                 "total_sightings": int(r["total_sightings"]),
-                "unique_vehicles": int(r["unique_vehicles"]),
                 "last_seen_iso": r["last_seen_iso"],
                 "classes": {
                     "car": int(r["cars"]),
@@ -1067,8 +928,7 @@ class Database:
 
         Every all-time figure is read from the trigger-maintained totals tables, O(cameras) rather
         than a scan of ``vehicle_sightings``. They count inserts, so ``total_sightings`` and friends
-        include sightings that retention has deleted. ``total_unique_vehicles`` is the number of
-        distinct ``local_track_id``.
+        include sightings that retention has deleted.
         """
         target_conn = conn or self.conn
         cur = target_conn.cursor()
@@ -1078,8 +938,6 @@ class Database:
 
         cur.execute("SELECT COALESCE(SUM(n), 0) FROM sighting_totals")
         total_sightings = cur.fetchone()[0]
-        counters = {row["key"]: row["value"] for row in cur.execute("SELECT key, value FROM sighting_counters")}
-        unique_local_vehicles = counters.get("tracks", 0)
 
         # Sightings breakdown by class
         cur.execute("SELECT vehicle_class, SUM(n) AS count FROM sighting_totals GROUP BY vehicle_class")
@@ -1095,7 +953,6 @@ class Database:
             "active_cameras": active_cameras,
             "total_sightings": total_sightings,
             "total_vehicles_counted": total_sightings,
-            "total_unique_vehicles": unique_local_vehicles,
             "class_breakdown": class_breakdown,
             "cameras_with_detections": cameras_with_detections,
             "camera_counts": camera_counts_map,

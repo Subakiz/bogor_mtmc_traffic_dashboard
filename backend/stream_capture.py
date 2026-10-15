@@ -10,17 +10,14 @@ Implements:
   grabbed; ``max_fps`` is re-read every frame, so a rolling visit promoted to focus speeds up.
 - `get_new_frame()`: returns the newest converted frame.
 - Resilient auto-reconnection: Exponential backoff on stream/network interruptions.
-- Clean resource management: Safe `release()` closing capture, terminating thread, and reclaiming memory.
+- Clean resource management: Safe `release()` closing capture and terminating the thread.
 """
 
-import collections
-import glob
 import logging
 import os
-import sys
 import threading
 import time
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -67,49 +64,6 @@ os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", (
 ))
 
 
-class MockVideoCapture:
-    """Mock video capture object for testing environments without live RTSP/HLS stream."""
-
-    def __init__(self, width: int = 640, height: int = 480, fps: float = 25.0):
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self._opened = True
-        self._frame_count = 0
-        self._last_time = time.time()
-
-    def isOpened(self) -> bool:
-        return self._opened
-
-    def grab(self) -> bool:
-        if not self._opened:
-            return False
-        self._frame_count += 1
-        return True
-
-    def retrieve(self) -> Tuple[bool, Optional[np.ndarray]]:
-        if not self._opened:
-            return False, None
-        # Generate synthetic frame with rolling gradient and timestamp marker
-        frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        color_val = (self._frame_count * 5) % 255
-        frame[:, :] = (color_val, 128, 255 - color_val)
-        return True, frame
-
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
-        if self.grab():
-            return self.retrieve()
-        return False, None
-
-    def get(self, prop_id: int) -> float:
-        if cv2 is not None and prop_id == cv2.CAP_PROP_POS_MSEC:
-            return float(self._frame_count * (1000.0 / self.fps))
-        return 0.0
-
-    def release(self):
-        self._opened = False
-
-
 # A live stream more than this far off its real-time playout schedule is re-anchored (stream
 # restart, timestamp jump, or a network stall longer than a segment).
 RESYNC_S = 3.0
@@ -136,7 +90,6 @@ class ThreadedStreamCapture:
         max_fps: float = 30.0,
         initial_backoff: float = 0.5,
         max_backoff: float = 8.0,
-        buffer_size: int = 2,
         auto_start: bool = True,
         realtime: Optional[bool] = None,
     ):
@@ -148,7 +101,6 @@ class ThreadedStreamCapture:
         self.initial_backoff = initial_backoff
         self.max_backoff = max_backoff
         self.current_backoff = initial_backoff
-        self.buffer_size = buffer_size
 
         self._lock = threading.Lock()
         self._cap_lock = threading.Lock()
@@ -159,18 +111,11 @@ class ThreadedStreamCapture:
         self._thread: Optional[threading.Thread] = None
 
         self._is_opened = False
-        self._grab_count = 0
-        self._retrieve_count = 0
-        self._dropped_frames_count = 0
         self._consecutive_failures = 0
         self._last_frame_time = 0.0
-        self._start_time = 0.0
 
-        # Ring buffer retaining only the newest frames
-        self._ring_buffer = collections.deque(maxlen=self.buffer_size)
         self._cached_frame: Optional[np.ndarray] = None
         self._frame_seq = 0
-        self._has_new_grab = False
 
         if auto_start:
             self._init_initial_capture()
@@ -188,15 +133,14 @@ class ThreadedStreamCapture:
                 self._cap = None
 
     def _create_capture(self) -> Optional[Any]:
-        """Initializes OpenCV or Mock VideoCapture."""
+        """Opens the OpenCV capture (or returns an injected capture object)."""
         if hasattr(self.source, "grab") and hasattr(self.source, "retrieve"):
             # Custom or mock capture provided directly
             return self.source
 
         if cv2 is None:
-            # OpenCV missing: fallback to mock capture
-            logger.warning(f"OpenCV not found. Using MockVideoCapture for {self.name}.")
-            return MockVideoCapture()
+            logger.warning(f"OpenCV not found; cannot open {self.name}.")
+            return None
 
         try:
             # FFmpeg only for URLs: on failure OpenCV would otherwise fall back to its image-sequence
@@ -224,7 +168,6 @@ class ThreadedStreamCapture:
             if self._thread is not None and self._thread.is_alive():
                 return
             self._stop_event.clear()
-            self._start_time = time.time()
             self._thread = threading.Thread(
                 target=self._capture_loop, name=f"Capture-{self.name}", daemon=True
             )
@@ -305,10 +248,8 @@ class ThreadedStreamCapture:
                 if ret and frame is not None:
                     last_out_pos = pos
                     with self._lock:
-                        self._grab_count += 1
                         self._cached_frame = frame
                         self._frame_seq += 1
-                        self._has_new_grab = True
                         self._consecutive_failures = 0
                         self.current_backoff = self.initial_backoff
                         self._last_frame_time = time.time()
@@ -316,9 +257,6 @@ class ThreadedStreamCapture:
                 else:
                     with self._lock:
                         self._consecutive_failures += 1
-            else:
-                with self._lock:
-                    self._dropped_frames_count += 1
 
             if pos is None:
                 # No stream clock to play against: pace on the wall clock instead.
@@ -385,21 +323,6 @@ class ThreadedStreamCapture:
                 self._is_opened = False
                 self._cap = None
 
-    def get_frame(self, timeout: float = 0.5) -> Tuple[bool, Optional[np.ndarray]]:
-        """
-        Retrieves the freshest decoded frame safely from cached frame.
-        Non-blocking and eliminates multithreaded VideoCapture race conditions.
-        """
-        with self._lock:
-            if self._cached_frame is not None:
-                self._retrieve_count += 1
-                self._ring_buffer.append(
-                    {"frame_id": self._retrieve_count, "timestamp": time.time()}
-                )
-                return True, self._cached_frame.copy()
-
-            return False, None
-
     def get_new_frame(
         self, last_seq: int = 0, timeout: float = 0.5, copy: bool = False
     ) -> Tuple[bool, int, Optional[np.ndarray]]:
@@ -413,36 +336,12 @@ class ThreadedStreamCapture:
                 self._frame_available.wait(timeout=timeout)
             if self._cached_frame is None or self._frame_seq <= last_seq:
                 return False, last_seq, None
-            self._retrieve_count += 1
             frame = self._cached_frame.copy() if copy else self._cached_frame
             return True, self._frame_seq, frame
 
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
-        """Standard OpenCV-compatible interface for get_frame()."""
-        return self.get_frame()
-
-    def get_status(self) -> Dict[str, Any]:
-        """Returns real-time stream telemetry and health metrics."""
-        with self._lock:
-            uptime = (time.time() - self._start_time) if self._start_time > 0 else 0.0
-            computed_fps = (self._retrieve_count / uptime) if uptime > 0 else 0.0
-            return {
-                "camera_id": self.camera_id,
-                "name": self.name,
-                "source": str(self.source),
-                "is_opened": self._is_opened,
-                "frames_grabbed": self._grab_count,
-                "frames_retrieved": self._retrieve_count,
-                "dropped_frames": max(0, self._grab_count - self._retrieve_count),
-                "current_backoff_s": round(self.current_backoff, 2),
-                "fps": round(computed_fps, 2),
-                "last_frame_time": self._last_frame_time,
-                "uptime_s": round(uptime, 2),
-            }
-
     def release(self):
         """
-        Stops background capture thread, closes VideoCapture, and releases memory.
+        Stops background capture thread and closes the VideoCapture.
         """
         self._stop_event.set()
         with self._frame_available:
@@ -464,7 +363,6 @@ class ThreadedStreamCapture:
         with self._lock:
             self._is_opened = False
             self._cached_frame = None
-            self._ring_buffer.clear()
 
     def __enter__(self):
         return self

@@ -9,12 +9,6 @@ import os
 import shutil
 import tempfile
 
-# Extra city sources are opt-in per test (tests/test_camera_sources.py); the Bogor suite counts Bogor only.
-os.environ["EXTRA_CAMERA_SOURCES"] = "0"
-
-# Extra city sources are opt-in per test (tests/test_camera_sources.py); the Bogor suite counts Bogor only.
-os.environ["EXTRA_CAMERA_SOURCES"] = "0"
-
 _TMP = tempfile.mkdtemp(prefix="cctv-tests-")
 for _var, _name in (("TRAFFIC_DB_PATH", "traffic_db.sqlite"),
                     ("ANALYTICS_DB_PATH", "traffic_timeseries.db"),

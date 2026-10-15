@@ -64,6 +64,25 @@ class CitywideRateTest(unittest.TestCase):
         self.assertNotIn(167, cluster)
         self.assertEqual(server._citywide_vph(rates), 1200.0)  # max(900, 600) + 300
 
+    def test_removed_cameras_are_not_citywide(self):
+        self.assertNotIn(1001, server.topology.cameras)            # a dropped Tasikmalaya camera
+        self.assertEqual(server._citywide_vph({167: {"vph": 300.0}, 1001: {"vph": 500.0}}), 300.0)
+
+    def test_recent_limit_is_clamped(self):
+        client = TestClient(server.app)
+        for limit in (-1, 0, 10 ** 9):
+            self.assertEqual(client.get(f"/api/recent?limit={limit}").status_code, 200)
+        calls = []
+        real = server.db.get_latest_sightings
+        server.db.get_latest_sightings = lambda limit: calls.append(limit) or []
+        try:
+            server._stats_cache.clear()
+            client.get("/api/recent?limit=-1")
+            client.get("/api/recent?limit=999999")
+        finally:
+            server.db.get_latest_sightings = real
+        self.assertEqual(calls, [1, server.RECENT_MAX_LIMIT])
+
     def test_counts_endpoint_exposes_rates(self):
         data = TestClient(server.app).get("/api/cameras/counts").json()
         for key in ("camera_rates", "camera_vph_map", "cameras_with_rates", "citywide_vph", "rate_window_minutes"):

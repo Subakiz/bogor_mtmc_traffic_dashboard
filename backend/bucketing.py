@@ -11,15 +11,11 @@ The one rule for cutting time into buckets, shared by the Analytics chart and th
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Iterator, Tuple, Union
 
-try:  # IANA zone when the system has tzdata, otherwise the same fixed offset (WIB has no DST)
-    from zoneinfo import ZoneInfo
-    LOCAL_TZ = ZoneInfo("Asia/Jakarta")
-except Exception:  # noqa: BLE001  (ZoneInfoNotFoundError, ImportError)
-    LOCAL_TZ = timezone(timedelta(hours=7), "WIB")
-LOCAL_TZ_NAME = "Asia/Jakarta"
+from car_tracker.analytics import LOCAL_TZ, LOCAL_TZ_NAME   # the engine's WIB, so features and buckets agree
+
 LOCAL_UTC_OFFSET_S = int(datetime(2026, 1, 1, tzinfo=LOCAL_TZ).utcoffset().total_seconds())   # 25200
 
 

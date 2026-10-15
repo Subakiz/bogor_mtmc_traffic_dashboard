@@ -174,5 +174,42 @@ class LaneMapTest(unittest.TestCase):
                 again.close()
 
 
+class ParkedCarDoesNotLearnItsBayAsLaneTest(LaneScenario):
+    def test_car_that_drove_in_and_parked_adds_no_lane_evidence_while_still(self):
+        # ``moved`` stays latched after the drive-in; only movement now may heat the lane map.
+        tid = self.new_id()
+        x = 0.0
+        for _ in range(int(2 * FPS)):              # drives in along the kerb strip at ~2 bodies/s
+            x += 20.0
+            self.frame([self.car(tid, x, KERB_Y)])
+        for _ in range(int(8 * FPS)):              # parks; lane evidence stops static_after_s after it last advanced
+            self.frame([self.car(tid, x, KERB_Y)])
+        lanes = self.engine._lanes[1]
+        r1, r2, c1, c2 = _LaneMap.cells((x, KERB_Y[0], x + 120, KERB_Y[1]), FW, FH)
+        heat_after_parking = float(lanes.heat[r1:r2, c1:c2].sum())
+        obs_after_parking = lanes.obs
+        for _ in range(int(30 * FPS)):             # stays parked for half a minute
+            self.frame([self.car(tid, x, KERB_Y)])
+        self.assertAlmostEqual(float(lanes.heat[r1:r2, c1:c2].sum()), heat_after_parking, places=3)
+        self.assertAlmostEqual(lanes.obs, obs_after_parking, places=3)
+        self.assertFalse(lanes.ready, "half a minute parked must not teach the camera a lane")
+
+    def test_crawling_stop_and_go_queue_still_teaches_the_lanes(self):
+        # A chronic jam (camera 168): cars creep at 0.12 body/s with 1 s stops, so their recent speed
+        # (~0.06-0.08 body/s) never reaches stop_bodies_per_s. They still advance, so they are lane
+        # evidence; otherwise a jammed camera would never learn its lanes.
+        cars = [self.new_id() for _ in range(10)]
+        step = 0.12 * 120 / FPS                    # px per frame at 0.12 body sizes/s (120 px bodies)
+        off, live = 0.0, None
+        for i in range(int(45 * FPS)):
+            if (i // int(FPS)) % 2 == 0:           # 1 s creeping, 1 s standing
+                off += step
+            live = self.frame([self.car(cars[k], 5 + k * 125 + off, LANE_Y) for k in range(10)])
+        bps = [t.recent_bps for t in self.engine._camera_tracks[1].values()]
+        self.assertTrue(bps and all(b is not None and b < self.engine.stop_bodies_per_s for b in bps), bps)
+        self.assertTrue(self.engine._lanes[1].ready, "a crawling queue must still teach the lane map")
+        self.assertTrue(live["lanes_learned"])
+
+
 if __name__ == "__main__":
     unittest.main()

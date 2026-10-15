@@ -18,14 +18,15 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="/static/styles.css?v=20261013_wib" />
+    <link rel="stylesheet" href="/static/styles.css?v=20261015_city" />
 
     <!-- Deferred scripts download in parallel with parsing and run in this order, before
          DOMContentLoaded: leaflet (L), hls.js (Hls), lucide, then app.js, which uses all three. -->
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
     <script defer src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script defer src="/static/app.js?v=20261013_wib"></script>
+    <script defer src="/static/app.js?v=20261015_city"></script>
+    <script defer src="/static/city.js?v=20261015_city"></script>
 </head>
 <body>
 
@@ -58,7 +59,6 @@
                     <button class="chip corridor-btn" aria-pressed="false" data-corridor="PAJAJARAN_CORRIDOR">Pajajaran</button>
                     <button class="chip corridor-btn" aria-pressed="false" data-corridor="SHOLEH_ISKANDAR_BORR">Jl. Baru</button>
                     <button class="chip corridor-btn" aria-pressed="false" data-corridor="BOGOR_TIMUR_TAJUR_KATULAMPA">Tajur</button>
-                    <button class="chip corridor-btn" aria-pressed="false" data-corridor="TASIKMALAYA">Tasikmalaya</button>
                 </div>
                 <div class="toolbar__active truncate" id="activeCamIndicator">Selected: <b>–</b></div>
             </div>
@@ -145,6 +145,7 @@
                 <div class="tabs">
                     <div class="tablist" role="tablist" aria-label="Detail panels">
                         <button class="tab" role="tab" id="tabBtnCameras" data-tab="cameras" aria-selected="true">Cameras</button>
+                        <button class="tab" role="tab" id="tabBtnCity" data-tab="city" aria-selected="false">City</button>
                         <button class="tab" role="tab" id="tabBtnTimeSeries" data-tab="timeseries" aria-selected="false">Analytics</button>
                         <button class="tab" role="tab" id="tabBtnSightings" data-tab="sightings" aria-selected="false">Recent</button>
                     </div>
@@ -163,6 +164,92 @@
                         </span>
                     </div>
                     <div id="allCamerasCountsList" class="scroll"></div>
+                </div>
+
+                <!-- City: citywide patterns (city.js) -->
+                <div id="tabContentCity" class="tabpanel city--loading" role="tabpanel" aria-labelledby="tabBtnCity" hidden>
+                    <div class="scroll scroll--stack">
+                        <section class="city-hero" aria-labelledby="cityTitle">
+                            <p class="city-eyebrow">Citywide pattern · WIB</p>
+                            <h3 id="cityTitle" class="city-title">Reading the city's rhythm…</h3>
+                            <p id="cityLede" class="city-lede"></p>
+                            <div class="city-tiles">
+                                <div class="metric">
+                                    <div class="metric__label"><span>Right now</span></div>
+                                    <div class="metric__value"><span id="cityNowVph">–</span><small>veh / h</small></div>
+                                    <div id="cityNowDelta" class="metric__foot city-delta"></div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric__label"><span>Morning rush</span></div>
+                                    <div class="metric__value"><span id="cityAmHour">–</span></div>
+                                    <div id="cityAmNote" class="metric__foot"></div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric__label"><span>Afternoon rush</span></div>
+                                    <div class="metric__value"><span id="cityPmHour">–</span></div>
+                                    <div id="cityPmNote" class="metric__foot"></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="chart-box city-card" aria-labelledby="cityDayTitle">
+                            <div class="chart-head">
+                                <span><b id="cityDayTitle">A day on Bogor's roads</b> <span class="muted">veh/h per camera</span></span>
+                                <div class="legend">
+                                    <span><i style="background:var(--chart-flow)"></i>Usual</span>
+                                    <span><i style="background:var(--text)"></i>Today</span>
+                                    <span><i style="background:var(--warn)"></i>Junctions slow</span>
+                                </div>
+                            </div>
+                            <div id="cityDay" class="city-chart"></div>
+                            <p id="cityDayReadout" class="city-readout" aria-live="polite"></p>
+                        </section>
+
+                        <section class="chart-box city-card" aria-labelledby="cityHeatTitle">
+                            <div class="chart-head">
+                                <span><b id="cityHeatTitle">Where and when it slows down</b> <span class="muted">by corridor and hour</span></span>
+                                <div class="legend">
+                                    <span><i style="background:var(--ok)"></i>Smooth</span>
+                                    <span><i style="background:var(--warn)"></i>Moderate</span>
+                                    <span><i style="background:var(--bad)"></i>Heavy</span>
+                                </div>
+                            </div>
+                            <div class="heat" role="img" aria-label="Congestion by corridor and hour of day">
+                                <div id="cityHeatHours" class="heat__row heat__hours" aria-hidden="true"></div>
+                                <div id="cityHeatRows"></div>
+                            </div>
+                            <p id="cityHeatNote" class="city-readout"></p>
+                        </section>
+
+                        <section class="chart-box city-card" aria-labelledby="cityRankTitle">
+                            <div class="chart-head">
+                                <span><b id="cityRankTitle">Hotspots</b> <span id="cityRankHint" class="muted">Daytime (06–22) congestion index, one camera per junction</span></span>
+                                <div class="segmented segmented--sm" id="cityRankMode" role="group" aria-label="Rank junctions by">
+                                    <button type="button" data-mode="congested" aria-pressed="true">Slowest</button>
+                                    <button type="button" data-mode="busiest" aria-pressed="false">Busiest</button>
+                                </div>
+                            </div>
+                            <div id="cityRankList" class="rank"></div>
+                        </section>
+
+                        <section class="chart-box city-card" aria-labelledby="cityMixTitle">
+                            <div class="chart-head">
+                                <span><b id="cityMixTitle">Who is on the road</b> <span class="muted">share of counted vehicles</span></span>
+                                <div class="legend">
+                                    <span><i style="background:var(--c-moto)"></i>Motorcycles</span>
+                                    <span><i style="background:var(--c-car)"></i>Cars</span>
+                                    <span><i style="background:var(--c-truck)"></i>Trucks</span>
+                                    <span><i style="background:var(--c-bus)"></i>Buses</span>
+                                </div>
+                            </div>
+                            <div id="cityMix" class="city-chart"></div>
+                            <p id="cityMixNote" class="city-readout"></p>
+                            <div class="mixrows__head"><span>By corridor</span><span>motorcycles</span></div>
+                            <div id="cityMixRows" class="mixrows"></div>
+                        </section>
+
+                        <p id="cityFoot" class="city-foot"></p>
+                    </div>
                 </div>
 
                 <!-- Analytics -->
@@ -226,6 +313,18 @@
                                 <div class="range-slider__ticks" id="tsRangeTicks" aria-hidden="true"></div>
                             </div>
                             <canvas id="trafficMlCanvas" class="chart-canvas" aria-label="Flow and congestion history chart"></canvas>
+                        </div>
+
+                        <div class="chart-box" aria-labelledby="typicalTitle">
+                            <div class="chart-head">
+                                <span><b id="typicalTitle">Typical week</b> <span id="typicalNote" class="muted">loading…</span></span>
+                                <div class="legend">
+                                    <span><i style="background:var(--ok)"></i>Smooth</span>
+                                    <span><i style="background:var(--warn)"></i>Moderate</span>
+                                    <span><i style="background:var(--bad)"></i>Heavy</span>
+                                </div>
+                            </div>
+                            <div id="typicalGrid" class="typical" role="img" aria-label="Usual congestion by weekday and hour"></div>
                         </div>
 
                         <form id="exportForm" class="export" aria-labelledby="exportTitle" novalidate>

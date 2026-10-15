@@ -6,7 +6,7 @@ Counting vehicles "in view" over-counts queued and parked vehicles and double-co
 fragment behind occlusions. Volume counters instead count a vehicle when it crosses a line across
 the road. Every camera here has a different view, so the line is learned automatically:
 
-- ``MotionModel`` accumulates the trajectories of moving tracks (start -> end, in frame
+- ``MotionModel`` accumulates the trajectories of moving tracks (the last ``LINE_MEMORY`` or so) (start -> end, in frame
   coordinates normalised to 0..1). The dominant axis of travel is the length-weighted axial mean of
   their directions (angles doubled, so opposite lanes reinforce instead of cancelling), and the line
   is placed through the length-weighted middle of the traffic, perpendicular to that axis.
@@ -31,6 +31,7 @@ from typing import Dict, Optional, Tuple
 Point = Tuple[float, float]
 
 LINE_MIN_TRACKS = 12      # moving trajectories needed before a learned line replaces passage mode
+LINE_MEMORY = 500         # older trajectories fade beyond this many, so a re-aimed camera's line follows
 MIN_MOVE = 0.08           # a trajectory shorter than this (fraction of the frame) doesn't teach the model
 PASSAGE_FRAC = 0.15       # passage mode: count after moving this far
 HYSTERESIS = 0.015        # points this close to the line have no side yet
@@ -97,6 +98,10 @@ class MotionModel:
         self.sy += length * (start[1] + end[1]) / 2.0
         self.weight += length
         self.tracks += 1
+        if self.tracks > LINE_MEMORY:
+            k = LINE_MEMORY / self.tracks
+            self.c2, self.s2, self.sx, self.sy, self.weight = (v * k for v in (self.c2, self.s2, self.sx, self.sy, self.weight))
+            self.tracks = LINE_MEMORY
         if self.tracks >= LINE_MIN_TRACKS:
             self.line = self._fit()
         return True

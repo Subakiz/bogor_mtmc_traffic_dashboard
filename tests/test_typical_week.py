@@ -85,5 +85,21 @@ class TestRefresh(DatasetTestCase):
         self.assertEqual(tw.refresh(self.main, self.analytics, [(167,)], now=wib("2026-10-14T12:00:00")), 0)
 
 
+class TestEndpoint(unittest.TestCase):
+    def test_typical_week_of_a_cameras_junction(self):
+        from fastapi.testclient import TestClient
+        import backend.server as server
+        client = TestClient(server.app)
+        res = client.get("/api/cameras/79/typical-week")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn(199, data["cluster"])                        # Tugu Kujang: one junction, one grid
+        self.assertEqual(data["min_days"], tw.MIN_DAYS)
+        for s in data["slots"]:
+            self.assertEqual((s["scope"], s["ref_id"]), ("cluster", min(data["cluster"])))
+            self.assertIn(s["congestion_label"], ("Smooth", "Moderate", "Heavy", "Congested"))
+        self.assertEqual(client.get("/api/cameras/999999/typical-week").status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -572,6 +572,7 @@ function setupTabs() {
     const tabs = document.querySelectorAll(".tab[data-tab]");
     const panels = {
         cameras: document.getElementById("tabContentCameras"),
+        city: document.getElementById("tabContentCity"),
         timeseries: document.getElementById("tabContentTimeSeries"),
         sightings: document.getElementById("tabContentSightings"),
     };
@@ -580,6 +581,7 @@ function setupTabs() {
         activeTab = tab;
         tabs.forEach(btn => btn.setAttribute("aria-selected", String(btn.dataset.tab === tab)));
         Object.entries(panels).forEach(([name, panel]) => { if (panel) panel.hidden = name !== tab; });
+        if (window.CityTab) tab === "city" ? CityTab.show() : CityTab.hide();   // city.js; draws only once visible (needs its width)
         if (tab === "timeseries") {
             refreshExportRange();
             loadTimeSeriesMetrics(currentCameraId);
@@ -850,7 +852,7 @@ function filterMarkersByCorridor(corridor) {
             map.removeLayer(marker);
         }
     });
-    // A single-corridor view pans to its cameras (Tasikmalaya is ~200 km from Bogor).
+    // A single-corridor view pans to its cameras.
     if (corridor !== "ALL") {
         const pts = allCameras.filter(c => cameraMarkers[c.id] && map.hasLayer(cameraMarkers[c.id]))
             .map(c => [c.latitude, c.longitude]);
@@ -987,7 +989,60 @@ function setupRangeSlider() {
 const fmtSpan = minutes => minutes < 120 ? `${Math.round(minutes)} min`
     : minutes < 2880 ? `${Math.round(minutes / 60)} h` : `${+(minutes / 1440).toFixed(1)} d`;
 
+// Typical week: usual congestion of the camera's junction per weekday and hour (WIB). Thin slots
+// (fewer than min_days days seen) are faded; never-observed slots stay empty.
+const TYPICAL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];   // day_of_week 0 = Monday
+let typicalShownFor = null;
+
+async function loadTypicalWeek(cameraId) {
+    if (typicalShownFor === cameraId) return;
+    typicalShownFor = cameraId;
+    const grid = document.getElementById("typicalGrid");
+    const note = document.getElementById("typicalNote");
+    if (!grid || !note) return;
+    note.textContent = "loading…";
+    let data = null;
+    try {
+        const res = await fetch(`/api/cameras/${cameraId}/typical-week`);
+        data = res.ok ? await res.json() : null;
+    } catch (e) { /* shown below */ }
+    if (typicalShownFor !== cameraId) return;   // another camera was picked meanwhile
+    if (!data) { note.textContent = "unavailable"; typicalShownFor = null; return; }
+
+    const bySlot = new Map(data.slots.map(s => [`${s.day_of_week}-${s.hour}`, s]));
+    const cells = [makeEl("span")];
+    for (let h = 0; h < 24; h++) {
+        const label = makeEl("span");
+        label.textContent = h % 6 === 0 ? String(h) : "";
+        cells.push(label);
+    }
+    TYPICAL_DAYS.forEach((day, d) => {
+        const name = makeEl("span");
+        name.textContent = day;
+        cells.push(name);
+        for (let h = 0; h < 24; h++) {
+            const s = bySlot.get(`${d}-${h}`);
+            const cell = makeEl("i", s && s.low_data ? "low" : "");
+            const when = `${day} ${String(h).padStart(2, "0")}:00`;
+            if (s) {
+                cell.style.background = congestionLevel(s.congestion_label).color;
+                cell.title = `${when}: ${s.congestion_label} (${s.value.toFixed(2)}), ${s.n_days} day${s.n_days === 1 ? "" : "s"}` +
+                    (s.low_data ? " - still learning" : "");
+            } else {
+                cell.title = `${when}: not observed yet`;
+            }
+            cells.push(cell);
+        }
+    });
+    grid.replaceChildren(...cells);
+    const cams = data.cluster.length > 1 ? `junction of ${data.cluster.length} cameras` : "this camera";
+    note.textContent = data.slots.length
+        ? `${cams}, last ${data.days} days · faded: under ${data.min_days} days seen`
+        : "not observed yet";
+}
+
 async function loadTimeSeriesMetrics(cameraId) {
+    loadTypicalWeek(cameraId);
     try {
         const range = CHART_RANGES[activeChartRange(cameraId)];
         const request = ++chartRange.request;

@@ -37,6 +37,13 @@ class MotionModelTest(unittest.TestCase):
         self.assertAlmostEqual(m.line.px, 0.5, places=3)
         self.assertEqual(m.line.labels(), ("left to right", "right to left"))
 
+    def test_line_follows_a_re_aimed_camera(self):
+        m = MotionModel()
+        teach(m, HORIZONTAL * 100)                                  # a long history in one view
+        teach(m, VERTICAL * 125)                                    # then the camera is turned
+        self.assertGreater(abs(m.line.ny), abs(m.line.nx))
+        self.assertEqual(m.tracks, counting.LINE_MEMORY)
+
     def test_needs_enough_trajectories_and_ignores_short_ones(self):
         m = MotionModel()
         teach(m, HORIZONTAL[: counting.LINE_MIN_TRACKS - 1])

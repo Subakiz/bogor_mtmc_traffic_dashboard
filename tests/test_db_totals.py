@@ -1,6 +1,6 @@
 """
 Trigger-maintained all-time totals (backend/database.py: TOTALS_*): they must equal the old
-COUNT / COUNT(DISTINCT) scans over vehicle_sightings, survive the one-off migration of a database
+COUNT scans over vehicle_sightings, survive the one-off migration of a database
 that predates them (or still carries the re-identification schema), and keep counting after old
 sightings are deleted.
 """
@@ -22,12 +22,11 @@ def reference_stats(conn):
     """The aggregates exactly as the pre-trigger implementation computed them (full scans)."""
     one = lambda sql: conn.execute(sql).fetchone()[0]
     per_cam = {r[0]: r[1:] for r in conn.execute(
-        "SELECT camera_id, COUNT(*), COUNT(DISTINCT local_track_id), MAX(timestamp_iso), "
+        "SELECT camera_id, COUNT(*), MAX(timestamp_iso), "
         "SUM(vehicle_class = 'car'), SUM(vehicle_class = 'motorcycle'), SUM(vehicle_class = 'truck'), "
         "SUM(vehicle_class IN ('bus', 'angkot')) FROM vehicle_sightings GROUP BY camera_id")}
     return {
         "total": one("SELECT COUNT(*) FROM vehicle_sightings"),
-        "tracks": one("SELECT COUNT(DISTINCT local_track_id) FROM vehicle_sightings"),
         "classes": dict(conn.execute("SELECT vehicle_class, COUNT(*) FROM vehicle_sightings GROUP BY 1").fetchall()),
         "per_cam": per_cam,
     }
@@ -64,13 +63,12 @@ class TotalsMixin:
         stats = db.get_traffic_stats()
         self.assertEqual(stats["total_sightings"], ref["total"])
         self.assertEqual(stats["total_vehicles_counted"], ref["total"])
-        self.assertEqual(stats["total_unique_vehicles"], ref["tracks"])
         self.assertEqual(stats["class_breakdown"], ref["classes"])
         counts = {c["camera_id"]: c for c in db.get_camera_vehicle_counts()}
         self.assertEqual(set(ref["per_cam"]), {cid for cid, c in counts.items() if c["total_sightings"]})
-        for cid, (n, tracks, last, cars, motos, trucks, buses) in ref["per_cam"].items():
+        for cid, (n, last, cars, motos, trucks, buses) in ref["per_cam"].items():
             c = counts[cid]
-            self.assertEqual((c["total_sightings"], c["unique_vehicles"], c["last_seen_iso"]), (n, tracks, last), cid)
+            self.assertEqual((c["total_sightings"], c["last_seen_iso"]), (n, last), cid)
             self.assertEqual(c["classes"], {"car": cars, "motorcycle": motos, "truck": trucks, "bus": buses}, cid)
         self.assertEqual([c["total_sightings"] for c in db.get_camera_vehicle_counts()],
                          sorted((c["total_sightings"] for c in counts.values()), reverse=True))
@@ -86,7 +84,7 @@ class TriggerTotalsTest(TotalsMixin, unittest.TestCase):
 
     def test_empty_database_reads_zero(self):
         stats = self.db.get_traffic_stats()
-        self.assertEqual((stats["total_sightings"], stats["total_unique_vehicles"]), (0, 0))
+        self.assertEqual(stats["total_sightings"], 0)
         self.assertEqual(stats["class_breakdown"], {})
         self.assertTrue(all(c["total_sightings"] == 0 for c in self.db.get_camera_vehicle_counts()))
 
@@ -101,19 +99,6 @@ class TriggerTotalsTest(TotalsMixin, unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):   # unknown camera: FK violation, trigger rolled back too
             self.db.insert_vehicle_sighting(999999, 1, "car", 0.9, (0, 0, 1, 1), 0, 0, "2026-10-01T00:00:00Z")
         self.assertEqual(self.db.get_traffic_stats(), before)
-        self.assertEqual(self.db.conn.execute("SELECT COUNT(*) FROM sighting_tracks").fetchone()[0],
-                         self.db.conn.execute("SELECT COUNT(*) FROM (SELECT DISTINCT local_track_id, camera_id FROM vehicle_sightings)").fetchone()[0])
-
-    def test_track_ids_repeat_across_cameras_like_the_live_data(self):
-        for cam in (79, 87):
-            for _ in range(2):
-                self.db.insert_vehicle_sighting(cam, 7, "car", 0.9, (0, 0, 1, 1), 0, 0, "2026-10-01T00:00:00Z")
-        stats = self.db.get_traffic_stats()
-        self.assertEqual(stats["total_sightings"], 4)
-        self.assertEqual(stats["total_unique_vehicles"], 1)             # COUNT(DISTINCT local_track_id) over everything
-        counts = {c["camera_id"]: c for c in self.db.get_camera_vehicle_counts()}
-        self.assertEqual((counts[79]["unique_vehicles"], counts[87]["unique_vehicles"]), (1, 1))
-        self.assert_totals_match_scans(self.db)
 
     def test_concurrent_writers_keep_totals_exact(self):
         def work(offset):
@@ -130,7 +115,7 @@ class TriggerTotalsTest(TotalsMixin, unittest.TestCase):
     def test_rebuild_totals_repairs_drifted_counters(self):
         insert_rows(self.db, random_rows(300, 4))
         with self.db.conn:
-            self.db.conn.execute("UPDATE sighting_counters SET value = value + 17")
+            self.db.conn.execute("UPDATE sighting_totals SET n = n + 17")
             self.db.conn.execute("DELETE FROM sighting_totals WHERE camera_id = 79")
         self.db.rebuild_totals()
         self.assert_totals_match_scans(self.db)
@@ -155,8 +140,7 @@ class MigrationTest(TotalsMixin, unittest.TestCase):
         Database(path, auto_seed=True).close()
         c = sqlite3.connect(path)
         c.execute("DROP TRIGGER trg_sightings_totals")
-        for tbl in ("sighting_totals", "sighting_tracks", "camera_track_totals", "sighting_counters"):
-            c.execute(f"DROP TABLE {tbl}")
+        c.execute("DROP TABLE sighting_totals")
         c.execute("CREATE INDEX idx_sightings_agg ON vehicle_sightings(camera_id, local_track_id, vehicle_class, timestamp_iso)")
         c.execute("CREATE INDEX idx_sightings_local_track ON vehicle_sightings(local_track_id)")
         c.execute("DELETE FROM maintenance_state WHERE key = ?", (TOTALS_MARKER,))
@@ -207,6 +191,68 @@ class MigrationTest(TotalsMixin, unittest.TestCase):
             self.assertEqual(db.get_traffic_stats()["total_sightings"], 0)
             insert_rows(db, random_rows(10, 1))
             self.assert_totals_match_scans(db)
+        finally:
+            db.close()
+
+
+# The distinct-track counters as databases written before their removal still carry them (the live
+# database's shape on 2026-10-14): three tables and a totals trigger that maintains them.
+OLD_COUNTERS_DDL = """
+CREATE TABLE sighting_tracks (local_track_id INTEGER NOT NULL, camera_id INTEGER NOT NULL,
+    PRIMARY KEY (local_track_id, camera_id)) WITHOUT ROWID;
+CREATE TABLE camera_track_totals (camera_id INTEGER PRIMARY KEY, tracks INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE sighting_counters (key TEXT PRIMARY KEY, value INTEGER NOT NULL) WITHOUT ROWID;
+INSERT INTO sighting_counters (key, value) VALUES ('tracks', 0);
+DROP TRIGGER trg_sightings_totals;
+CREATE TRIGGER trg_sightings_totals AFTER INSERT ON vehicle_sightings
+BEGIN
+    INSERT INTO sighting_totals (camera_id, vehicle_class, n, last_seen_iso)
+    VALUES (NEW.camera_id, NEW.vehicle_class, 1, NEW.timestamp_iso)
+    ON CONFLICT(camera_id, vehicle_class) DO UPDATE SET
+        n = n + 1, last_seen_iso = max(last_seen_iso, excluded.last_seen_iso);
+    UPDATE sighting_counters SET value = value + 1
+    WHERE key = 'tracks'
+      AND NOT EXISTS (SELECT 1 FROM sighting_tracks WHERE local_track_id = NEW.local_track_id);
+    INSERT OR IGNORE INTO sighting_tracks (local_track_id, camera_id) VALUES (NEW.local_track_id, NEW.camera_id);
+END;
+"""
+
+OLD_COUNTER_TABLES = {"sighting_tracks", "camera_track_totals", "sighting_counters"}
+
+
+def table_names(db):
+    return {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+
+class TrackCounterRemovalTest(TotalsMixin, unittest.TestCase):
+    """A database with the old distinct-track counters loses them on open and keeps counting."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(self.tmp.name, "counters.sqlite")
+        db = Database(self.path, auto_seed=True)
+        db.close()
+        c = sqlite3.connect(self.path)
+        c.executescript(OLD_COUNTERS_DDL)
+        raw_insert_rows(c, random_rows(200, 31))
+        c.commit()
+        c.close()
+
+    def test_counter_tables_are_dropped_and_the_trigger_keeps_counting(self):
+        db = Database(self.path, auto_seed=False)
+        try:
+            self.assertTrue(db.migration_report["track_counters_dropped"])
+            self.assertFalse(table_names(db) & OLD_COUNTER_TABLES)
+            self.assert_totals_match_scans(db)
+            insert_rows(db, random_rows(50, 32))           # the rewritten trigger is live
+            self.assertEqual(db.get_traffic_stats()["total_sightings"], 250)
+            self.assert_totals_match_scans(db)
+        finally:
+            db.close()
+        db = Database(self.path, auto_seed=False)
+        try:
+            self.assertFalse(db.migration_report["track_counters_dropped"])
         finally:
             db.close()
 
@@ -271,7 +317,7 @@ class ReidSchemaRemovalTest(TotalsMixin, unittest.TestCase):
         insert_rows(db, random_rows(300, 21))
         db.close()
         c = sqlite3.connect(self.path)
-        c.executescript(REID_ERA_DDL)
+        c.executescript(OLD_COUNTERS_DDL + REID_ERA_DDL)
         c.execute("INSERT INTO handoff_events (global_vehicle_id, from_camera_id, to_camera_id, confidence, "
                   "timestamp_iso) VALUES (1, 79, 87, 0.9, '2026-10-01T00:00:00Z')")
         c.commit()
@@ -291,7 +337,7 @@ class ReidSchemaRemovalTest(TotalsMixin, unittest.TestCase):
             self.assertIn("trg_sightings_totals", names)
             columns = {r[1] for r in db.conn.execute("PRAGMA table_info(vehicle_sightings)")}
             self.assertFalse(columns & {"global_vehicle_id", "embedding", "color_hist", "crop_thumbnail"})
-            self.assertEqual([r[0] for r in db.conn.execute("SELECT key FROM sighting_counters")], ["tracks"])
+            self.assertFalse(table_names(db) & OLD_COUNTER_TABLES)
             self.assertIsNone(db.conn.execute(
                 "SELECT 1 FROM maintenance_state WHERE key = 'embeddings_expired_upto'").fetchone())
             self.assertEqual(db.get_traffic_stats()["total_sightings"], 300)

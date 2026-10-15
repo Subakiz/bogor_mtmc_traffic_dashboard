@@ -47,6 +47,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, TextIO, Tuple, Union
 
+from car_tracker.analytics import local_iso
 from car_tracker.congestion import congestion_label
 from backend.bucketing import (
     LOCAL_TZ, LOCAL_TZ_NAME, LOCAL_UTC_OFFSET_S, bucket_range, bucket_seconds, spread,
@@ -109,8 +110,7 @@ def to_utc_iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def to_local_iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, LOCAL_TZ).isoformat()
+to_local_iso = local_iso
 
 
 def _iso_to_local(text: Any) -> Optional[str]:

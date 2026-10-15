@@ -16,7 +16,6 @@ from typing import Optional, List, Dict, Tuple, Any, Set
 import os
 import json
 
-from backend.camera_sources import load_extra_nodes
 
 
 class TopologyEngine:
@@ -84,8 +83,7 @@ class TopologyEngine:
         self.cameras: Dict[int, dict] = {}
         self.corridors: Dict[str, List[int]] = {}
         
-        # Extra cities (data/sources/*.json): nodes only, no road edges; ids are namespaced.
-        for raw_node in data.get("nodes", []) + load_extra_nodes():
+        for raw_node in data.get("nodes", []):
             cid = int(raw_node["id"])
             node = dict(raw_node)
             node["id"] = cid
@@ -95,7 +93,7 @@ class TopologyEngine:
             node["latitude"] = node["lat"]
             node["longitude"] = node["lng"]
             node["corridor"] = str(raw_node.get("corridor", "UNKNOWN"))
-            node["stream_url"] = str(raw_node.get("stream_url", ""))
+            node["stream_url"] = str(raw_node.get("stream_url") or "")  # JSON null must not become "None"
             node["default_azimuth"] = float(raw_node.get("default_azimuth", raw_node.get("facing_bearing_deg", 0.0)))
             node["facing_bearing_deg"] = node["default_azimuth"]
             
@@ -175,14 +173,6 @@ class TopologyEngine:
                 cluster = self.intra_junction_clusters[u] | self.intra_junction_clusters[v]
                 for member in cluster:
                     self.intra_junction_clusters[member] = cluster
-        # Edgeless sources name their junctions: cameras sharing one watch the same vehicles.
-        by_junction: Dict[str, Set[int]] = {}
-        for cid, cam in self.cameras.items():
-            if cam.get("source"):
-                by_junction.setdefault(cam.get("junction_name") or str(cid), set()).add(cid)
-        for cluster in by_junction.values():
-            for member in cluster:
-                self.intra_junction_clusters[member] = cluster
 
     # =========================================================================
     # Contract Implementation: Camera Metadata & Inventory
